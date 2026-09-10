@@ -1,0 +1,985 @@
+{
+  "catalogVersion": "1.0",
+  "transportClasses": {
+    "map": {
+      "stdio": "local",
+      "sdk": "local",
+      "http": "network",
+      "sse": "network",
+      "websocket": "network",
+      "unknown": "unknown"
+    },
+    "presentation": {
+      "local": {
+        "label": "Running locally",
+        "description": "Runs as a process on the endpoint with the user's privileges.",
+        "chartToken": "danger-500"
+      },
+      "network": {
+        "label": "Remote",
+        "description": "Reached over HTTP, SSE or WebSocket.",
+        "chartToken": "brand-500"
+      },
+      "unknown": {
+        "label": "Unknown",
+        "description": "The collector could not classify the transport.",
+        "chartToken": "neutral-400"
+      }
+    }
+  },
+  "settingValues": {
+    "on": [
+      "true",
+      "enabled",
+      "on",
+      "always",
+      "auto",
+      "trusted"
+    ],
+    "bypass": [
+      "bypassPermissions",
+      "dontAsk",
+      "danger-full-access",
+      "unrestricted",
+      "auto",
+      "always",
+      "auto_edit",
+      "Autopilot",
+      "autopilot"
+    ],
+    "off": [
+      "false",
+      "off",
+      "disabled",
+      "never",
+      "danger-full-access"
+    ]
+  },
+  "areas": {
+    "order": [
+      "access",
+      "permissions",
+      "content",
+      "identity",
+      "discovery",
+      "hygiene"
+    ],
+    "presentation": {
+      "access": {
+        "label": "Access & execution",
+        "summary": "Local execution and gateway routing",
+        "blurb": "How agents reach tools: local servers, direct network endpoints, credentials in configuration."
+      },
+      "permissions": {
+        "label": "Agent permissions",
+        "summary": "Browser, computer and approval switches",
+        "blurb": "Switches that let an agent act without asking: browser and computer use, approvals, sandboxing, hooks, tooling."
+      },
+      "content": {
+        "label": "Content trust",
+        "summary": "Skills and pack provenance",
+        "blurb": "Skills and packs agents execute, and whether anyone reviewed them."
+      },
+      "identity": {
+        "label": "Identity & sign-in",
+        "summary": "API keys and personal accounts",
+        "blurb": "How AI clients authenticate, and whether enterprise identity is in the loop."
+      },
+      "discovery": {
+        "label": "Discovery gaps",
+        "summary": "Unclassified configuration",
+        "blurb": "Evidence the scan could not classify; re-scan or register to resolve."
+      },
+      "hygiene": {
+        "label": "Configuration hygiene",
+        "summary": "Stale or inactive entries",
+        "blurb": "Disabled, cached, stale and orphaned entries that are safe to remove."
+      }
+    },
+    "guidance": {
+      "access": {
+        "why": "Control who can invoke tools, what permissions they receive, and when human confirmation is required. An audit trail makes sensitive actions traceable and supports investigation.",
+        "intro": "For connectors that go through Palma's gateway:",
+        "capabilities": [
+          {
+            "name": "Scoped access",
+            "text": "Control tool access through spaces and permissions."
+          },
+          {
+            "name": "Execution policies",
+            "text": "Block restricted actions or require human confirmation."
+          },
+          {
+            "name": "Audit & oversight",
+            "text": "Review tool activity and export it to your SIEM."
+          }
+        ]
+      },
+      "permissions": {
+        "why": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
+        "intro": "For governed tools, the checkpoint moves to a policy you control:",
+        "capabilities": [
+          {
+            "name": "Approval policies",
+            "text": "Require a human decision before a governed tool runs."
+          },
+          {
+            "name": "Execution policies",
+            "text": "Block restricted actions outright, per space or tool."
+          },
+          {
+            "name": "Audit & oversight",
+            "text": "See every governed call, who made it and what it touched."
+          }
+        ]
+      },
+      "content": {
+        "why": "Skills and packs are code and prompts an agent executes. Anything authored or side-loaded locally has not been reviewed for prompt injection, secrets or unsafe instructions.",
+        "intro": "For skills and packs distributed through Palma:",
+        "capabilities": [
+          {
+            "name": "Skill catalog",
+            "text": "Publish skills through Palma, scanned for injection and secrets at publish time."
+          },
+          {
+            "name": "Curated packs",
+            "text": "Distribute reviewed packs to the clients that should have them."
+          },
+          {
+            "name": "Audit & oversight",
+            "text": "Know which version of a skill each environment runs."
+          }
+        ]
+      },
+      "identity": {
+        "why": "API keys and personal vendor accounts sit outside your identity provider: no SSO, no offboarding, no conditional access. Enterprise identity at the gateway brings AI clients back under it.",
+        "intro": "For clients that sign in through the gateway:",
+        "capabilities": [
+          {
+            "name": "Enterprise sign-in",
+            "text": "Clients authenticate to the gateway with your identity provider."
+          },
+          {
+            "name": "Scoped access",
+            "text": "Entitlements follow the person, not a shared key."
+          },
+          {
+            "name": "Audit & oversight",
+            "text": "Every call is attributed to an identity you manage."
+          }
+        ]
+      },
+      "discovery": {
+        "why": "Evidence the scan could not classify is neither safe nor unsafe: it is unknown. Resolving it is cheap and turns a gap into a decision.",
+        "intro": "",
+        "capabilities": []
+      },
+      "hygiene": {
+        "why": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
+        "intro": "",
+        "capabilities": []
+      }
+    }
+  },
+  "kindUnits": {
+    "client": {
+      "one": "client",
+      "many": "clients"
+    },
+    "mcp": {
+      "one": "connector",
+      "many": "connectors"
+    },
+    "skill": {
+      "one": "skill",
+      "many": "skills"
+    },
+    "plugin": {
+      "one": "pack",
+      "many": "packs"
+    },
+    "agent": {
+      "one": "agent",
+      "many": "agents"
+    },
+    "setting": {
+      "one": "setting",
+      "many": "settings"
+    }
+  },
+  "clientFamilies": {
+    "claude-code": "Claude Code",
+    "claude-desktop": "Claude Desktop",
+    "codex": "Codex",
+    "cursor": "Cursor",
+    "gemini-cli": "Gemini CLI",
+    "kiro": "Kiro",
+    "vscode": "VS Code",
+    "windsurf": "Windsurf",
+    "cline": "Cline",
+    "roo-code": "Roo Code",
+    "unknown": "Unknown client"
+  },
+  "singularPhrases": [
+    [
+      "1 MCP connectors run as local processes",
+      "1 MCP connector runs as a local process"
+    ],
+    [
+      "1 remote MCP connectors are used",
+      "1 remote MCP connector is used"
+    ],
+    [
+      "1 connectors keep",
+      "1 connector keeps"
+    ],
+    [
+      "1 connectors authenticate",
+      "1 connector authenticates"
+    ],
+    [
+      "1 connector entries could",
+      "1 connector entry could"
+    ],
+    [
+      "1 connector entries are",
+      "1 connector entry is"
+    ],
+    [
+      "1 connectors give",
+      "1 connector gives"
+    ],
+    [
+      "1 connectors let",
+      "1 connector lets"
+    ],
+    [
+      "1 skills were",
+      "1 skill was"
+    ],
+    [
+      "1 skills have",
+      "1 skill has"
+    ],
+    [
+      "1 skills arrive",
+      "1 skill arrives"
+    ],
+    [
+      "1 packs were",
+      "1 pack was"
+    ],
+    [
+      "1 packs have",
+      "1 pack has"
+    ],
+    [
+      "1 packs are",
+      "1 pack is"
+    ],
+    [
+      "1 pack downloads sit",
+      "1 pack download sits"
+    ],
+    [
+      "1 AI clients use",
+      "1 AI client uses"
+    ],
+    [
+      "1 AI clients sign",
+      "1 AI client signs"
+    ],
+    [
+      "1 AI clients are",
+      "1 AI client is"
+    ],
+    [
+      "1 client settings let",
+      "1 client setting lets"
+    ],
+    [
+      "1 client settings approve",
+      "1 client setting approves"
+    ],
+    [
+      "1 client settings run",
+      "1 client setting runs"
+    ],
+    [
+      "1 client settings",
+      "1 client setting"
+    ],
+    [
+      "1 Codex configurations never ask",
+      "1 Codex configuration never asks"
+    ],
+    [
+      "1 settings belong",
+      "1 setting belongs"
+    ],
+    [
+      "1 experimental features are",
+      "1 experimental feature is"
+    ],
+    [
+      "1 agent definitions declare",
+      "1 agent definition declares"
+    ]
+  ],
+  "mcpCapabilities": {
+    "computer": [
+      "computer-use",
+      "computer_use",
+      "computeruse",
+      "cua",
+      "desktop-control",
+      "desktop_control",
+      "desktopcontrol",
+      "screen-control",
+      "screencontrol",
+      "xdotool",
+      "pyautogui",
+      "applescript",
+      "macos-use",
+      "macos_use",
+      "peekaboo",
+      "windows-mcp"
+    ],
+    "browser": [
+      "playwright",
+      "puppeteer",
+      "browser-use",
+      "browser_use",
+      "browseruse",
+      "chrome-devtools",
+      "chromedevtools",
+      "browserbase",
+      "stagehand",
+      "selenium",
+      "browser-mcp",
+      "browsermcp",
+      "hyperbrowser"
+    ]
+  },
+  "rules": [
+    {
+      "id": "mcp-local-unaudited",
+      "severity": "critical",
+      "kind": "mcp",
+      "area": "access",
+      "title": "Connectors running locally without monitoring or governance",
+      "conditions": [
+        {
+          "attr": "transport",
+          "in": [
+            "stdio",
+            "sdk"
+          ]
+        }
+      ],
+      "headline": "{n} MCP connectors run as local processes {where}; local processes sit outside Palma's monitoring and governance",
+      "action": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
+      "drill": "transportClass=local&presence=present"
+    },
+    {
+      "id": "mcp-inline-credential",
+      "severity": "critical",
+      "kind": "mcp",
+      "area": "access",
+      "title": "Credentials stored in local client config",
+      "conditions": [
+        {
+          "attr": "inlineCredentialPresent",
+          "in": [
+            "true"
+          ]
+        }
+      ],
+      "headline": "{n} connectors keep a credential in plain text in a client configuration file {where}",
+      "action": "Move the credential behind the gateway and rotate the exposed value.",
+      "drill": "inlineCredential=true&presence=present"
+    },
+    {
+      "id": "mcp-network-direct",
+      "severity": "high",
+      "kind": "mcp",
+      "area": "access",
+      "title": "Remote connectors used outside Palma's governance",
+      "conditions": [
+        {
+          "attr": "transport",
+          "in": [
+            "http",
+            "sse",
+            "websocket"
+          ]
+        },
+        {
+          "attr": "endpointOrigin",
+          "notInParam": "gatewayOrigins"
+        }
+      ],
+      "headline": "{n} remote MCP connectors are used directly from AI clients {where}, outside Palma's governance",
+      "action": "Route them through Palma: the same tools, audited and governed per policy.",
+      "drill": "transportClass=network&gatewayReach=direct&presence=present"
+    },
+    {
+      "id": "mcp-static-secret-auth",
+      "severity": "high",
+      "kind": "mcp",
+      "area": "access",
+      "title": "Connectors signed in with a fixed secret",
+      "conditions": [
+        {
+          "attr": "auth",
+          "in": [
+            "bearer_header",
+            "static_header"
+          ]
+        }
+      ],
+      "headline": "{n} connectors authenticate with a long-lived fixed secret {where}",
+      "action": "Let the gateway hold the credential, or move the server to OAuth.",
+      "drill": "auth=bearer_header,static_header&presence=present"
+    },
+    {
+      "id": "mcp-unknown-transport",
+      "severity": "medium",
+      "kind": "mcp",
+      "area": "discovery",
+      "title": "Connectors of unknown type",
+      "conditions": [
+        {
+          "attr": "transport",
+          "in": [
+            "unknown"
+          ]
+        }
+      ],
+      "headline": "{n} connector entries could not be classified as local or remote {where}",
+      "action": "Re-scan with the current collector, or register the server so its transport is known.",
+      "drill": "transport=unknown&presence=present"
+    },
+    {
+      "id": "mcp-declared-disabled",
+      "severity": "info",
+      "kind": "mcp",
+      "area": "hygiene",
+      "title": "Disabled connector entries left in config",
+      "conditions": [
+        {
+          "attr": "enabled",
+          "in": [
+            "disabled"
+          ]
+        }
+      ],
+      "headline": "{n} connector entries are switched off but still in configuration {where}",
+      "action": "Remove them, or re-enable them deliberately.",
+      "drill": "enabled=disabled&presence=present"
+    },
+    {
+      "id": "skills-local-unreviewed",
+      "severity": "high",
+      "kind": "skill",
+      "area": "content",
+      "title": "Local unaudited skills installed",
+      "conditions": [
+        {
+          "attr": "origin",
+          "in": [
+            "user",
+            "project"
+          ]
+        }
+      ],
+      "headline": "{n} skills were written or installed locally {where}; nobody has audited them",
+      "action": "Publish them through Palma's skill catalog, which scans for prompt injection and secrets at publish.",
+      "drill": "origin=user,project&presence=present"
+    },
+    {
+      "id": "skills-unverifiable",
+      "severity": "medium",
+      "kind": "skill",
+      "area": "discovery",
+      "title": "Skills that cannot be verified",
+      "conditions": [
+        {
+          "attr": "digest",
+          "isNull": true
+        }
+      ],
+      "headline": "{n} skills have no content digest {where}, so nobody can attest what they contain",
+      "action": "Re-scan; a skill whose folder cannot be read cannot be attested.",
+      "drill": "digest=missing&presence=present"
+    },
+    {
+      "id": "skills-managed",
+      "severity": "info",
+      "kind": "skill",
+      "area": "content",
+      "title": "Skills delivered through managed distribution",
+      "conditions": [
+        {
+          "attr": "origin",
+          "in": [
+            "managed"
+          ]
+        }
+      ],
+      "headline": "{n} skills arrive through managed distribution {where}",
+      "action": "Positive evidence; keep it on the coverage view.",
+      "drill": "origin=managed&presence=present"
+    },
+    {
+      "id": "plugins-sideloaded",
+      "severity": "high",
+      "kind": "plugin",
+      "area": "content",
+      "title": "Packs installed outside any marketplace",
+      "conditions": [
+        {
+          "attr": "origin",
+          "in": [
+            "local"
+          ]
+        }
+      ],
+      "headline": "{n} packs were installed by hand, outside any marketplace {where}",
+      "action": "Inventory them now; governed conversion registers the ones that stay.",
+      "drill": "origin=local&presence=present"
+    },
+    {
+      "id": "plugins-unknown-origin",
+      "severity": "medium",
+      "kind": "plugin",
+      "area": "discovery",
+      "title": "Packs of unknown origin",
+      "conditions": [
+        {
+          "attr": "origin",
+          "in": [
+            "unknown"
+          ]
+        }
+      ],
+      "headline": "{n} packs have no recorded origin {where}",
+      "action": "Inventory them now; governed conversion registers the ones that stay.",
+      "drill": "origin=unknown&presence=present"
+    },
+    {
+      "id": "plugins-declared-disabled",
+      "severity": "info",
+      "kind": "plugin",
+      "area": "hygiene",
+      "title": "Disabled pack entries left in config",
+      "conditions": [
+        {
+          "attr": "enabled",
+          "in": [
+            "disabled"
+          ]
+        }
+      ],
+      "headline": "{n} packs are switched off but still declared {where}",
+      "action": "Hygiene: remove the entries, or re-enable them deliberately.",
+      "drill": "enabled=disabled&presence=present"
+    },
+    {
+      "id": "plugins-cached-only",
+      "severity": "info",
+      "kind": "plugin",
+      "area": "hygiene",
+      "title": "Packs downloaded but not installed",
+      "conditions": [
+        {
+          "attr": "installationState",
+          "in": [
+            "cached"
+          ]
+        }
+      ],
+      "headline": "{n} pack downloads sit in caches without an installation {where}",
+      "action": "Clear the caches, or install the packs deliberately.",
+      "drill": "installationState=cached&presence=present"
+    },
+    {
+      "id": "clients-api-key-auth",
+      "severity": "high",
+      "kind": "client",
+      "area": "identity",
+      "title": "AI clients signed in with API keys",
+      "conditions": [
+        {
+          "attr": "authModes",
+          "has": "api_key"
+        }
+      ],
+      "headline": "{n} AI clients use API keys {where}; a key sits outside your company's identity provider",
+      "action": "Move clients to enterprise identity through the gateway.",
+      "drill": "authMode=api_key&presence=present"
+    },
+    {
+      "id": "clients-outside-enterprise-identity",
+      "severity": "medium",
+      "kind": "client",
+      "area": "identity",
+      "title": "AI clients on personal or cloud accounts, not company identity",
+      "conditions": [
+        {
+          "attr": "authModes",
+          "hasAny": [
+            "vendor_login",
+            "cloud_provider"
+          ]
+        },
+        {
+          "attr": "authModes",
+          "lacks": "enterprise_identity"
+        }
+      ],
+      "headline": "{n} AI clients sign in with personal vendor or cloud accounts {where}, not your company's identity",
+      "action": "Move clients to enterprise identity through the gateway.",
+      "drill": "authMode=vendor_login,cloud_provider&withoutAuthMode=enterprise_identity&presence=present"
+    },
+    {
+      "id": "clients-config-only",
+      "severity": "info",
+      "kind": "client",
+      "area": "hygiene",
+      "title": "AI client config left behind without an installation",
+      "conditions": [
+        {
+          "attr": "installationState",
+          "in": [
+            "config_only"
+          ]
+        }
+      ],
+      "headline": "{n} AI clients are configured but not installed {where}",
+      "action": "Remove stale configuration.",
+      "drill": "installationState=config_only&presence=present"
+    },
+    {
+      "id": "mcp-computer-use",
+      "severity": "critical",
+      "kind": "mcp",
+      "area": "permissions",
+      "title": "Computer use via a connector: acts as the signed-in user without governance",
+      "conditions": [
+        {
+          "attr": "capability",
+          "in": [
+            "computer"
+          ]
+        },
+        {
+          "attr": "endpointOrigin",
+          "notInParam": "gatewayOrigins"
+        }
+      ],
+      "headline": "{n} connectors give agents the keyboard, mouse and screen {where}, acting as the signed-in user with no policy in between",
+      "action": "Check how Palma AI can help: desktop control becomes a governed capability with approval policies and an audit trail.",
+      "drill": "capability=computer&gatewayReach=direct&presence=present"
+    },
+    {
+      "id": "mcp-browser-automation",
+      "severity": "critical",
+      "kind": "mcp",
+      "area": "permissions",
+      "title": "Browser automation via a connector: drives a browser without governance",
+      "conditions": [
+        {
+          "attr": "capability",
+          "in": [
+            "browser"
+          ]
+        },
+        {
+          "attr": "endpointOrigin",
+          "notInParam": "gatewayOrigins"
+        }
+      ],
+      "headline": "{n} connectors let agents drive a browser {where}, with whatever session that browser holds and no policy in between",
+      "action": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "drill": "capability=browser&gatewayReach=direct&presence=present"
+    },
+    {
+      "id": "browser-use-enabled",
+      "severity": "critical",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Browser use turned on: acts as the signed-in user without governance",
+      "conditions": [
+        {
+          "attr": "category",
+          "in": [
+            "browser"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "true",
+            "enabled",
+            "on",
+            "always",
+            "auto",
+            "trusted"
+          ]
+        }
+      ],
+      "headline": "Browser use is turned on or trusted in {n} client settings {where}: the agent can use the web as the signed-in user, with no policy in between",
+      "action": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "drill": "category=browser&value=true,enabled,on,always,auto,trusted&presence=present"
+    },
+    {
+      "id": "browser-actions-unconfirmed",
+      "severity": "critical",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Browser actions allowed without confirmation",
+      "conditions": [
+        {
+          "attr": "nativeKey",
+          "in": [
+            "agents.browser.confirmSensitiveActions"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "false"
+          ]
+        }
+      ],
+      "headline": "{n} client settings let the browser agent fill forms and run scripts without asking {where}",
+      "action": "Check how Palma AI can help: sensitive browser actions run behind an approval policy instead of silently.",
+      "drill": "nativeKey=agents.browser.confirmSensitiveActions&value=false&presence=present"
+    },
+    {
+      "id": "computer-use-enabled",
+      "severity": "critical",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Computer use turned on: acts as the signed-in user without governance",
+      "conditions": [
+        {
+          "attr": "category",
+          "in": [
+            "computer"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "true",
+            "enabled",
+            "on",
+            "always",
+            "auto",
+            "trusted"
+          ]
+        }
+      ],
+      "headline": "Computer use is turned on or trusted in {n} client settings {where}: the agent can act on the desktop as the signed-in user, with no policy in between",
+      "action": "Check how Palma AI can help: desktop control becomes a governed capability with approval policies and an audit trail.",
+      "drill": "category=computer&value=true,enabled,on,always,auto,trusted&presence=present"
+    },
+    {
+      "id": "permissions-bypassed",
+      "severity": "critical",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Permission prompts turned off",
+      "conditions": [
+        {
+          "attr": "category",
+          "in": [
+            "permissions"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "bypassPermissions",
+            "dontAsk",
+            "danger-full-access",
+            "unrestricted",
+            "auto",
+            "always",
+            "auto_edit",
+            "Autopilot",
+            "autopilot"
+          ]
+        }
+      ],
+      "headline": "{n} client settings let agents run tools without asking {where}",
+      "action": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "drill": "category=permissions&value=bypassPermissions,dontAsk,danger-full-access,unrestricted,auto,always,auto_edit,Autopilot,autopilot&presence=present"
+    },
+    {
+      "id": "tools-auto-approved",
+      "severity": "critical",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Every tool call auto-approved",
+      "conditions": [
+        {
+          "attr": "nativeKey",
+          "in": [
+            "chat.tools.autoApprove",
+            "chat.tools.global.autoApprove",
+            "autoApprovalSettings.enabled",
+            "autoApprovalSettings.actions.executeAllCommands",
+            "globalState.autoApprovalSettings.enabled",
+            "globalState.autoApprovalSettings.actions.executeAllCommands",
+            "bypassPermissionsModeAccepted"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "true"
+          ]
+        }
+      ],
+      "headline": "{n} client settings approve every tool call automatically {where}; nothing would ask first",
+      "action": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "drill": "nativeKey=chat.tools.autoApprove,chat.tools.global.autoApprove,autoApprovalSettings.enabled,autoApprovalSettings.actions.executeAllCommands,globalState.autoApprovalSettings.enabled,globalState.autoApprovalSettings.actions.executeAllCommands,bypassPermissionsModeAccepted&value=true&presence=present"
+    },
+    {
+      "id": "approval-prompts-disabled",
+      "severity": "critical",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Codex never asks before acting",
+      "conditions": [
+        {
+          "attr": "nativeKey",
+          "in": [
+            "approval_policy"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "never"
+          ]
+        }
+      ],
+      "headline": "{n} Codex configurations never ask before acting {where}",
+      "action": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "drill": "nativeKey=approval_policy&value=never&presence=present"
+    },
+    {
+      "id": "settings-stale",
+      "severity": "info",
+      "kind": "setting",
+      "area": "hygiene",
+      "title": "Settings for project folders that no longer exist",
+      "conditions": [
+        {
+          "attr": "effectiveState",
+          "in": [
+            "stale"
+          ]
+        }
+      ],
+      "headline": "{n} settings belong to project folders that were not present at scan time {where}; some still grant trust",
+      "action": "Hygiene: if a folder is gone for good, remove its entries from the client configuration; nothing can use them.",
+      "drill": "effectiveState=stale&presence=present"
+    },
+    {
+      "id": "sandbox-disabled",
+      "severity": "high",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Sandbox turned off: agents run unconfined",
+      "conditions": [
+        {
+          "attr": "category",
+          "in": [
+            "sandbox"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "false",
+            "off",
+            "disabled",
+            "never",
+            "danger-full-access"
+          ]
+        }
+      ],
+      "headline": "{n} client settings run agents outside a sandbox {where}",
+      "action": "Evidence for the security review now; managed settings from Palma later.",
+      "drill": "category=sandbox&value=false,off,disabled,never,danger-full-access&presence=present"
+    },
+    {
+      "id": "hooks-declared",
+      "severity": "medium",
+      "kind": "setting",
+      "area": "permissions",
+      "title": "Scripts run automatically on agent events",
+      "conditions": [
+        {
+          "attr": "category",
+          "in": [
+            "hooks"
+          ]
+        }
+      ],
+      "headline": "{n} client settings run hook scripts when agents act {where}",
+      "action": "Audit the scripts; observation feeds will make hook activity visible.",
+      "drill": "category=hooks&presence=present"
+    },
+    {
+      "id": "experimental-enabled",
+      "severity": "info",
+      "kind": "setting",
+      "area": "hygiene",
+      "title": "Experimental features turned on",
+      "conditions": [
+        {
+          "attr": "category",
+          "in": [
+            "experimental"
+          ]
+        },
+        {
+          "attr": "value",
+          "in": [
+            "true",
+            "enabled",
+            "on",
+            "always",
+            "auto",
+            "trusted"
+          ]
+        }
+      ],
+      "headline": "{n} experimental features are switched on {where}",
+      "action": "Track them; experimental capabilities change without notice.",
+      "drill": "category=experimental&value=true,enabled,on,always,auto,trusted&presence=present"
+    },
+    {
+      "id": "agents-broad-tooling",
+      "severity": "medium",
+      "kind": "agent",
+      "area": "permissions",
+      "title": "Agents with broad tool access",
+      "conditions": [
+        {
+          "attr": "toolCount",
+          "min": 10
+        }
+      ],
+      "headline": "{n} agent definitions declare ten or more tools {where}",
+      "action": "Review their tool lists; governed conversion registers the ones that stay.",
+      "drill": "minToolCount=10&presence=present"
+    }
+  ]
+}
