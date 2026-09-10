@@ -1,0 +1,5 @@
+interface:
+  display_name: "Palma AI access scan"
+  short_description: "Machine-wide AI discovery, priorities, and local evidence"
+  brand_color: "#007a93"
+  default_prompt: "Use $palma-ai-readiness to scan this entire machine for AI clients, integrations, settings, and governance concerns, then show me the local report. If this chat cannot access my actual computer, guide me to run the downloaded skill locally."

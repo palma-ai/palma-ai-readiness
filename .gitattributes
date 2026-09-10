@@ -1,0 +1,5 @@
+# Preserve upstream parser and license bytes; validate whitespace in our source.
+/scripts/palma_scan/_vendor/** linguist-vendored -whitespace
+/THIRD_PARTY_NOTICES.md -whitespace
+/examples/** linguist-generated
+/examples/report.html -whitespace

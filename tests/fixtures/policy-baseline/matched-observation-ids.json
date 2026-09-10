@@ -1,0 +1,92 @@
+{
+  "agents-broad-tooling": [
+    "b3c426fb775fc916ea475f8fdc7142974e05145d9b541f05c7d1f0c1a72f4add"
+  ],
+  "approval-prompts-disabled": [
+    "d61b0aa44c6a4a2083a767fcef828fa43d4a952ace4bcd36a48133ebb24042f7"
+  ],
+  "browser-actions-unconfirmed": [
+    "563af5737c7ea741ae6a7147a433bbe639709c5a16772b08fa1cb2ef6490b65e"
+  ],
+  "browser-use-enabled": [
+    "edb6c8c0afebb94a1991332d8b0105fbc0d6b78fde8e2bf6ddedab341edeb1d9"
+  ],
+  "clients-api-key-auth": [
+    "7b0efb677182912cea148a7bab3503d2cdf623faecd830795ebca260f992e835"
+  ],
+  "clients-config-only": [
+    "a095b8df73cf4b86c725a8c4762aa0d68937c6d1f0fb2de847fec014ce181303"
+  ],
+  "clients-outside-enterprise-identity": [
+    "7b0efb677182912cea148a7bab3503d2cdf623faecd830795ebca260f992e835"
+  ],
+  "computer-use-enabled": [
+    "7e7e31b3cb56b049fed251a22bec38bdb5b4ec7b6ca491165a070a5819f80921"
+  ],
+  "experimental-enabled": [],
+  "hooks-declared": [
+    "f39173136baf26b7d4663cab06c0fba70249fce98f49e54c8e5f2c320349fb06"
+  ],
+  "mcp-browser-automation": [
+    "e2e36f237250dfe679216df78dff3bed120287fd402df85e5e0f5d1dc54d4003"
+  ],
+  "mcp-computer-use": [
+    "d6ccc55b29ae74dc9ea5f610a7649c92686f5d57e9e82c7867adda7b3b6d1cb8"
+  ],
+  "mcp-declared-disabled": [
+    "32adaab92f33c0552d701ddd3a8b248637304f406c1de0530c9ff7343fb65ddc"
+  ],
+  "mcp-inline-credential": [
+    "c1219cc2398f9965a297c807293d9a65cd1d2a01f7f6519b69105023747fd246"
+  ],
+  "mcp-local-unaudited": [
+    "319ce01a1e61754c0eb9842edcc9f2c74b0fe2e132eb16bc1d63420d22768f88",
+    "d6ccc55b29ae74dc9ea5f610a7649c92686f5d57e9e82c7867adda7b3b6d1cb8",
+    "df889563c018182b71464d24990bc61e6324d9eec3e1ff09da43e8ca60c94276",
+    "e2e36f237250dfe679216df78dff3bed120287fd402df85e5e0f5d1dc54d4003"
+  ],
+  "mcp-network-direct": [
+    "c1219cc2398f9965a297c807293d9a65cd1d2a01f7f6519b69105023747fd246"
+  ],
+  "mcp-static-secret-auth": [
+    "c1219cc2398f9965a297c807293d9a65cd1d2a01f7f6519b69105023747fd246"
+  ],
+  "mcp-unknown-transport": [
+    "32adaab92f33c0552d701ddd3a8b248637304f406c1de0530c9ff7343fb65ddc"
+  ],
+  "permissions-bypassed": [
+    "57a2ca98d30bbc225bca0feddca3bb216855c1f052f98f1ac11ce02b43d43567",
+    "5d13abf7c840cb7709af64f384c8a88892b37b514ec8943a38bde5630090daaf"
+  ],
+  "plugins-cached-only": [
+    "517d4e55bef84b27581f5d9c8a7ba3229a20438f466fe1465d20d8d11dff4960"
+  ],
+  "plugins-declared-disabled": [
+    "b2349c1ed00590b8c9e830fb9109e1430fd16054a9c2831bceb162a7710721c4"
+  ],
+  "plugins-sideloaded": [
+    "7912604020004e349f700037e2cd51c8e7debd3386444edb97805793dc9604af"
+  ],
+  "plugins-unknown-origin": [
+    "517d4e55bef84b27581f5d9c8a7ba3229a20438f466fe1465d20d8d11dff4960"
+  ],
+  "sandbox-disabled": [
+    "159607e431aa6ddb48456b52c326d8c06a49d392e7e8a87ccb5b5c5734606c7a"
+  ],
+  "settings-stale": [
+    "2e06136707106fe0b6fb13fb05abe9ca7de4ae0924776f0fbd0a49e8592f8950"
+  ],
+  "skills-local-unreviewed": [
+    "91d9b6c1d9a5c5085d9cb99a50e4dfa52f4b7904c38b7f2548d9c4fd8a4ac7ac",
+    "a0c65d7081b036902a4b81bad73cb87200da9e5a575114142fa055c1cf2090d2"
+  ],
+  "skills-managed": [
+    "63910c4c26f291effc85533de80a52f1ed32aeff081e043f3024dd15f5787158"
+  ],
+  "skills-unverifiable": [
+    "63910c4c26f291effc85533de80a52f1ed32aeff081e043f3024dd15f5787158"
+  ],
+  "tools-auto-approved": [
+    "f1d2fd79351539c38f4d255da452ea0d413158f413fbc811f2abb98a2b621869"
+  ]
+}

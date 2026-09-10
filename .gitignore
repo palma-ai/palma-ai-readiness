@@ -1,0 +1,41 @@
+# Operating-system and editor files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local environment values (keep shareable templates)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Python environments, bytecode, and development caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Optional JavaScript development dependencies
+node_modules/
+
+# Generated release archives and local scan output
+/dist/
+*.zip
+*.zip.sha256
+readiness-run-*/
+
+# Keep skill instructions, agent metadata, references, examples, fixtures,
+# vendored parser sources, and third-party notices versioned.

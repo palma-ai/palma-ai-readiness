@@ -1,0 +1,176 @@
+{
+  "gatewayOrigins": [
+    "http://localhost:3000"
+  ],
+  "checksPassed": 1,
+  "items": [
+    {
+      "id": "mcp-local-unaudited",
+      "severity": "critical",
+      "distinct": 4,
+      "declarations": 4
+    },
+    {
+      "id": "permissions-bypassed",
+      "severity": "critical",
+      "distinct": 2,
+      "declarations": 2
+    },
+    {
+      "id": "approval-prompts-disabled",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "browser-actions-unconfirmed",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "browser-use-enabled",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "computer-use-enabled",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-browser-automation",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-computer-use",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-inline-credential",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "tools-auto-approved",
+      "severity": "critical",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "skills-local-unreviewed",
+      "severity": "high",
+      "distinct": 1,
+      "declarations": 2
+    },
+    {
+      "id": "clients-api-key-auth",
+      "severity": "high",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-network-direct",
+      "severity": "high",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-static-secret-auth",
+      "severity": "high",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "plugins-sideloaded",
+      "severity": "high",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "sandbox-disabled",
+      "severity": "high",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "agents-broad-tooling",
+      "severity": "medium",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "clients-outside-enterprise-identity",
+      "severity": "medium",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "hooks-declared",
+      "severity": "medium",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-unknown-transport",
+      "severity": "medium",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "plugins-unknown-origin",
+      "severity": "medium",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "skills-unverifiable",
+      "severity": "medium",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "clients-config-only",
+      "severity": "info",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "mcp-declared-disabled",
+      "severity": "info",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "plugins-cached-only",
+      "severity": "info",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "plugins-declared-disabled",
+      "severity": "info",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "settings-stale",
+      "severity": "info",
+      "distinct": 1,
+      "declarations": 1
+    },
+    {
+      "id": "skills-managed",
+      "severity": "info",
+      "distinct": 1,
+      "declarations": 1
+    }
+  ]
+}

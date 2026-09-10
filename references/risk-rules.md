@@ -1,0 +1,231 @@
+# Risk rules and evidence limits
+
+Vendor documentation reviewed **10 September 2026**. The 29-rule Palma findings catalog is preserved in [palma_catalog.json](../scripts/palma_scan/palma_catalog.json). The report uses the Critical, High, Medium, Low and Info priorities below. Severity expresses Palma's governance priority for the observed condition, not a vendor vulnerability rating or proof of exploitation.
+
+## What the evidence means
+
+The scan records **configuration declarations, installation metadata, and selected OS runtime observations**. A process-name observation establishes that a matching name was visible during collection; it does not establish executable provenance or session permissions. Configuration can be overridden by a selected profile, workspace trust, CLI flags, a running session, an embedding host, or organization policy. An unreadable, unsupported, or truncated source is a coverage gap, never a passed security check. An absent configuration is recorded as absent without inventing missing governance.
+
+Apply the defined rating policy; do not independently change it because the scan is personal, offline, or based on configuration:
+
+- **Critical:** local MCP, direct or unverified remote MCP, computer/browser capabilities, locally sourced skills requiring review, potential configuration credentials, and configured hooks. These conditions need immediate governance attention without waiting for a demonstrated attack. The permission-only exceptions below are Low.
+- **High:** actual sandbox-off, supported authentication and data-sharing concerns, side-loaded plugins, and oversized cached skill/plugin components that can waste agent context, tokens or usage. Size alone does not prove that a component was loaded or billed.
+- **Medium:** scoped catalog concerns such as unknown origin, absent content digests and unknown transport unless a specifically unsupported/malformed MCP shape is established.
+- **Low:** permission bypass, automatic or absent approval prompts, unrestricted folder grants, and specifically malformed/unsupported MCP shapes. Group and highlight these observations instead of discarding them. Original catalog ratings remain visible as `baselineSeverity`.
+- **Info:** informational and hygiene conditions, including disabled, cached, stale and managed-distribution evidence.
+
+Keep observed state alongside the finding. A disabled or cached declaration remains evidence for the matching catalog rule and may also receive a hygiene finding; neither proves present execution. A Critical local-skill priority does not mean malicious code was found or that no review has ever occurred: record **audit not assessed** when that is all the evidence supports. A configured server has not necessarily connected. An unverified gateway route does not establish the absence of every other governance system.
+
+## Documented sources
+
+The default is **machine discovery**: enumerate accessible local user profiles and local volumes, locate project AI markers through directory metadata, then inspect known configuration and installation sources. Explicit `--copied-home` selects a separate offline directory inspection. The retained original local collector supplies installation, package, editor-profile, custom-directory, settings, component, and state adapters; publishing and enrollment are removed. The source records in each report determine what that run actually inspected.
+
+| Client | Common configuration locations | Scope caveat and primary source |
+| --- | --- | --- |
+| Codex | `$CODEX_HOME/config.toml`, normally `~/.codex/config.toml`; project `.codex/config.toml` | Project and profile keys have restrictions; requirements may constrain local settings. [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference) |
+| Claude Code | `~/.claude/settings.json`; project `.claude/settings.json`, `.claude/settings.local.json`; MCP declarations in `~/.claude.json` and `.mcp.json` | Managed sources take precedence. Current versions ignore project/local `defaultMode` values `auto` and `bypassPermissions`; older versions differ. [Settings](https://code.claude.com/docs/en/settings), [directory reference](https://code.claude.com/docs/en/claude-directory) |
+| Gemini CLI | `~/.gemini/settings.json`; project `.gemini/settings.json` | System overrides and session inputs can change behavior. An untrusted workspace ignores project settings and does not connect MCP servers. [Configuration](https://geminicli.com/docs/reference/configuration/), [trusted folders](https://geminicli.com/docs/cli/trusted-folders/) |
+| Cursor | `~/.cursor/mcp.json`, project `.cursor/mcp.json`; corresponding `permissions.json`; CLI `~/.cursor/cli-config.json`, project `.cursor/cli.json` | Desktop and CLI use different permission schemas. Team settings can override local allowances. [MCP](https://prod.cursor.com/help/customization/mcp), [desktop permissions](https://prod.cursor.com/docs/reference/permissions), [CLI permissions](https://prod.cursor.com/docs/cli/reference/permissions) |
+| VS Code / Copilot | User/profile `settings.json`, workspace `.vscode/settings.json`; user/profile `mcp.json`, workspace `.vscode/mcp.json` | JSONC; platform, profile, remote workspace, and policy scope matter. MCP uses a root `servers` object. [Settings](https://code.visualstudio.com/docs/configure/settings), [MCP configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration) |
+| Windsurf / Cascade | `~/.codeium/windsurf/mcp_config.json`; editor user `settings.json` | Current official pages redirect to Devin Desktop. Cascade settings are distinct from the newer Devin Local agent. [MCP](https://docs.devin.ai/desktop/cascade/mcp), [terminal](https://docs.devin.ai/desktop/terminal) |
+
+The collector checks these editor layouts beneath discovered profiles, including layouts copied from another platform:
+
+| Layout | Paths relative to each discovered or explicitly copied profile |
+| --- | --- |
+| macOS | `Library/Application Support/{app}/User/settings.json` |
+| Linux | `.config/{app}/User/settings.json` |
+| Windows | `AppData/Roaming/{app}/User/settings.json` |
+| Editor MCP and named profiles | Corresponding `mcp.json` and `User/profiles/*` configuration stores; interpreted according to each supported client's schema |
+| Claude Desktop | `Library/Application Support/Claude/claude_desktop_config.json`, `AppData/Roaming/Claude/claude_desktop_config.json` |
+
+`{app}` is `Code`, `Code - Insiders`, `Cursor`, `Kiro`, or `Windsurf`. Account files additionally include `.codex/hooks.json` and `.claude/remote-settings.json`. Discovered and explicit workspaces add `.codex/config.toml`, `.codex/hooks.json`, `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`, `.cursor/mcp.json`, `.cursor/permissions.json`, `.cursor/cli.json`, `.gemini/settings.json`, `.vscode/settings.json`, and `.vscode/mcp.json`, plus the additional client catalog below.
+
+Bounded inventories cover account/workspace `.agents/skills`, `.codex/skills`, `.claude/skills`, `.cursor/skills`, `.gemini/skills`; account `.copilot/skills` and workspace `.github/skills`; account `.codeium/windsurf/skills` and workspace `.windsurf/skills`; `.claude/agents`, `.cursor/agents`, `.codex/agents`, `.gemini/agents`; and account caches `.codex/plugins/cache`, `.claude/plugins/cache`, `.gemini/extensions`. Original component adapters inspect selected manifests and referenced hook/MCP metadata without executing component code. Inventory is not a code audit.
+
+Supported actual-account directory overrides include `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `CURSOR_CONFIG_DIR`, `CLINE_DATA_DIR`, editor `APPDATA` / `LOCALAPPDATA` / `XDG_CONFIG_HOME`, and supported Claude plugin cache/seed roots. The original boundary checks reject unsafe overrides and record the reason. Another account's scan uses that account's standard paths, not the current account's environment. Copied-home mode never imports the scanner host's environment or OS installation registries.
+
+Named editor and Codex configuration profiles, Gemini trusted-folder state, Claude saved project references, plugin registry/cache metadata, and Windows Claude Desktop's MSIX Roaming store retain their provenance. Historical references and previous permission-mode acceptance do not establish current grants. Cached `.claude/remote-settings.json` remains historical evidence. Private `.codex/.codex-global-state.json`, editor state backups, browser cookies/history, keychains, and auth caches are not generically decoded: unknown private schemas cannot establish active permissions. Locally present remote/container project files may be discovered on accessible local volumes; no remote host is contacted and no container boundary is crossed.
+
+For supported editor `User/globalStorage/state.vscdb` and named-profile stores, the collector selects only the exact Cline and Roo Code extension rows: `saoudrizwan.claude-dev`, `rooveterinaryinc.roo-cline`, and the historical case variant `RooVeterinaryInc.roo-cline`. Only recognized typed preference fields become evidence; arbitrary extension rows, conversation content, credentials and history are excluded. The collector reads a bounded in-memory snapshot and skips an actively changing or uncheckpointed store. These are persisted preferences; named-profile selection and live extension activation remain unverified. [VS Code extension storage](https://github.com/microsoft/vscode/blob/main/src/vs/platform/extensionManagement/common/extensionStorage.ts), [Cline preferences](https://github.com/cline/cline/blob/main/apps/vscode/src/shared/AutoApprovalSettings.ts), [Roo settings](https://github.com/RooCodeInc/Roo-Code/blob/main/packages/types/src/global-settings.ts)
+
+## Machine discovery sources and limits
+
+Machine scope describes the intended collection surface, including inaccessible areas; it never means every byte or every client was inspected. Directory traversal reads names and metadata to find supported AI markers, not arbitrary project documents. General traversal excludes network/virtual mounts, dependency trees, caches, OS binary trees and application bundles. Known configuration and installation adapters inspect their selected sources separately. Inodes deduplicate overlapping local mount roots; symlinks/reparse points are not traversed. Defaults allow 500,000 directories, 5,000,000 entries and 30 minutes of project discovery, with a 100,000-entry per-directory limit. The Python API accepts larger explicit budgets. A reached limit creates a source gap and `scope.discovery.truncated`; it is never silently presented as exhaustive.
+
+| Surface | Implemented metadata source | Interpretation / authoritative reference |
+| --- | --- | --- |
+| Linux local volumes and accounts | `/proc/self/mountinfo`; local `/etc/passwd`; `/home` metadata | Mounts belong to the scanner's current mount namespace. No LDAP/NSS account enumeration or remote traversal. [Linux mountinfo](https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html), [local account fields](https://man7.org/linux/man-pages/man5/passwd.5.html) |
+| macOS local volumes and accounts | Fixed `/sbin/mount` inventory; local `dscl . -list /Users NFSHomeDirectory`; `/Users` metadata | Only recognized local mounts are traversed. Account enumeration uses ordinal aliases. Local configuration paths retain directory names needed to locate files; paths under the primary home use `~`. [Apple mount source](https://github.com/apple-oss-distributions/diskdev_cmds/blob/main/mount.tproj/mount.8) |
+| Windows local volumes and accounts | `GetLogicalDrives` / `GetDriveTypeW`; local `ProfileList` registry metadata and profile directory metadata | Fixed local drives are included; mapped network drives are excluded. No remote registry query or profile loading. [Drive types](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getdrivetypew) |
+| Running AI process names | Fixed Unix `ps` with only `comm`; Windows local `tasklist /FO CSV /NH` | Only recognized names are exported. No PIDs, usernames, arguments, environment, hostnames or raw paths. Generic `node`/Python wrappers cannot identify an AI client without arguments and remain unclassified. [Apple ps](https://github.com/apple-oss-distributions/adv_cmds/blob/main/ps/ps.1), [Microsoft tasklist](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist) |
+| Installed clients and CLIs | Retained original app-bundle, executable metadata, native payload, npm/package, Windows registry/MSIX and platform installation adapters | Installation identity/version metadata is distinct from runtime observation. Discovered executables and package managers are not started. The shipped `engine/installation*` and `engine/windows_*` catalogs define supported fingerprints. |
+| Service/startup declarations | Known systemd unit filenames; selected macOS LaunchAgent/LaunchDaemon plist program names; known Windows service keys | Saved startup metadata is an installation indicator, not a claim that a service runs or listens. Commands and arguments are discarded. |
+| Browser extension metadata | Standard Chrome/Edge/Brave/Chromium profile extension manifests, bounded default-locale names, and Firefox `extensions.json` metadata | AI-related names are hints, not authenticated publisher identities. Export only selected permission names and broad-host flags; stored active flags do not establish a live browser session. No scripts, browser launch, cookies or history. [Chromium paths](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/user_data_dir.md), [Firefox profiles](https://support.mozilla.org/en-US/kb/profiles-where-firefox-stores-user-data), [Firefox extension database](https://github.com/mozilla-firefox/firefox/blob/main/toolkit/mozapps/extensions/internal/XPIDatabase.sys.mjs) |
+| System / managed AI settings | Original `managed_candidates` paths: Claude/Gemini OS files; Codex `/etc/codex/{config,requirements,managed_config}.toml` or Windows `ProgramData/OpenAI/Codex`; Claude macOS managed plist and Windows `Software/Policies/ClaudeCode/Settings`; Copilot CLI and OpenCode files below | Supported Gemini `GEMINI_CLI_SYSTEM_SETTINGS_PATH` / `GEMINI_CLI_SYSTEM_DEFAULTS_PATH` and Windows system-directory hints are validated as absolute local paths. Policy declaration/source evidence stays separate; collection does not prove MDM enrollment or effective precedence. [Claude settings](https://code.claude.com/docs/en/settings), [Gemini configuration](https://geminicli.com/docs/reference/configuration/) |
+| Execution context | Known Docker/container marker files, WSL kernel marker, explicit agent sandbox environment markers | Only fixed indicator enums are exported. Absence of markers does not prove unrestricted access or that the scanner runs on the intended physical device. A detected container creates a concrete source gap for unverified outer-host access. |
+
+Discovery source records report actual permission denials, unsupported metadata, or reached budgets. Failed areas get stable redacted area identifiers under the responsible discovery category; filesystem exception strings and private names are discarded. `scope.discovery` records profiles, volumes, directories, entries, projects, skipped mounts/links, permission errors and truncation. Methodology belongs here; the report's source list contains the observed issues rather than a generic warning checklist.
+
+## Additional client configuration catalog
+
+| Client | Supported additional configuration sources | Primary reference |
+| --- | --- | --- |
+| OpenCode | `~/.config/opencode/opencode.{json,jsonc}`; project `opencode.{json,jsonc}`, `.opencode/opencode.{json,jsonc}`; managed files under macOS `/Library/Application Support/opencode`, Linux `/etc/opencode`, Windows `ProgramData/opencode` | [Configuration](https://opencode.ai/docs/config/), [permissions](https://opencode.ai/docs/permissions/); V1 and V2 permission shapes remain distinct |
+| GitHub Copilot CLI | `~/.copilot/{settings,config,mcp-config,permissions-config}.json`; project `.github/copilot/settings{,.local}.json`, `.github/mcp.json`; managed-settings file under macOS `/Library/Application Support/GitHubCopilot`, Linux `/etc/github-copilot`, Windows `Program Files/GitHubCopilot` | [Configuration directory](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference); extra vendor MDM sources are not implied by file support |
+| Continue | `~/.continue/config.{yaml,json}` | [Configuration reference](https://docs.continue.dev/reference) |
+| Aider | Home/project `.aider.conf.yml` | [Configuration](https://aider.chat/docs/config.html), [options](https://aider.chat/docs/config/options.html) |
+| LM Studio | `~/.lmstudio/mcp.json` | [MCP](https://lmstudio.ai/docs/app/mcp) |
+| Antigravity | `~/.gemini/config/mcp_config.json`, `~/.gemini/antigravity-cli/settings.json`, project `.agents/mcp_config.json` | [MCP](https://antigravity.google/docs/mcp), [CLI settings](https://antigravity.google/docs/cli/settings/) |
+| OpenClaw | `~/.openclaw/openclaw.json` JSON5, `exec-approvals.json` | [Gateway configuration](https://docs.openclaw.ai/gateway/configuration), [execution approvals](https://docs.openclaw.ai/tools/exec-approvals) |
+| Cline / Roo Code / Kiro | Original CLI and editor globalStorage configuration stores, Kiro `.kiro/settings/mcp.json`, scoped extension settings and inventory | [Cline paths](https://github.com/cline/cline/blob/main/sdk/packages/shared/src/storage/paths.ts), [Roo settings](https://github.com/RooCodeInc/Roo-Code/blob/main/packages/types/src/global-settings.ts), [Kiro MCP](https://kiro.dev/docs/mcp/configuration/) |
+
+The additional adapters evaluate supported typed approval, isolation, browser and listener declarations. They do not probe a configured listener or fetch MCP metadata. The following index describes the shared core rules.
+
+## Shipped rule index
+
+The evaluator preserves the Palma catalog matches and uses the priorities shown here. Findings carry the original `baselineSeverity`, the resulting severity, and `ratingReason`. Cached, disabled, stale, superseded and unselected-profile states remain attached to their evidence rather than silently removing a catalog match. Those states qualify application; they do not rewrite the stored declaration.
+
+| Rule ID | Priority | Evidence condition |
+| --- | --- | --- |
+| `mcp-local-unaudited` | Critical | Local `stdio` or `sdk` MCP declaration |
+| `mcp-inline-credential` | Critical | Potential credential stored inline in MCP configuration |
+| `mcp-network-direct` | Critical | Direct or unverified network MCP route |
+| `mcp-static-secret-auth` | High | Static/bearer-header authentication metadata; inline literals also match the Critical credential rule |
+| `mcp-unknown-transport` | Medium | Unknown transport; the explicit unsupported-shape exception below is Low |
+| `mcp-declared-disabled` | Info | Disabled MCP declaration retained in configuration |
+| `skills-local-unreviewed` | Critical | Skill origin recorded as user or project; audit status remains separately stated |
+| `skills-unverifiable` | Medium | Skill without a content digest |
+| `skills-managed` | Info | Skill with managed-distribution provenance |
+| `plugins-sideloaded` | High | Plugin with local installation provenance |
+| `plugins-unknown-origin` | Medium | Plugin with unknown recorded origin |
+| `plugins-declared-disabled` | Info | Disabled plugin declaration |
+| `plugins-cached-only` | Info | Plugin cache without established installation |
+| `clients-api-key-auth` | High | Client authentication metadata includes API-key use |
+| `clients-outside-enterprise-identity` | Medium | Vendor/cloud authentication without collected enterprise-identity evidence |
+| `clients-config-only` | Info | Client configuration without detected installation evidence |
+| `mcp-computer-use` | Critical | Computer-control MCP capability declaration or identified capability hint |
+| `mcp-browser-automation` | Critical | Browser-automation MCP capability declaration or identified capability hint |
+| `browser-use-enabled` | Critical | Browser-category setting matches a catalog enabled/trusted value |
+| `browser-actions-unconfirmed` | Critical | Browser sensitive-action confirmation explicitly disabled |
+| `computer-use-enabled` | Critical | Computer-category setting matches a catalog enabled/trusted value |
+| `permissions-bypassed` | Low | Permission-category value matches the catalog bypass/autonomous-mode set |
+| `tools-auto-approved` | Low | A catalog automatic-approval key is true |
+| `approval-prompts-disabled` | Low | `approval_policy` is `never`, independently of the sandbox finding |
+| `settings-stale` | Info | Collected setting state is stale |
+| `sandbox-disabled` | High / Low | Actual disabled sandbox values remain High; unrestricted-access declarations receive Low permission priority |
+| `hooks-declared` | Critical | Configured hook metadata |
+| `experimental-enabled` | Info | Experimental-category setting matches a catalog enabled value |
+| `agents-broad-tooling` | Medium | An agent definition declares at least ten tools |
+
+Additional client-specific rules extend this coverage. Potential credentials found in any supported configuration and configured hooks receive the same Critical priority. `unrestricted-folder-access` groups broad folder-grant declarations at Low. `mcp-unsupported-shape` is Low when the parser specifically establishes a malformed or unsupported MCP shape. A general unknown transport keeps Medium.
+
+`artifacts-oversized` is High when an identified skill/plugin/agent/hook component exceeds its actual read limit, or when a collected skill or agent instruction manifest is larger than 64 KiB (65,536 bytes). The latter is a Palma policy review threshold, not a collection limit; equality does not trigger it. Evidence records measured bytes and either the actual read limit or `reviewThresholdBytes`, and multiple adapters reporting the same client and file location count once. Large plugin metadata or arbitrary binary files do not automatically trigger the instruction-size rule. Bytes indicate potential context and usage overhead, not measured token consumption.
+
+`skills-duplicate-content` is Low when skills share the same client, name and nonempty content digest across more than one distinct location. The finding includes all matching declarations. Missing digests, different clients, different names and different content are not merged. Copies may be intentional; review which are needed before consolidating them. Repetition alone does not establish that an agent loaded the copies or consumed additional tokens.
+
+The catalog's governance labels do not prove credential validity, hostile code, live tool use, absence of all third-party controls, or past review history. Explain the observed fact precisely and retain the policy's priority.
+
+### Additional policy priorities
+
+Client-specific rules also identify broad permissions, isolation settings, remote access and potential data-sharing paths. Browser/computer capabilities, hooks and potential credentials keep Critical priority. Permission bypass, automatic approval and unrestricted folder grants are Low and stay visible as grouped findings. Actual sandbox-off, gateway authentication/listener changes, session sharing, code-bearing data events and oversized components are High where the supported rule identifies that condition. Other focused checks retain their defined Medium, Low or Info priority.
+
+Hooks, skills and MCP access can combine into a data-exposure path: untrusted instructions may cause prompt injection, a tool or script may read credentials or personally identifiable information (PII), and an external destination may receive that data. Explain which part is supported by the collected configuration. Review source/version provenance, permissions, event triggers, tool scope, sensitive-data access and outbound destinations. Do not claim a successful injection or an actual data leak without corresponding evidence.
+
+## Rule rationale and documented boundaries
+
+This table explains supported rule semantics and explicitly identifies metadata-only or future checks. Do not infer security meaning from substrings such as `allow`, `experimental`, `browser`, or `disabled`.
+
+| Surface | Condition and priority | What to explain / action |
+| --- | --- | --- |
+| Codex execution | Unrestricted permission declarations and `approval_policy = "never"`: Low. Actual sandbox-off values remain High. | `never` rejects approval prompts; it is not proof of a sandbox escape. Group the permission declarations for review and narrow access to the task. Do not combine unrelated profiles into an effective policy. [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference) |
+| Codex network | Explicit workspace network access and broad writable roots are collected separately; unrestricted folder grants are Low. Incompatible sandbox modes remain context for unused blocks. | Describe the access expansion and narrow it to the task. The sandboxed-command proxy does not govern hosted tools, apps, or MCP. [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference) |
+| Claude execution | `permissions.defaultMode = "bypassPermissions"`: Low declared permission condition. | Preserve `permissions.disableBypassPermissionsMode` and scope as context. `dontAsk` allows only pre-approved operations; `acceptEdits` and `auto` have different semantics. Do not describe a stored or blocked mode as a verified active session. [Permission modes](https://code.claude.com/docs/en/permission-modes) |
+| Claude sandbox | Explicit `sandbox.enabled = false`: High isolation priority. Weaker sandbox options or excluded commands require their own contextual review. | `allowUnsandboxedCommands = true` permits an approval flow; it does not silently bypass it. `autoAllowBashIfSandboxed = true` is compatible with sandbox protection. [Sandboxing](https://code.claude.com/docs/en/sandboxing) |
+| Claude broad grants | Broad `permissions.allow` rules for shell or MCP: Low permission review, with deny/ask rules and scope retained. | Prefer narrow command/tool grants. Command patterns are not equivalent to OS isolation. [Permissions](https://code.claude.com/docs/en/permissions) |
+| Gemini execution | `general.defaultApprovalMode` accepts `default`, `auto_edit`, `plan`; matching permission-mode findings are Low. `tools.sandbox = false` matches High sandbox priority. | Current docs restrict YOLO to CLI flags, which are not inspected. Unknown schema values require an explicit source issue. System/session overrides and per-tool sandboxing remain evidence context; one disabled mechanism does not prove the entire host is unconfined. [Configuration](https://geminicli.com/docs/reference/configuration/), [sandboxing](https://geminicli.com/docs/cli/sandbox/) |
+| Gemini MCP approvals | `mcpServers.<name>.trust = true`: Low automatic-approval review; the MCP connection itself retains Critical priority. | `includeTools` restricts available tools; `excludeTools` wins on conflicts. Scope conclusions to that server. [MCP servers](https://geminicli.com/docs/tools/mcp-server/) |
+| VS Code execution | `chat.tools.global.autoApprove = true`; supported automatic permission defaults: Low. | These change confirmations; terminal sandboxing remains independent. Organization policy and session choices can override defaults. [Approvals](https://code.visualstudio.com/docs/agents/run/approvals), [AI settings](https://code.visualstudio.com/docs/agents/reference/ai-settings) |
+| VS Code shell grants | Broad `true` entries in `chat.tools.terminal.autoApprove`: Low permission review. | Retain `chat.tools.terminal.enableAutoApprove = false` as context. A matching `false` entry requires approval and takes precedence; it does not prohibit execution. Review `ignoreDefaultAutoApproveRules = true`. [Approvals](https://code.visualstudio.com/docs/agents/run/approvals) |
+| VS Code sandbox/network | `chat.agent.sandbox.enabled = "off"`: High. Separate command-network settings have their own rules. Legacy forms and filter flags retain their schema context. | Vendor versions document multiple forms. Network domain lists apply only with `chat.agent.networkFilter`; denies win. Never treat empty lists as unrestricted when filtering is enabled. [AI settings](https://code.visualstudio.com/docs/agents/reference/ai-settings) |
+| VS Code Claude harness | `github.copilot.chat.claudeAgent.allowDangerouslySkipPermissions = true`: Low permission priority. | This is a distinct harness-specific bypass. Review it alongside the applicable sandbox and agent scope. [AI settings](https://code.visualstudio.com/docs/agents/reference/ai-settings) |
+| Cursor desktop grants | Recognized blanket `terminalAllowlist` / `mcpAllowlist` tokens: Low permission review. Per-command prefix and arbitrary `server:*` matching are not exhaustive. | User and project arrays concatenate. A defined empty list overrides the UI list. `autoRun` prose steers a classifier; it is not enforcement. [Desktop permissions](https://prod.cursor.com/docs/reference/permissions) |
+| Cursor CLI grants | Broad `permissions.allow` tokens such as `Shell(*)` or `Mcp(*:*)`: Low permission review. | Retain `permissions.deny` as context. `WebFetch(*)` allows any domain; separate network review from shell access. [CLI permissions](https://prod.cursor.com/docs/cli/reference/permissions) |
+| Cascade grants — metadata only | `windsurf.cascadeCommandsAllowList` / `DenyList` are summarized without a dedicated auto-run verdict. | Deny entries require approval. Team lists merge; denied commands prompt. The documented Turbo behavior warrants review, but its persisted setting key is not established here. [Terminal](https://docs.devin.ai/desktop/terminal) |
+| Literal credentials | Non-placeholder credential-like values in supported config fields: Critical. | Report field category and count, never the value. No claim of validity or leakage. Recommend vendor-supported secret references; rotate if exposure is confirmed. `${input:...}`, `${env:...}`, `$VAR`, and `${file:...}` are references, not resolved secrets. Literal fallbacks remain potential credential storage. [VS Code MCP](https://code.visualstudio.com/docs/agents/reference/mcp-configuration), [Windsurf MCP](https://docs.devin.ai/desktop/cascade/mcp) |
+| Network MCP | Direct or unverified remote MCP: Critical independently of credential evidence. | TLS protects data in transit; it does not establish governance. A client URL does not prove server bind address, authentication, reachability, or vulnerability. Loopback HTTP, `unix:`, and `pipe:` retain their actual transport classification. [MCP transports](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports) |
+| Local MCP and mutable packages | Configured stdio/SDK server: Critical. Mutable package versions add reproducibility evidence. | Local servers execute code with client privileges when launched unless isolated. Review provenance, pin a reviewed version, and minimize privileges. Do not launch commands to discover capabilities. [MCP security](https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices) |
+| Missing remote scope evidence | Direct or unverified remote declarations keep Critical even when a local scope list is absent. | Say which controls are visible locally. OAuth, gateway controls, enterprise policy, and tool approval state may live elsewhere. Authorization is optional at protocol level; stdio uses a different model. [MCP authorization](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization) |
+| Hooks and skills | Configured hooks and locally sourced skills requiring review: Critical. Plugin provenance keeps its original catalog rules. | Hook events may transmit prompts or tool inputs. Review destinations and handlers manually. Instructions and scripts are untrusted input. A file's existence is not activation or a prior audit result. [Claude hooks](https://code.claude.com/docs/en/hooks), [Claude skills](https://code.claude.com/docs/en/skills) |
+| Experiments | The baseline experimental-enabled rule is Info; additional capabilities may independently match higher-priority rules. | Explain the actual capability. Experiments that add isolation are not vulnerabilities; stable `features.*` keys must not be generically flagged. [Codex reference](https://learn.chatgpt.com/docs/config-file/config-reference), [VS Code AI settings](https://code.visualstudio.com/docs/agents/reference/ai-settings) |
+
+## Additional governance surfaces
+
+These add useful context beyond an endpoint inventory. Preserve disabled and unknown states; none establishes missing organization controls merely by being present.
+
+| Surface | Deterministic evidence | Review and exceptions |
+| --- | --- | --- |
+| Shell environment inheritance | Codex `shell_environment_policy.inherit = "all"` together with `ignore_default_excludes = true` | High potential exposure to child commands; do not read environment contents. Account for `filters` and legacy `include_only` / `exclude`: filters can narrow inheritance, and explicit `set` runs after exclusions. [Advanced config](https://learn.chatgpt.com/docs/config-file/config-advanced) |
+| Project server startup | Shipped: Claude `enableAllProjectMcpServers = true`. Future: reconciling `enabledMcpjsonServers` / `disabledMcpjsonServers` by source. | Review who can edit the approved project configuration. This approves server startup, not every tool call. Untrusted-project and disabled-server restrictions still apply. [MCP](https://code.claude.com/docs/en/mcp) |
+| Remote continuation | Claude user/managed `remoteControlAtStartup = true` | High account/device access and transcript-handling priority. Project/local `true` is ignored; `false` there restricts startup. `disableRemoteControl = true` blocks it. This is authenticated outbound connectivity, not an exposed inbound listener. [Remote Control](https://code.claude.com/docs/en/remote-control) |
+| Remote agent delegation — future parser | Gemini `.gemini/agents/*.md` is inventoried only; `kind: remote` and `agent_card_url` / `agent_card_json` frontmatter is not inspected. | Future data-flow review is independent of MCP. Authentication may use environment references or command helpers: never fetch a card or execute a helper. Complex YAML needs an explicit unsupported-format gap. [Remote agents](https://geminicli.com/docs/core/remote-agents/) |
+| Local plugin activation | VS Code `chat.pluginLocations` maps paths to `true` / `false`; `chat.plugins.enabledPlugins` maps plugin IDs to booleans | Count configured enabled/disabled items without exposing or following arbitrary path keys. Marketplace provenance, including `chat.plugins.marketplaces`, remains a future review surface; a source declaration does not prove installation. [Agent plugins](https://code.visualstudio.com/docs/agent-customization/agent-plugins), [managed AI settings](https://code.visualstudio.com/docs/enterprise/ai-settings) |
+| Hook activation | VS Code `chat.useHooks` is metadata; configured `chat.hookFilesLocations` produces hook inventory. | Configured hooks receive Critical automatic-execution priority. A global switch alone does not establish an installed hook. `chat.useHooks` applies only to the Local harness. [Managed AI settings](https://code.visualstudio.com/docs/enterprise/ai-settings), [agent plugins](https://code.visualstudio.com/docs/agent-customization/agent-plugins) |
+
+Codex also documents `features.network_proxy.dangerously_allow_all_unix_sockets` and `dangerously_allow_non_loopback_proxy`. When that proxy is enabled, these merit focused IPC/listener review. [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+
+## Browser and computer access
+
+Treat native desktop interaction, browser automation, and web search as separate capabilities. The presence of a browser-related name is only a capability hint.
+
+| Client | Supported observation | Interpretation and proportionate action |
+| --- | --- | --- |
+| Codex | Shipped: `computer_use.default_app_access` and supported global policy flags. Future: app-specific policies and `computer_use.windows.always_allowed_app_ids`. | Policy allows do not establish enablement. Review allowed apps and operating-system permissions; keep sensitive tasks scoped. Private runtime state files are not used to infer access grants. [Computer Use](https://learn.chatgpt.com/docs/computer-use) |
+| Codex browser | Shipped: `browser_use.default_origin_policy` for `access`, `uploads`, `downloads`, `full_cdp_access`. Future: per-origin map summaries. | Browser/computer capability findings keep Critical priority with the observed policy context. `allow` leaves other gates intact; `browser_use.disable_auto_review = true` requests human review. Full CDP requires its own enablement and approval. [Browser](https://learn.chatgpt.com/docs/browser), [configuration](https://learn.chatgpt.com/docs/config-file/config-reference) |
+| Gemini browser | `agents.overrides.browser_agent.enabled = true`; `agents.browser.sessionMode`, `confirmSensitiveActions`, `blockFileUploads` | Browser-enabled and unconfirmed-action conditions are Critical. Existing/persistent sessions need scoped account review. Confirmation settings and browser policy do not alone prove which session is running. [Subagents](https://geminicli.com/docs/core/subagents/) |
+| VS Code browser | `workbench.browser.enableChatTools = true` | Critical browser-capability priority. Agent-opened tabs use isolated sessions; existing authenticated tabs require sharing. Do not claim this setting exposes all normal browser cookies. [Browser tools](https://code.visualstudio.com/docs/agents/run/browser-tools) |
+| Cursor browser — manual controls review | Recognized MCP packages can supply a capability hint; native browser session and enterprise-origin settings are not collected. | Enterprise origin controls are dashboard-managed. A missing local list proves nothing. Redirects and link navigation limit the allowlist's protection. [Browser](https://prod.cursor.com/docs/agent/tools/browser) |
+
+## Manual or future checks — do not report as tested
+
+- **Effective policy:** reconcile the actual client version, selected profile, session flags, trust status, remote/MDM policy, and disabled plugins. Do not start installed clients: startup can execute hooks or connect services.
+- **Local listeners and remote control:** verify server ownership, listening interfaces, origin checks, authentication, account membership, and remote-control approvals through an independently authorized inspection. A `localhost` client endpoint does not establish a safe listener.
+- **MCP server security:** token audience validation, least-privilege scopes, token passthrough, confused-deputy protections, and tool-result trust require server-side evidence. Configuration-only inspection cannot validate them. [MCP security](https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices)
+- **Skill/plugin safety:** review provenance, exact versions, commands, credential access, outbound requests, and Claude `allowed-tools` grants. Never execute embedded shell substitutions, scripts, or installers for inspection. A filesystem inventory is not a vulnerability scan or code audit. [Claude skills](https://code.claude.com/docs/en/skills)
+- **Credentials:** do not resolve environment/file/input references, inspect keychains or auth caches, authenticate with a token, or copy raw configuration into the report. A template with a literal fallback can still embed a secret; classify the fallback without exposing it.
+- **Coverage:** OS privacy permissions, cloud admin policy, registry enforcement, live tool invocations, installed-version vulnerability matching, browser session contents, and service listener ownership remain unverified. Fixed process-name inventories and supported registry/file declarations are collected as described above; they do not answer those enforcement questions.
+
+## Evidence handling
+
+Retain observed tool/component names, actionable source locations, bounded typed settings, structural counts and reason codes. Withhold commands, arguments, credential-bearing URLs, credential/header/env values and unrelated raw configuration. Reject symlinks, special files, oversize inputs, excessive nesting, duplicate keys and ambiguous types with the appropriate source issue and policy finding. Do not evaluate configuration as code. HTML-escape names and all other display content; keep the report self-contained without remote fonts, images, analytics or upload behavior.
+
+Evaluation records the rule version and evidence IDs so that the same sanitized snapshot produces the same findings. Missing evidence remains a stated limitation.
+
+## Public provider identification for report icons
+
+Reviewed **10 September 2026**. This small maintained catalog supplies recognizable provider icons while the local report retains useful connector names. It does not export credential values, endpoint URLs or command arguments. A match identifies a **declared provider**, not a successful connection, authenticated account, trusted package, official endorsement, or audited integration. Unknown/custom services keep a generic icon and their useful local display name.
+
+| Fixed provider ID / name | Exact public hostname | Primary evidence |
+| --- | --- | --- |
+| `github` / GitHub | `api.githubcopilot.com` | [GitHub's MCP server](https://github.com/github/github-mcp-server) documents its hosted endpoint. Private Enterprise domains are not inferred. |
+| `notion` / Notion | `mcp.notion.com` | [Notion connection guide](https://developers.notion.com/guides/mcp/get-started-with-mcp) documents HTTP and SSE paths on this host. |
+| `linear` / Linear | `mcp.linear.app` | [Linear MCP documentation](https://linear.app/docs/mcp) documents the hosted endpoint. |
+| `atlassian` / Atlassian | `mcp.atlassian.com` | [Atlassian MCP migration guide](https://support.atlassian.com/atlassian-ai-gateway/docs/how-to-upgrade-from-atlassian-rovo-mcp-v1-to-atlassian-rovo-mcp-v2/) documents versioned paths on this host. |
+| `slack` / Slack | `mcp.slack.com` | [Slack MCP documentation](https://docs.slack.dev/ai/slack-mcp-server/) documents its Streamable HTTP endpoint. |
+| `figma` / Figma | `mcp.figma.com` | [Figma remote-server setup](https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/) documents the hosted endpoint. A localhost port does not identify Figma. |
+| `context7` / Context7 | `mcp.context7.com` | [Context7 repository](https://github.com/upstash/context7) documents its hosted MCP endpoint. |
+| `browserbase` / Browserbase | `mcp.browserbase.com` | [Browserbase repository](https://github.com/browserbase/mcp-server-browserbase) documents its hosted MCP endpoint. |
+
+| Fixed provider ID / name | Exact npm package identifier | Primary evidence |
+| --- | --- | --- |
+| `playwright` / Playwright | `@playwright/mcp` | [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp) |
+| `chrome` / Chrome DevTools | `chrome-devtools-mcp` | [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) |
+| `filesystem` / Filesystem | `@modelcontextprotocol/server-filesystem` | [MCP filesystem reference server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) |
+| `context7` / Context7 | `@upstash/context7-mcp` | [Context7 package listing](https://github.com/upstash/context7) |
+| `browserbase` / Browserbase | `@browserbasehq/mcp` | [Vendor package manifest](https://github.com/browserbase/mcp-server-browserbase/blob/main/package.json), [server manifest](https://github.com/browserbase/mcp-server-browserbase/blob/main/server.json) |
+
+Match an exact parsed hostname using HTTPS and the default port or port 443. Reject ambiguous authorities, credentials in the authority, nonstandard ports, and lookalike suffixes. Match packages only in recognized launch syntax, separating an optional version from an exact package identifier. A package appearing in an arbitrary command argument or connection name is insufficient for provider classification. Provider IDs and provider labels come from fixed constants; a connector's own name remains separate. Icons must be embedded assets, never fetched from discovered URLs.
+
+The Browserbase source repository was archived in July 2026; identification does not imply ongoing maintenance. The reviewed vendor manifest identifies npm `@browserbasehq/mcp` and a separate OCI image `browserbasehq/mcp-server-browserbase`. Do not invent npm `@browserbasehq/mcp-server-browserbase` from the image/repository name. [Browserbase manifest](https://github.com/browserbase/mcp-server-browserbase/blob/main/server.json)
+
+Google Drive's `@modelcontextprotocol/server-gdrive` is documented in the [archived MCP reference servers](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive), not as a current Google-maintained MCP package. It is excluded from the current official-provider package catalog. Self-hosted endpoints, enterprise hostnames, transport bridges, and other providers require separately verified additions; this catalog does not claim to recognize every integration.

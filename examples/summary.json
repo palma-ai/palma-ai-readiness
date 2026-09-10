@@ -1,0 +1,29 @@
+{
+  "counts": {
+    "agent": 1,
+    "client": 8,
+    "hook": 1,
+    "mcp": 8,
+    "plugin": 2,
+    "setting": 17,
+    "skill": 2
+  },
+  "coverage": {
+    "collected": 20,
+    "error": 1,
+    "missing": 192,
+    "skipped": 0
+  },
+  "findings": {
+    "critical": 10,
+    "high": 2,
+    "info": 6,
+    "low": 6,
+    "medium": 1
+  },
+  "limitationCount": 2,
+  "mode": "endpoint",
+  "schemaVersion": "2.0",
+  "scope": "copied-home",
+  "status": "partial"
+}
