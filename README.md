@@ -50,7 +50,9 @@ Each run saves `report.html`, `snapshot.json` (sanitized evidence and findings),
 open evidence and inventory details. Search actual skill, plugin, agent, and connector
 names and their local configuration paths. All priorities remain visible, with Critical
 and High first. Client and connector icons are embedded.
-The report works offline and makes no network requests.
+The report uses Palma's light visual style, with Onest typography, linked metric cards,
+priority and access charts, and expandable evidence. Its font and artwork are embedded;
+the report works offline and makes no network requests.
 
 Rebuild a saved report without rescanning:
 

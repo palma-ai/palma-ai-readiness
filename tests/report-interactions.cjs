@@ -17,6 +17,17 @@ window.HTMLElement.prototype.scrollIntoView = function () {};
 const scripts = [...document.querySelectorAll('script')];
 assert.equal(scripts.length, 1, 'one trusted bundled interaction script');
 assert.equal(scripts[0].src, '', 'no external script source');
+assert.equal(document.getElementById('print-report').getAttribute('aria-label'), 'Print report', 'print action keeps an accessible name when its mobile text is hidden');
+for (const table of document.querySelectorAll('table')) {
+  assert.equal(table.getAttribute('role'), 'table', 'stacked mobile tables retain explicit semantics');
+  for (const row of table.rows) {
+    assert.equal(row.getAttribute('role'), 'row');
+    for (const cell of row.cells) {
+      const role = cell.tagName === 'TD' ? 'cell' : cell.scope === 'col' ? 'columnheader' : 'rowheader';
+      assert.equal(cell.getAttribute('role'), role);
+    }
+  }
+}
 assert.equal(window.getComputedStyle(document.querySelector('.inventory-toolbar')).display, 'none', 'inventory search stays hidden without JavaScript');
 window.eval(scripts[0].textContent);
 assert.equal(window.getComputedStyle(document.querySelector('.inventory-toolbar')).display, 'flex', 'inventory search appears when the local script is active');
