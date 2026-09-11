@@ -1,7 +1,8 @@
 # Rebuilding the Palma report, with or without the renderer
 
-The normal path is `palma-scan.py report`. Its single renderer module contains the Palma
-logo, styles, SVG visualizations, and interactions. It uses no external resources. This
+The normal path is `palma-scan.py report`. The renderer and its `report_theme.py` and
+`report_font.py` modules embed the Palma logo, styles, Onest font, SVG visualizations,
+and interactions in a single HTML file. It uses no external resources. This
 reference is the fallback specification when an agent must reconstruct the report from
 sanitized evidence or explain the result without running the scripts.
 
@@ -47,7 +48,9 @@ all information remains usable without JavaScript.
    A declared report has a prominent “Session inventory — endpoint not scanned” banner.
 2. **Review first.** Start with a clear sentence about the highest supported priority and
    show at most three leading actions. Critical and High precede other priorities.
-   Keep the key action and reason visible; defer the full evidence until requested.
+   Use up to three numbered white cards with the condition and recommended action visible;
+   defer the full evidence until requested. A compact priority ring and labeled bars
+   show the exact finding distribution, including a neutral empty ring for zero findings.
 3. **At a glance.** Use a few compact metrics for AI clients, MCP declarations, extensions,
    and review findings. A severity distribution shows the actual counts, with labels and
    a textual equivalent. Use a second simple bar/ring for local vs remote vs unknown MCP
@@ -93,20 +96,26 @@ invent certification badges or imitate a verified security seal.
 
 | Element | Guidance |
 | --- | --- |
-| Brand | Palma teal `#00a9c7`, deeper teal `#007a93` for readable links and actions |
-| Base | Cool white `#f8fafc`, white surfaces, ink `#0f172a`, subdued slate secondary text |
-| Typography | System sans-serif stack; large restrained title, compact uppercase section labels, readable 15–16px body; code in system monospace |
-| Layout | Centered content about 1160px wide, 24–40px desktop gutters, generous 24–32px section gaps |
-| Surfaces | Thin pale borders, restrained corner radius, subtle elevation, no dense grid of equally weighted warning cards |
+| Brand | `palma-brand-motion` 1.0.1: Palma teal `#00a9c7`, deeper teal `#007a93` for readable links/actions, signature gradient `#43A1D0` → `#33C0D0` |
+| Base | Pale-cyan page ground (`#eef7fa` → `#f6fbfc` → `#e9f4f8`) with a soft cyan radial bloom, white cards, ink `#0f172a`, slate secondary text |
+| Typography | Embedded Onest variable font, system sans-serif fallback; 700 headings, 600 labels, readable 15–16px body; code in system monospace |
+| Layout | Centered content up to 1180px wide, 24–40px desktop gutters, generous section gaps, four linked metric cards in a row (two on mobile) |
+| Surfaces | White cards, `#e2e8f0` borders, 16px card / 22px section corners; shadow `0 10px 15px -3px rgba(15,23,42,.06), 0 4px 6px -2px rgba(15,23,42,.03)` |
 | Priority | Critical/High get distinct text and warm accents; Medium amber; Low/Info muted blue/slate. Never rely on color alone |
 | Charts | Simple horizontal bars or rings with exact count labels and a legend; accessible description; no chart library needed |
-| Detail | Collapsed evidence with clear disclosure labels; long paths/keys wrap, never overflow |
+| Detail | Pale-cyan next-step panels, quiet evidence disclosures, category icons on inventory cards; long paths/keys wrap, never overflow |
 | Mobile | Single column at narrow widths, 16px gutters, wrapping controls and tables/cards that remain readable at 360px |
 | Print | Remove sticky navigation and filter controls, expand findings/evidence, retain scope/coverage and source references |
 
 Avoid full-width red banners for ordinary capabilities, decorative gauges, excessive
 small badges, repeated paragraphs, animated counters, large hero artwork, and marketing
 above scan results. The report should make the first useful action obvious in seconds.
+The priority ring represents a distribution of actual findings, not a score or progress
+toward safety. Use native SVG/CSS for the charts and the illustrative team diagram.
+Palma is a light brand: avoid navy/neon surfaces. Match the light card and list patterns
+on the public [Palma site](https://palma.ai/), without live-app screenshots or sample
+marketing statistics. Use the brand's `cubic-bezier(.16,1,.3,1)` easing for brief hover
+and disclosure transitions; keep charts static and honor reduced motion.
 
 ## Interaction and offline contract
 
@@ -116,9 +125,12 @@ counts or hide coverage caveats. Search across visible descriptions, client name
 source labels, with an empty-state message. Reset restores all findings. Support reduced
 motion; keyboard navigation and disclosure activation must work.
 
-Inline CSS/SVG/JavaScript only. No forms, analytics, `fetch`, XHR, WebSocket, remote fonts,
+Inline CSS/SVG/JavaScript only. The fixed, bundled Onest 2.001 font is a base64 data URL;
+include its SIL Open Font License and provenance in the standalone HTML artwork credits.
+No forms, analytics, `fetch`, XHR, WebSocket, remote fonts,
 remote images or automatic navigation. A restrictive meta Content-Security-Policy should
-deny external resources, connections, form actions and frames. Escape untrusted HTML and
+deny external resources, connections, form actions and frames. Permit only `data:` for
+fonts, and pin the inline stylesheet and script by hash. Escape untrusted HTML and
 attribute values; never concatenate raw snapshot JSON into executable scripts or HTML.
 Use `textContent` for dynamic text. External documentation/calendar links must use safe
 HTTPS destinations and explicit clicks; reject `javascript:`, credentials, and malformed

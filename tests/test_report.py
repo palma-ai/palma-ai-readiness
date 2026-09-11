@@ -138,7 +138,46 @@ class ReportTests(unittest.TestCase):
         for api in ("fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon", "innerHTML", "document.write", "eval("):
             self.assertNotIn(api, javascript)
         self.assertNotIn("@import", "".join(document.styles))
-        self.assertNotIn("url(", "".join(document.styles))
+        # The only CSS resource is the fixed, embedded Onest font. No URL from
+        # a snapshot, external stylesheet, local path, or network is permitted.
+        css = "".join(document.styles)
+        urls = re.findall(r"url\(([^)]+)\)", css)
+        self.assertEqual(len(urls), 1)
+        self.assertTrue(urls[0].startswith("data:font/ttf;base64,"))
+        font = base64.b64decode(urls[0].split(",", 1)[1], validate=True)
+        self.assertEqual(hashlib.sha256(font).hexdigest(),
+                         "966c5c29b4755da84b6854d5c21dd4eaa2420225d0e9874de602de176d4a9f31")
+        policy = next(attrs["content"] for tag, attrs in document.tags
+                      if tag == "meta" and attrs.get("http-equiv") == "Content-Security-Policy")
+        self.assertIn("font-src data:", policy)
+        self.assertIn("connect-src 'none'", policy)
+
+    def test_priority_ring_matches_findings_and_handles_empty_evidence(self):
+        data = snapshot()
+        for counts in ({}, {"critical": 3, "high": 2, "medium": 1, "low": 4, "info": 1}, {"info": 1}):
+            with self.subTest(counts=counts):
+                data["findings"] = [dict(snapshot()["findings"][0], id=f"{severity}-{i}", severity=severity)
+                                    for severity, count in counts.items() for i in range(count)]
+                document = Document(render_report(data, {"findings": 9000}))
+                segments = [attrs for tag, attrs in document.tags
+                            if tag == "circle" and attrs.get("class", "").startswith("ring-segment ")]
+                self.assertEqual(len(segments), len(counts))
+                offset = 0.0
+                for segment, (severity, count) in zip(segments, counts.items()):
+                    share = 100 * count / sum(counts.values())
+                    self.assertEqual(segment["class"], f"ring-segment ring-{severity}")
+                    self.assertAlmostEqual(float(segment["stroke-dasharray"].split()[0]), share, places=5)
+                    self.assertAlmostEqual(float(segment["stroke-dashoffset"]), -offset, places=5)
+                    offset += share
+                self.assertNotIn("9000", " ".join(document.text))
+
+    def test_leading_actions_include_escaped_recommendations(self):
+        data = snapshot()
+        data["findings"][1]["recommendation"] = 'Review <script>untrusted</script> & confirm access.'
+        output = render_report(data, {})
+        overview = output.split('id="overview"', 1)[1].split('<div class="metric-strip"', 1)[0]
+        self.assertIn('class="priority-action">Review &lt;script&gt;untrusted&lt;/script&gt; &amp; confirm access.', overview)
+        self.assertNotIn('<script>untrusted</script>', overview)
 
     def test_booking_link_optional_and_only_safe_https(self):
         baseline = render_report(snapshot(), {})
@@ -405,6 +444,8 @@ class ReportTests(unittest.TestCase):
         self.assertIn('class="artwork-credits"', output)
         self.assertIn('Copyright (c) 2024 Bjorn Lammers, Meier Lukas, Thomas Camlong and Homarr Labs', output)
         self.assertIn('Creative Commons Attribution 4.0 International Public License', output)
+        self.assertIn('Copyright 2021 The Onest Project Authors', output)
+        self.assertIn('SIL OPEN FONT LICENSE Version 1.1', output)
         self.assertLess(output.index('class="artwork-credits"'), output.index('class="local-note local-note-end"'))
         credits = [attrs for tag, attrs in Document(output).tags if tag == "a" and attrs.get("class") == "artwork-reference"]
         self.assertEqual([item["href"] for item in credits], [
