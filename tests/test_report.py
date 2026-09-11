@@ -231,7 +231,7 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn('Observed state', inventory)
         self.assertEqual(inventory.count('class="inventory-row"'), 2)
         self.assertEqual(inventory.count('class="inventory-metadata"'), 2)
-        self.assertIn('<th scope="col">Location &amp; evidence</th>', inventory)
+        self.assertIn('<th scope="col" role="columnheader">Location &amp; evidence</th>', inventory)
 
     def test_disabled_status_is_preserved_even_for_installed_artifacts(self):
         data = snapshot()
