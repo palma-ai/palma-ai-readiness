@@ -193,6 +193,38 @@ class MarketplacePolicyTests(unittest.TestCase):
         self.assertEqual(rules.get('artifacts-unresolved-source'), 'high')
         self.assertNotIn('plugins-unknown-origin', rules)
 
+    def test_project_codex_config_cannot_place_a_reserved_marketplace(self):
+        self.plugin('codex', 'openai-bundled')
+        self.write('.codex/config.toml', '[plugins."other@openai-bundled"]\nenabled=true\n')
+        managed = self.home / 'code/app/.codex/.tmp/bundled-marketplaces/openai-bundled'
+        self.write('code/app/.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource=\'{managed}\'\n[plugins."tool@openai-bundled"]\nenabled=true\n')
+        with patch('subprocess.Popen', side_effect=AssertionError('no process')):
+            result = collect(self.home, [self.home / 'code/app'], scope_type='copied-home')
+        trust = {(x['name'], x['details'].get('installationState')): x['details'].get('sourceTrust') for x in result['observations'] if x['kind'] == 'plugin'}
+        self.assertEqual(trust, {('example', 'cached'): 'unresolved', ('other@openai-bundled', 'config_only'): 'unresolved', ('tool@openai-bundled', 'config_only'): 'unresolved'})
+        account = self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled'
+        self.write('.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource=\'{account}\'\n[plugins."other@openai-bundled"]\nenabled=true\n')
+        with patch('subprocess.Popen', side_effect=AssertionError('no process')):
+            result = collect(self.home, [self.home / 'code/app'], scope_type='copied-home')
+        trust = {x['name']: x['details'].get('sourceTrust') for x in result['observations'] if x['kind'] == 'plugin'}
+        # The account's declaration governs the cached pack and both configured entries.
+        self.assertEqual(trust, {'example': 'allowlisted', 'other@openai-bundled': 'allowlisted', 'tool@openai-bundled': 'allowlisted'})
+
+    def test_managed_marketplace_records_from_other_hosts_and_odd_shapes_stay_unapproved(self):
+        self.plugin('codex', 'openai-bundled')
+        for source in ('C:\\Users\\Someone\\.codex\\.tmp\\bundled-marketplaces\\openai-bundled', '.codex/.tmp/bundled-marketplaces/openai-bundled',
+                       '~/.codex/.tmp/bundled-marketplaces/openai-bundled', str(self.home / '.codex/.tmp/../.tmp/bundled-marketplaces/openai-bundled'),
+                       str(self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled') + '\n', ''):
+            escaped = source.replace('\\', '\\\\').replace('\n', '\\n')
+            self.write('.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource="{escaped}"\n')
+            result = self.scan()
+            trusts = {x['details'].get('sourceTrust') for x in self.artifacts(result)}
+            expected = {'allowlisted'} if source.startswith('C:') else {'unapproved'}
+            self.assertEqual(trusts, expected, source)
+        self.write('.codex/config.toml', '[marketplaces.openai-bundled]\nsource_type="local"\nsource=7\n')
+        result = self.scan()
+        self.assertEqual({x['details'].get('sourceTrust') for x in self.artifacts(result)}, {'unapproved'})
+
     def test_system_skills_read_through_another_client_keep_their_bundled_provenance(self):
         self.write('.codex/skills/.system/skill-creator/SKILL.md', '---\nname: skill-creator\n---\nBundled fixture')
         self.write('.codex/skills/.system/.codex-system-skills.marker', 'c0ffee1234abcdef\n')

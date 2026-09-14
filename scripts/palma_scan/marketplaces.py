@@ -278,7 +278,10 @@ def _configured(builder, item, candidate, roots):
         source_records = [source for root in roots for source in _claude_sources(builder, root.path.parent, market)]
         item.update(_decision(candidate.family, market, source_records, ['marketplace-registry'] if source_records else []))
     elif candidate.family == 'codex' and candidate.path.name == 'config.toml' and isinstance(data.get('plugins'), dict) and name in data['plugins']:
-        source_records = _config_sources(builder, candidate.path.parent, market)
+        # Marketplace sources come from the account's Codex home only: a project's own
+        # config.toml cannot declare where a reserved marketplace lives.
+        homes = [candidate.path.parent] if candidate.scope == 'user' else sorted({root.path.parent.parent for root in roots if root.family == 'codex'})
+        source_records = [source for home in homes for source in _config_sources(builder, home, market)]
         item.update(_decision(candidate.family, market, source_records, ['marketplace-config'] if source_records else []))
 
 
