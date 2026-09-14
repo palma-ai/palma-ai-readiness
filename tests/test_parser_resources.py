@@ -36,7 +36,7 @@ else:
         except subprocess.TimeoutExpired:
             self.fail("numeric document exceeded the subprocess timeout")
         self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
-        self.assertEqual(result.stdout, b"parse_error\n")
+        self.assertEqual(result.stdout.strip(), b"parse_error", "one line, whatever the host's line ending")
 
     def test_sexagesimal_integer_cannot_stall_yaml_or_frontmatter_parsing(self):
         for format_name in ("yaml", "markdown"):

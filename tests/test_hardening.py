@@ -1,6 +1,7 @@
 """Hardening from the pre-release security audit: hidden text, identity, scope, cost and sharing."""
 from contextlib import redirect_stdout
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -194,9 +195,10 @@ class SummaryTests(Home):
             model.read_snapshot(path)
 
     def test_messages_name_the_home_folder_as_tilde(self):
-        with patch.object(cli, "home_folder", return_value=Path("/Users/jo.smith")):
-            self.assertEqual(cli.shown(Path("/Users/jo.smith/readiness-run-1/report.html")), str(Path("~/readiness-run-1/report.html")))
-            self.assertEqual(cli.shown(Path("/srv/runs/report.html")), str(Path("/srv/runs/report.html")))
+        home = Path("/Users/jo.smith").absolute()  # a drive-qualified home on Windows hosts
+        with patch.object(cli, "home_folder", return_value=home):
+            self.assertEqual(cli.shown(home / "readiness-run-1/report.html"), str(Path("~") / "readiness-run-1/report.html"))
+            self.assertEqual(cli.shown(Path("/srv/runs/report.html")), str(Path("/srv/runs/report.html").absolute()))
 
 
 class ScopeTests(Home):
@@ -280,7 +282,9 @@ class CostTests(Home):
     def test_collection_stops_at_its_overall_time_limit(self):
         self.put(".claude/settings.json", {})
         candidate = Candidate("claude-code", "user", self.home / ".claude/settings.json", "~/.claude/settings.json")
-        collection = collect_inventory(CollectOptions(home=self.home, os_name="linux", environ={}, max_total_seconds=1e-9), ("test",), [candidate])
+        clock = itertools.count(1000.0, 1.0)  # a coarse host clock might not tick between two reads
+        with patch("time.monotonic", side_effect=lambda: next(clock)):
+            collection = collect_inventory(CollectOptions(home=self.home, os_name="linux", environ={}, max_total_seconds=1e-9), ("test",), [candidate])
         self.assertIn("time_limit", {source["reason"] for source in collection.builder.sources.values()})
 
     @unittest.skipUnless(hasattr(os, "getuid") and hasattr(os, "link"), "POSIX hard links")

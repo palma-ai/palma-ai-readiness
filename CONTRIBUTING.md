@@ -26,15 +26,15 @@ skill requires no package installation.
 
 ## Releases
 
-The [Validate and release workflow](.github/workflows/release.yml) runs for every pushed
-branch head and pull request. It runs the fixture suite and generates a fictional report
-on native Windows, macOS and Linux with Python 3.11 and 3.14. The suite builds, extracts,
-and runs the standalone release against synthetic configuration on each platform.
-No job scans the runner's account.
+The [Validate and release workflow](.github/workflows/release.yml) runs for every pull
+request and every push to `main`. It runs the fixture suite and generates a fictional report
+on native macOS and Linux with Python 3.11 and 3.14, and on Windows with Python 3.11. The
+suite builds, extracts, and runs the standalone release against synthetic configuration on
+each platform. No job scans the runner's account.
 
 After all matrix jobs pass, the workflow builds the canonical ZIP with Python 3.11 on
 Ubuntu and saves it with its matching checksum as an Actions artifact named by commit and run attempt for
-30 days. Branch and pull-request artifacts are previews and require GitHub sign-in to
+30 days. Pull-request artifacts are previews and require GitHub sign-in to
 download. Pull requests have read-only repository permissions and never publish.
 
 Each successful `main` push also publishes the same ZIP and checksum as a GitHub Release

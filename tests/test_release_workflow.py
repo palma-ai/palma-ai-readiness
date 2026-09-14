@@ -41,7 +41,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         matrix = jobs["test"]["strategy"]["matrix"]
         self.assertEqual(set(matrix["os"]), {"ubuntu-24.04", "macos-15", "windows-2022"})
         self.assertEqual(set(matrix["python"]), {"3.11", "3.14"})
+        self.assertEqual(matrix["exclude"], [{"os": "windows-2022", "python": "3.14"}], "one Windows job, on the minimum Python")
         self.assertFalse(jobs["test"]["strategy"]["fail-fast"])
+        self.assertEqual(self.workflow["on"]["push"], {"branches": ["main"]}, "pull requests run once, main pushes release")
         self.assertEqual(jobs["build"]["needs"], "test")
         artifact = next(step for step in jobs["build"]["steps"] if step.get("uses", "").startswith("actions/upload-artifact@"))
         self.assertEqual(set(artifact["with"]["path"].splitlines()),

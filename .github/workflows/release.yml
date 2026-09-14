@@ -2,7 +2,7 @@ name: Validate and release
 
 "on":
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
 
 permissions:
@@ -18,6 +18,10 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2022]
         python: ['3.11', '3.14']
+        # One Windows job, on the minimum supported Python; the newest runs on macOS and Linux.
+        exclude:
+          - os: windows-2022
+            python: '3.14'
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:

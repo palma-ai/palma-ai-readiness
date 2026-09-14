@@ -20,8 +20,8 @@ from palma_scan.rules import evaluate
 class IdentityScrubberTests(unittest.TestCase):
     def setUp(self):
         self.scrubber = IdentityScrubber([
-            {"root": Path("/Users/jdoe"), "alias": "~", "names": ["jdoe"]},
-            {"root": Path("/Users/colleague"), "alias": "user-1", "names": []},
+            {"root": "/Users/jdoe", "alias": "~", "names": ["jdoe"]},
+            {"root": "/Users/colleague", "alias": "user-1", "names": []},
         ])
 
     def test_home_paths_become_aliases_wherever_they_appear(self):
@@ -43,22 +43,22 @@ class IdentityScrubberTests(unittest.TestCase):
         self.assertEqual(text("colleague-notes"), "colleague-notes")
 
     def test_generic_or_short_names_are_only_removed_from_home_paths(self):
-        generic = IdentityScrubber([{"root": Path("/Users/admin"), "alias": "~", "names": ["admin"]}])
+        generic = IdentityScrubber([{"root": "/Users/admin", "alias": "~", "names": ["admin"]}])
         self.assertEqual(generic.text("/Users/admin/.codex/config.toml"), "~/.codex/config.toml")
         self.assertEqual(generic.text("admin-tools connector"), "admin-tools connector")
-        short = IdentityScrubber([{"root": Path("/home/al"), "alias": "~", "names": ["al"]}])
+        short = IdentityScrubber([{"root": "/home/al", "alias": "~", "names": ["al"]}])
         self.assertEqual(short.text("/home/al/.gemini/settings.json"), "~/.gemini/settings.json")
         self.assertEqual(short.text("al-assistant"), "al-assistant")
 
     def test_folder_names_encoded_with_dashes_are_scrubbed(self):
-        scrubber = IdentityScrubber([{"root": Path("/Users/john.doe"), "alias": "~", "names": ["john.doe"]}])
+        scrubber = IdentityScrubber([{"root": "/Users/john.doe", "alias": "~", "names": ["john.doe"]}])
         self.assertEqual(scrubber.text("/private/tmp/claude-501/-Users-john-doe-code-app/.claude/settings.json"),
                          "/private/tmp/claude-501/-Users-[account]-code-app/.claude/settings.json")
         self.assertEqual(scrubber.text("C--Users-john-doe-code-app"), "C--Users-[account]-code-app")
 
     def test_many_accounts_are_scrubbed_with_one_pattern_per_folder_and_nested_homes_keep_their_alias(self):
-        accounts = [{"root": Path("/home/me"), "alias": "~"}, {"root": Path("/home/me/guest"), "alias": "user-1"}]
-        accounts += [{"root": Path(f"/home/u{index:04d}"), "alias": f"user-{index + 2}"} for index in range(2000)]
+        accounts = [{"root": "/home/me", "alias": "~"}, {"root": "/home/me/guest", "alias": "user-1"}]
+        accounts += [{"root": f"/home/u{index:04d}", "alias": f"user-{index + 2}"} for index in range(2000)]
         scrubber = IdentityScrubber(accounts)
         self.assertEqual(len(scrubber.paths), 2)
         self.assertEqual(scrubber.text("/home/u1999/.mcp.json"), "user-2001/.mcp.json")
@@ -66,7 +66,7 @@ class IdentityScrubberTests(unittest.TestCase):
         self.assertEqual(scrubber.text("/opt/data/project/.claude/settings.json"), "/opt/data/project/.claude/settings.json")
 
     def test_scrubbing_never_grows_a_field_past_the_snapshot_limit(self):
-        scrubber = IdentityScrubber([{"root": Path("/home/abc"), "alias": "~", "names": ["abc"]}])
+        scrubber = IdentityScrubber([{"root": "/home/abc", "alias": "~", "names": ["abc"]}])
         location = "/srv/" + "-".join(["abc"] * 2400)
         self.assertLessEqual(len(location), MAX_SCRUBBED_LENGTH)
         self.assertEqual(len(scrubber.scrub({"location": location})["location"]), MAX_SCRUBBED_LENGTH)
@@ -77,7 +77,7 @@ class IdentityScrubberTests(unittest.TestCase):
         self.assertEqual(windows.text("C:/Users/JDoe/.cursor/mcp.json"), "~/.cursor/mcp.json")
 
     def test_snapshot_locations_and_messages_are_scrubbed_but_identifiers_and_labels_are_kept(self):
-        scrubber = IdentityScrubber([{"root": Path("/Users/deadbeef"), "alias": "~", "names": ["deadbeef"]}])
+        scrubber = IdentityScrubber([{"root": "/Users/deadbeef", "alias": "~", "names": ["deadbeef"]}])
         snapshot = {"scope": {"label": "unchanged"},
                     "sources": [{"id": "src-deadbeef", "location": "/Users/deadbeef/x.json", "reasons": ["deadbeef copy"]}],
                     "observations": [{"id": "obs-1", "kind": "setting", "sourceId": "src-deadbeef", "name": "deadbeef",

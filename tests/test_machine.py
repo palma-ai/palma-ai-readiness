@@ -51,6 +51,9 @@ class MachineTests(unittest.TestCase):
             stack.enter_context(patch.object(machine, "_system_sources", return_value=[]))
             stack.enter_context(patch.object(machine, "_system_command", return_value=""))
             stack.enter_context(patch.object(machine._Discovery, "services", return_value=None))
+            if not hasattr(os, "getuid"):
+                # The fixtures model a Linux host; its account-scoped process inventory needs a uid.
+                stack.enter_context(patch.object(machine._Discovery, "processes", return_value=None))
             stack.enter_context(patch.object(collector, "collect_scopes", side_effect=self.stub_core, create=True))
             stack.enter_context(patch("socket.create_connection", side_effect=AssertionError("network forbidden")))
             snapshot = machine.collect_machine(workspaces, **budgets)
@@ -160,6 +163,7 @@ class MachineTests(unittest.TestCase):
         self.assertFalse([path for path in opened if path == self.other or self.other in path.parents])
         self.assertEqual(snapshot["scope"]["discovery"]["excludedDirectories"], 3)
 
+    @unittest.skipIf(os.name == "nt", "POSIX symbolic-link layout")
     def test_another_accounts_linked_home_is_not_searched_where_it_points(self):
         target = self.volume / "data/PRIVATE_OTHER"
         self.put(target / "work/project/.mcp.json", {})
@@ -360,7 +364,7 @@ class MachineTests(unittest.TestCase):
         discovery = machine._Discovery(layout)
         output = '"Codex.exe","987654","PRIVATE_SESSION","42","999 K"\n"PRIVATE_UNKNOWN.exe","123","PRIVATE_SESSION","9","12 K"'
         with patch.object(machine, "_windows_system_directory", return_value=Path("C:/Windows/System32")), \
-             patch.object(machine, "_system_command", return_value=output) as run, patch.dict(os.environ, {"USERNAME": "me"}):
+             patch.object(machine, "_system_command", return_value=output) as run, patch.dict(os.environ, {"USERNAME": "me", "USERDOMAIN": ""}):
             discovery.processes()
         self.assertEqual(run.call_args.args[0][-2:], ["/FI", "USERNAME eq me"], "this account's processes only")
         self.assertEqual([item["client"] for item in discovery.observations], ["codex"])

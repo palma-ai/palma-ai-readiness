@@ -315,9 +315,10 @@ class IdentityScrubber:
         for account in accounts:
             alias = account["alias"]
             root = str(account.get("root") or "").rstrip("/\\")
-            variants = {root, root.replace("\\", "/")}
-            if root.startswith("/Users/"):
-                variants.add("/System/Volumes/Data" + root)  # macOS firmlinked form
+            forward = root.replace("\\", "/")
+            variants = {root, forward}
+            if forward.startswith("/Users/"):
+                variants.add("/System/Volumes/Data" + forward)  # macOS firmlinked form
             for variant in variants:
                 split = max(variant.rfind("/"), variant.rfind("\\")) + 1
                 if 0 < split < len(variant):
