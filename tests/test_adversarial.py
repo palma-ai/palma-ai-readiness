@@ -220,7 +220,10 @@ class CollectorAdversarialTests(unittest.TestCase):
         declarations = [item for item in snapshot["observations"] if item["kind"] != "client"]
         self.assertTrue(declarations)
         self.assertTrue(all(item["details"].get("context") == "cached" for item in declarations))
-        self.assertTrue(any(item["ruleId"] == "hooks-declared" and item["severity"] == "critical" for item in snapshot["findings"]))
+        hooks = next(item for item in snapshot["findings"] if item["ruleId"] == "hooks-declared")
+        # A cached policy copy keeps its hook evidence at Info: nothing in it applies as written.
+        self.assertEqual((hooks["severity"], hooks["applies"]), ("info", 0))
+        self.assertIn("in a cached policy copy", hooks["summary"])
         self.assertTrue(any(item["category"] == "credentials" and item["severity"] == "critical" for item in snapshot["findings"]))
         for finding in snapshot["findings"]:
             if finding["ruleId"] in {"hooks-declared", "mcp-network-direct"}:
@@ -331,15 +334,17 @@ class CollectorAdversarialTests(unittest.TestCase):
         snapshot = self.scan(evaluate=True)
         self.assertFalse(any(item["category"] == "execution" and item["severity"] in {"medium", "high", "critical"} for item in snapshot["findings"]))
 
-    def test_disabled_connection_retains_critical_exposure_with_disabled_evidence(self):
+    def test_disabled_connection_keeps_the_credential_critical_but_not_the_access_it_cannot_provide(self):
         self.put(".cursor/mcp.json", {"mcpServers": {"private": {"command": "npx", "args": ["@playwright/mcp"], "disabled": True, "env": {"API_TOKEN": "PRIVATE_DISABLED_CANARY"}}}})
         snapshot = self.scan(evaluate=True)
         credentials = [item for item in snapshot["findings"] if item["category"] == "credentials"]
         self.assertTrue(credentials)
-        self.assertTrue(all(item["severity"] == "critical" for item in credentials))
-        local = next(item for item in snapshot["findings"] if item["ruleId"] == "mcp-local-unaudited")
-        self.assertEqual(local["severity"], "critical")
-        self.assertIn("disabled", json.dumps(local["evidence"]))
+        self.assertTrue(all(item["severity"] == "critical" for item in credentials), "a secret in a disabled entry is still in the file")
+        for rule in ("mcp-local-unaudited", "mcp-browser-automation"):
+            finding = next(item for item in snapshot["findings"] if item["ruleId"] == rule)
+            self.assertEqual((finding["severity"], finding["applies"]), ("info", 0), rule)
+            self.assertIn("switched off", finding["ratingReason"])
+            self.assertIn("disabled", json.dumps(finding["evidence"]), "the declaration and its state stay in evidence")
         self.assertNotIn("PRIVATE_DISABLED_CANARY", json.dumps(snapshot))
 
     def test_collected_configuration_does_not_claim_verified_critical_exploitation(self):

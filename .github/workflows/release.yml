@@ -1,0 +1,97 @@
+name: Validate and release
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+        python: ['3.11', '3.14']
+        # One Windows job, on the minimum supported Python; the newest runs on macOS and Linux.
+        exclude:
+          - os: windows-2022
+            python: '3.14'
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Run fixture and extracted-release tests
+        run: python -B -m unittest discover -s tests -v
+      - name: Generate fictional report
+        run: python -I -S scripts/create_demo.py --output-dir demo-output
+
+  build:
+    needs: test
+    outputs:
+      artifact-id: ${{ steps.skill-artifact.outputs.artifact-id }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Build standalone skill
+        env:
+          PALMA_SOURCE_COMMIT: ${{ github.sha }}
+        run: python -I -S scripts/build_release.py --source-commit "$PALMA_SOURCE_COMMIT" --output dist/palma-ai-readiness.zip
+      - name: Verify archive checksum
+        working-directory: dist
+        run: sha256sum -c palma-ai-readiness.zip.sha256
+      - name: Save commit artifact
+        id: skill-artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: palma-ai-readiness-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            dist/palma-ai-readiness.zip
+            dist/palma-ai-readiness.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'palma-ai/palma-ai-readiness'
+    needs: [test, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    # Serialize publication; keep pending commits instead of replacing them.
+    # Run numbers also prevent a slower older run or rerun from moving latest back.
+    concurrency:
+      group: palma-public-release
+      queue: max
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact-id }}
+          path: dist
+      - name: Publish matching assets and advance latest
+        env:
+          PALMA_GITHUB_TOKEN: ${{ github.token }}
+          PALMA_SOURCE_COMMIT: ${{ github.sha }}
+          PALMA_RUN_NUMBER: ${{ github.run_number }}
+        run: python -I -S scripts/publish_release.py --source-commit "$PALMA_SOURCE_COMMIT" --run-number "$PALMA_RUN_NUMBER" --archive dist/palma-ai-readiness.zip

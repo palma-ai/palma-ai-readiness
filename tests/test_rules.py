@@ -51,19 +51,22 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(credential["severity"], "critical")
         self.assertNotIn("PRIVATE_TOKEN", json.dumps(findings))
         self.assertIn("potential credential", credential["summary"])
-        self.assertTrue(any(finding["ruleId"] == "mcp-local-unaudited" and finding["severity"] == "critical" for finding in findings))
+        # The only local connector is switched off: its evidence stays, its access priority does not.
+        local = next(finding for finding in findings if finding["ruleId"] == "mcp-local-unaudited")
+        self.assertEqual((local["severity"], local["baselineSeverity"], local["applies"]), ("info", "critical", 0))
+        self.assertIn("This declaration does not apply as written: it is switched off.", local["summary"])
 
-    def test_remote_mcp_governance_is_critical_without_claiming_missing_auth(self):
+    def test_remote_mcp_governance_is_high_without_claiming_missing_auth(self):
         _, findings = self.scan({".cursor/mcp.json": {"mcpServers": {"remote": {"url": "https://example.test/mcp"}}}})
         self.assertTrue(any(finding["category"] == "mcp" for finding in findings))
-        self.assertTrue(any(finding["ruleId"] == "mcp-network-direct" and finding["severity"] == "critical" for finding in findings))
+        self.assertTrue(any(finding["ruleId"] == "mcp-network-direct" and finding["severity"] == "high" for finding in findings))
         self.assertFalse(any("unauthenticated" in finding["title"].lower() for finding in findings))
 
-    def test_unaudited_local_skills_are_grouped_and_critical(self):
+    def test_local_skills_are_grouped_at_high_review_priority(self):
         _, findings = self.scan({".agents/skills/one/SKILL.md": "body", ".agents/skills/two/SKILL.md": "body"})
         inventory = [finding for finding in findings if finding["category"] == "extensions"]
         self.assertEqual(len(inventory), 1)
-        self.assertEqual(inventory[0]["severity"], "critical")
+        self.assertEqual(inventory[0]["severity"], "high")
         self.assertEqual(inventory[0]["evidenceType"], "inventory")
         self.assertEqual(len(inventory[0]["observationIds"]), 2)
 
@@ -108,9 +111,13 @@ class RuleTests(unittest.TestCase):
 
     def test_cached_policy_is_evaluated_with_cached_context(self):
         _, findings = self.scan({".claude/remote-settings.json": {"permissions": {"defaultMode": "bypassPermissions"}, "sandbox": {"enabled": False}}})
-        self.assertEqual(next(item["severity"] for item in findings if item["ruleId"] == "permissions-bypassed"), "low")
-        evidence = next(item["evidence"] for item in findings if item["ruleId"] == "sandbox-disabled")
-        self.assertIn("cached", json.dumps(evidence))
+        bypass = next(item for item in findings if item["ruleId"] == "permissions-bypassed")
+        # A cached policy copy is historical evidence: kept, but not an applying declaration.
+        self.assertEqual((bypass["severity"], bypass["baselineSeverity"], bypass["applies"]), ("info", "critical", 0))
+        self.assertIn("in a cached policy copy", bypass["summary"])
+        sandbox = next(item for item in findings if item["ruleId"] == "sandbox-disabled")
+        self.assertEqual(sandbox["severity"], "info")
+        self.assertIn("cached", json.dumps(sandbox["evidence"]))
 
     def test_remote_control_is_reviewed_only_in_supported_user_scope(self):
         _, findings = self.scan({".claude/settings.json": {"remoteControlAtStartup": True}})

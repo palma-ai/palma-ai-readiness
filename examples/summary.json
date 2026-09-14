@@ -14,39 +14,17 @@
     "skipped": 0
   },
   "findings": {
-    "critical": 10,
-    "high": 1,
-    "info": 6,
-    "low": 6,
-    "medium": 1
+    "critical": 6,
+    "high": 6,
+    "info": 7,
+    "low": 5,
+    "medium": 0
   },
   "limitationCount": 2,
   "mode": "endpoint",
   "priorities": [
     {
-      "clients": [
-        "cursor",
-        "vscode"
-      ],
-      "declarations": 5,
-      "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
-      "ruleId": "mcp-network-direct",
-      "severity": "critical",
-      "title": "Remote connectors used outside Palma's governance"
-    },
-    {
-      "clients": [
-        "claude-desktop",
-        "codex",
-        "cursor"
-      ],
-      "declarations": 3,
-      "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
-      "ruleId": "mcp-local-unaudited",
-      "severity": "critical",
-      "title": "Connectors running locally without monitoring or governance"
-    },
-    {
+      "applies": null,
       "clients": null,
       "declarations": 2,
       "recommendation": "Prefer isolated sessions and retain sensitive-action confirmation. Review file upload restrictions and browser-domain scope in the active agent.",
@@ -55,6 +33,7 @@
       "title": "Review browser session reuse and sensitive actions"
     },
     {
+      "applies": 2,
       "clients": [
         "gemini-cli",
         "vscode"
@@ -66,17 +45,7 @@
       "title": "Browser use turned on: acts as the signed-in user without governance"
     },
     {
-      "clients": [
-        "claude-code",
-        "shared"
-      ],
-      "declarations": 2,
-      "recommendation": "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team.",
-      "ruleId": "skills-local-unreviewed",
-      "severity": "critical",
-      "title": "Local unaudited skills installed"
-    },
-    {
+      "applies": 1,
       "clients": [
         "gemini-cli"
       ],
@@ -87,6 +56,7 @@
       "title": "Browser actions allowed without confirmation"
     },
     {
+      "applies": 1,
       "clients": [
         "codex"
       ],
@@ -97,16 +67,7 @@
       "title": "Computer use turned on: acts as the signed-in user without governance"
     },
     {
-      "clients": [
-        "claude-code"
-      ],
-      "declarations": 1,
-      "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
-      "ruleId": "hooks-declared",
-      "severity": "critical",
-      "title": "Scripts run automatically on agent events"
-    },
-    {
+      "applies": 1,
       "clients": [
         "codex"
       ],
@@ -117,6 +78,7 @@
       "title": "Browser automation via a connector: drives a browser without governance"
     },
     {
+      "applies": null,
       "clients": [
         "cursor"
       ],
@@ -127,6 +89,43 @@
       "title": "Credentials stored in local client config"
     },
     {
+      "applies": 5,
+      "clients": [
+        "cursor",
+        "vscode"
+      ],
+      "declarations": 5,
+      "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
+      "ruleId": "mcp-network-direct",
+      "severity": "high",
+      "title": "Remote connectors used outside Palma's governance"
+    },
+    {
+      "applies": 2,
+      "clients": [
+        "claude-desktop",
+        "codex",
+        "cursor"
+      ],
+      "declarations": 3,
+      "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
+      "ruleId": "mcp-local-unaudited",
+      "severity": "high",
+      "title": "Connectors running locally without monitoring or governance"
+    },
+    {
+      "applies": null,
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 2,
+      "recommendation": "Confirm where each pack came from in the client's marketplace registry, reinstall it from an approved source, or disable it until its origin is confirmed.",
+      "ruleId": "artifacts-unresolved-source",
+      "severity": "high",
+      "title": "Verify the source of skills and plugins with unresolved provenance"
+    },
+    {
+      "applies": 2,
       "clients": [
         "claude-code",
         "codex"
@@ -138,16 +137,30 @@
       "title": "Sandbox turned off: agents run unconfined"
     },
     {
+      "applies": null,
+      "clients": [
+        "claude-code",
+        "shared"
+      ],
+      "declarations": 2,
+      "recommendation": "Review the named skill instructions, scripts, dependencies, and update source. Retain the version approved for sensitive use; remove unused copies.",
+      "ruleId": "skills-local-unreviewed",
+      "severity": "high",
+      "title": "Local skills without a recorded review"
+    },
+    {
+      "applies": 1,
       "clients": [
         "claude-code"
       ],
-      "declarations": 2,
-      "recommendation": "Inventory them now; governed conversion registers the ones that stay.",
-      "ruleId": "plugins-unknown-origin",
-      "severity": "medium",
-      "title": "Packs of unknown origin"
+      "declarations": 1,
+      "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
+      "ruleId": "hooks-declared",
+      "severity": "high",
+      "title": "Scripts run automatically on agent events"
     },
     {
+      "applies": null,
       "clients": null,
       "declarations": 2,
       "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
@@ -156,6 +169,7 @@
       "title": "Configuration sources disagree on a setting"
     },
     {
+      "applies": null,
       "clients": null,
       "declarations": 1,
       "recommendation": "Review instructions, declared tools, dependencies, and update sources; retain the reviewed version.",
@@ -164,6 +178,7 @@
       "title": "Local agent instructions need a review record"
     },
     {
+      "applies": null,
       "clients": null,
       "declarations": 1,
       "recommendation": "Pin a reviewed package version and establish an update review process.",
@@ -172,6 +187,7 @@
       "title": "An MCP package lacks an exact version"
     },
     {
+      "applies": 1,
       "clients": [
         "codex"
       ],
@@ -182,16 +198,7 @@
       "title": "Codex never asks before acting"
     },
     {
-      "clients": [
-        "claude-code"
-      ],
-      "declarations": 1,
-      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
-      "ruleId": "permissions-bypassed",
-      "severity": "low",
-      "title": "Permission prompts turned off"
-    },
-    {
+      "applies": 1,
       "clients": [
         "vscode"
       ],
@@ -202,6 +209,7 @@
       "title": "Every tool call auto-approved"
     },
     {
+      "applies": null,
       "clients": [
         "claude-code",
         "claude-desktop",
@@ -219,6 +227,7 @@
       "title": "AI client config left behind without an installation"
     },
     {
+      "applies": null,
       "clients": null,
       "declarations": 2,
       "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
@@ -227,6 +236,7 @@
       "title": "A setting is repeated across configuration sources"
     },
     {
+      "applies": null,
       "clients": null,
       "declarations": 1,
       "recommendation": "Review saved projects in the client and remove obsolete references after confirming their purpose. The scan does not alter settings or delete any files.",
@@ -235,6 +245,7 @@
       "title": "Some saved project locations are no longer present"
     },
     {
+      "applies": null,
       "clients": [
         "cursor"
       ],
@@ -245,6 +256,18 @@
       "title": "Disabled connector entries left in config"
     },
     {
+      "applies": 0,
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "ruleId": "permissions-bypassed",
+      "severity": "info",
+      "title": "Permission prompts turned off"
+    },
+    {
+      "applies": null,
       "clients": [
         "claude-code"
       ],
@@ -255,6 +278,7 @@
       "title": "Disabled pack entries left in config"
     },
     {
+      "applies": null,
       "clients": [
         "claude-code"
       ],

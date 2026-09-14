@@ -1,75 +1,119 @@
-# Palma AI access scan
+<p align="center">
+  <a href="https://palma.ai"><img src="assets/palma-logo.svg" alt="Palma AI" width="240"></a>
+</p>
 
-See the AI tools on your computer, the access they have, and what needs attention. Palma
-combines local discovery with configuration evaluation and a clear, interactive local report.
-It supports Windows, macOS, and Linux, with no account, enrollment, or backend connection.
+<h1 align="center">Palma AI access scan</h1>
 
-## Run on your computer
+<p align="center">
+  See which AI tools are on your computer, what they can reach, and what to fix first.<br>
+  Local, offline, no account.
+</p>
 
-Download the skill from palma.ai and check it before extracting: the archive's SHA-256
-must match the `.sha256` file published beside it (`shasum -a 256 -c palma-ai-readiness.zip.sha256`
-on macOS, `sha256sum -c` on Linux, `Get-FileHash -Algorithm SHA256` in Windows PowerShell). Extract the **complete skill
-folder**. Python **3.11+** is required; parsers are bundled, so there are no packages to
-install or build tools to configure.
+<p align="center">
+  <a href="https://github.com/palma-ai/palma-ai-readiness/actions/workflows/release.yml"><img src="https://github.com/palma-ai/palma-ai-readiness/actions/workflows/release.yml/badge.svg?branch=main" alt="Validate and release"></a>
+  <a href="https://github.com/palma-ai/palma-ai-readiness/releases/latest"><img src="https://img.shields.io/badge/download-latest%20release-007a93" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-33c0d0" alt="Python 3.11 or newer">
+  <img src="https://img.shields.io/badge/runs%20on-macOS%20%7C%20Windows%20%7C%20Linux-33c0d0" alt="macOS, Windows and Linux">
+</p>
 
-**macOS / Linux**
+## What it does
 
-```bash
-bash "/path/to/palma-ai-readiness/scripts/run.sh"
-```
+The scan reads the configuration of the AI tools on the signed-in account and turns it into
+one local report:
 
-**Windows**
+- **Inventory.** AI clients, MCP servers and connectors, skills, plugins, agents, hooks and
+  settings, each listed once by name and tagged with the clients that declare it.
+- **Findings.** What deserves attention, with a priority, why it matters, and a next step:
+  credentials written into configuration, computer and browser control, connectors outside
+  any governance, permission bypasses, skills without a recorded review.
+- **EU AI Act review.** Four review areas that link the local evidence to the questions an
+  owner has to answer, without claiming a legal risk class.
+- **Coverage.** Exactly which sources were read and which could not be.
 
-```powershell
-py -3 -I -S "C:\path\palma-ai-readiness\scripts\palma-scan.py" run --open
-```
+It understands Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code and GitHub
+Copilot, Windsurf, Cline, Roo Code, Kiro, OpenCode, Continue, Aider, LM Studio, Antigravity,
+OpenClaw and AI browser extensions, on macOS, Windows and Linux.
+
+## Quick start
+
+1. Download **palma-ai-readiness.zip** and **palma-ai-readiness.zip.sha256** from the
+   [latest release](https://github.com/palma-ai/palma-ai-readiness/releases/latest). Both
+   files come from the same release; no GitHub account, Git or package installation is
+   needed. Python **3.11 or newer** is the only requirement.
+2. Verify the checksum, then extract the ZIP into a new folder and keep it intact. The
+   [download, verify and extract commands](references/commands.md#download-and-extract)
+   do all of this in one step. On Windows use a short folder in your own profile, such as
+   `%USERPROFILE%\palma-scan`.
+3. Run the scan.
+
+   macOS or Linux:
+
+   ```bash
+   bash "/path/to/palma-ai-readiness/scripts/run.sh"
+   ```
+
+   Windows:
+
+   ```powershell
+   py -3 -I -S "C:\path\palma-ai-readiness\scripts\palma-scan.py" run --open
+   ```
+
+The report opens in your browser. Results go in a new `readiness-run-<timestamp>` folder in
+your home folder; `--output-dir <new-directory>` chooses another location, `--workspace <path>`
+adds a project to automatic discovery, and `--no-open` keeps the browser closed. Large
+machines can take several minutes. You can also double-click `scripts/run.command` on
+macOS or `scripts\run.cmd` on Windows; if Gatekeeper or SmartScreen blocks it, use the
+terminal command instead of removing the quarantine. `PALMA_PYTHON` selects an installed
+Python. The scanner refuses to start if the folder differs from its release.
 
 The scan covers your account: AI clients, connectors, skills and settings in your profile,
-managed AI policy, installed AI apps, editor profiles, extension components, supported runtime
-and browser integration metadata, and AI projects on local drives. Folders that belong to
-other accounts are never opened. You do not need to choose a directory. Large machines can take
-several minutes. Specific unreadable sources are recorded in coverage.
+managed AI policy, installed AI apps, editor profiles, extension components, supported
+runtime and browser integration metadata, and AI projects on local drives. Folders that
+belong to other accounts are never opened.
 
-The report opens in your browser. Use `--no-open` to keep it closed, `--workspace <path>`
-to supplement automatic project discovery, or `--output-dir <new-directory>` to choose
-where results are saved. Otherwise they go in a new `readiness-run-<timestamp>` folder in
-your home folder. You can also double-click `scripts/run.command` on macOS or
-`scripts\run.cmd` on Windows; if Gatekeeper or SmartScreen blocks it, use the terminal
-command instead rather than removing the quarantine or choosing to run it anyway.
-`PALMA_PYTHON` can select an installed compatible Python executable. The scanner refuses to
-start if the folder differs from its release.
+## Use it from an AI assistant
 
-## Starting from a website or web chat
-
-A web assistant cannot scan your computer through its cloud environment. Download the
-skill and run the native command above, or give the folder to your desktop AI assistant:
+A web assistant cannot scan your computer through its cloud environment. Give the
+extracted folder to a desktop assistant with filesystem tools instead:
 
 > Read SKILL.md in this Palma skill folder. Run the scan of my account on this computer
 > and show me the local report, starting with the priorities and recommended actions.
 
-Use native Windows Python for Windows. WSL, containers, and SSH sessions scan their own
-operating-system context. Keep the folder intact so the assistant has all matching scripts.
+Use native Windows Python for Windows. WSL, containers and SSH sessions scan their own
+operating-system context. [SKILL.md](SKILL.md) holds the full workflow the assistant follows.
 
 ## Your report
 
-Each run saves `report.html`, `share.html` (a summary without project or folder names, for
-sharing), `snapshot.json` (sanitized evidence and findings), and `summary.json` (counts and
-scope). These files describe your computer's AI access, including which files hold
-credentials: keep them private, share only `share.html`, and delete the folder when you are
-done. Review priorities first, explore access charts, then open evidence and inventory
-details. Search actual skill, plugin, agent, and connector
-names and their local configuration paths. All priorities remain visible, with Critical
-and High first. Client and connector icons are embedded.
-The report uses Palma's light visual style, with Onest typography, linked metric cards,
-priority and access charts, and expandable evidence. Its font and artwork are embedded;
-the report works offline and makes no network requests.
+Each run saves four files:
 
-The **EU AI Act overview** highlights when an AI use-case review is needed.
-Its compact tiles link relevant local findings to review questions, with an official
-EU AI Act guidance link for further detail. Legal risk class and compliance remain
+| File | What it holds | Share it? |
+| --- | --- | --- |
+| `report.html` | The full local report: priorities, charts, evidence, inventory, EU AI Act review, coverage | Keep private |
+| `share.html` | The same report with every location reduced to its AI configuration folder and file name, without project or folder names | The only file meant for others |
+| `snapshot.json` | Sanitized evidence and findings | Keep private |
+| `summary.json` | Counts, coverage and priorities as rule text, without scanned names | Keep private |
+
+These files describe your computer's AI access, including which files hold credentials.
+Delete the folder when you are done.
+
+Review priorities first, then open evidence and inventory details. Finding summaries name
+connectors, not file paths; paths sit in the evidence. Access, capability and permission
+findings say how many declarations apply as written: an entry in an unselected profile, a
+cached policy copy, a plugin pack that is switched off or has no installation record, or an
+entry that is switched off stays in the evidence without raising the priority on its own.
+Skills and plugins from a marketplace outside Palma's allowlist are Critical; packs whose
+source could not be resolved locally are High, with a verify-the-source action. MCP servers
+and skills appear once per declared name with client badges and declaration counts;
+matching names do not imply identical versions or access. Browser extension records are
+grouped with their permission sets. Client and connector icons, the Onest typeface and the
+Palma artwork are embedded, so the report works offline and makes no network requests.
+
+The **EU AI Act overview** highlights when an AI use-case review is needed. If the scan finds
+no governance layer (no connector routed through a Palma-operated gateway), the panel says
+so and treats all four areas as not covered until an owner documents them; that is a stated
+assumption, not proof that a control is absent. Legal risk class and compliance remain
 unassessed: local access settings cannot establish the intended use or your legal role.
-It appears automatically in local reports. See the
-[EU AI Act review guidance](references/eu-ai-regulation.md).
+See the [EU AI Act review guidance](references/eu-ai-regulation.md).
 
 Rebuild a saved report without rescanning:
 
@@ -77,15 +121,43 @@ Rebuild a saved report without rescanning:
 python3 -I -S scripts/palma-scan.py report --run-dir /path/to/saved-run --output /path/to/new-report.html
 ```
 
-The collector retains useful settings and credential-presence facts while excluding
-secrets, raw commands, conversations, and instruction bodies from artifacts. It does not
-execute discovered code or change your configuration. You control any sharing.
+## Local by design
 
-Interested in the picture across your team? Palma's separate aggregated view can connect
-recurring tools, exposure patterns, and priorities across participating devices. This skill
-has no upload or aggregation function. An optional `--booking-url <https-url>` adds a
-link to a palma.ai page when one is supplied.
+- Reads configuration and manifests; runs nothing it finds and changes nothing.
+- Makes no network request. The only download is the release you fetch yourself, verified
+  by checksum and file manifest before any code runs.
+- Excludes secrets, raw commands, conversations and instruction bodies from every artifact;
+  the account name and home path never leave the machine.
+- Sends nothing anywhere. The team view below is a separate Palma offering; this scan has
+  no upload or enrollment.
 
-See [commands](references/commands.md), [rules and coverage](references/risk-rules.md),
-[report design and manual fallback](references/report-design.md), and
-[third-party notices](THIRD_PARTY_NOTICES.md).
+Report a vulnerability privately through the [security policy](SECURITY.md).
+
+## About Palma
+
+[Palma](https://palma.ai) is the governance plane for AI agents: one policy layer between
+your agents and every MCP server, with identity, approval policies, audit and cost control.
+This scan shows one machine. The team view connects shared tools, repeated exposure and
+priorities across people and devices, so the report ends with a
+[Talk to Palma](https://calendar.app.google/qVE3L8fGgmQWv3Hx7) button; `--booking-url <https-url>`
+can replace it with a palma.ai page. The link opens only when clicked and carries no scan data.
+
+## Repository
+
+| Path | Purpose |
+| --- | --- |
+| [SKILL.md](SKILL.md) | The skill an AI assistant follows to run the scan and present the report |
+| [references/](references/) | [Commands](references/commands.md), [rules and coverage](references/risk-rules.md), [allowlisted sources](references/trusted-marketplaces.md), [EU AI Act guidance](references/eu-ai-regulation.md), [report design](references/report-design.md) |
+| `scripts/` | The scanner, the report renderer and the platform launchers, with bundled JSON5 and YAML parsers |
+| `assets/` | Palma's official wordmark and brand mark |
+| `examples/` | A synthetic report generated from fictional configuration |
+| `tests/` | The fixture suite CI runs on macOS, Windows and Linux |
+
+[CONTRIBUTING.md](https://github.com/palma-ai/palma-ai-readiness/blob/main/CONTRIBUTING.md) covers development checks and releases;
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists bundled artwork, fonts and parsers.
+
+## License
+
+[Apache License 2.0](LICENSE); see [NOTICE](NOTICE). The Palma name, wordmark and brand mark
+are trademarks of Palma AI and are not covered by the license. Product marks in the report
+identify the tools found and imply no endorsement.

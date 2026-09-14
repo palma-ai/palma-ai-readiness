@@ -1,0 +1,67 @@
+{
+  "version": "2026-09-14.2",
+  "reviewedAt": "2026-09-14",
+  "sources": [
+    {
+      "id": "anthropic-official-plugins",
+      "label": "Anthropic official marketplace",
+      "clients": [
+        "claude-code",
+        "codex"
+      ],
+      "repository": "anthropics/claude-plugins-official",
+      "refs": [
+        null,
+        "main"
+      ],
+      "evidence": "https://code.claude.com/docs/en/plugin-marketplaces"
+    },
+    {
+      "id": "openai-plugins",
+      "label": "OpenAI plugins",
+      "clients": [
+        "codex"
+      ],
+      "repository": "openai/plugins",
+      "refs": [
+        null,
+        "main"
+      ],
+      "evidence": "https://github.com/openai/plugins"
+    },
+    {
+      "id": "openai-curated-remote",
+      "label": "OpenAI curated remote marketplace",
+      "clients": [
+        "codex"
+      ],
+      "remoteMarketplace": "openai-curated-remote",
+      "evidence": "https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/remote.rs"
+    },
+    {
+      "id": "openai-curated-skills",
+      "label": "OpenAI curated skills catalog",
+      "clients": [
+        "codex",
+        "shared"
+      ],
+      "repository": "openai/skills",
+      "refs": [
+        null,
+        "main"
+      ],
+      "skillPath": "skills/.curated",
+      "evidence": "https://github.com/openai/skills"
+    },
+    {
+      "id": "openai-codex-system-skills",
+      "label": "Codex bundled system skills",
+      "clients": [
+        "codex"
+      ],
+      "systemSkillsDir": "skills/.system",
+      "markerFile": ".codex-system-skills.marker",
+      "evidence": "https://github.com/openai/codex/blob/main/codex-rs/skills/src/lib.rs"
+    }
+  ]
+}

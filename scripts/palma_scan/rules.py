@@ -33,7 +33,7 @@ def _finding(rule_id, title, severity, category, observations, summary, impact, 
 
 def _active(item):
     details = item.get("details", {})
-    return item.get("enabled") != "disabled" and not details.get("shadowedBySelectedProfile") and details.get("context") != "cached" and details.get("interpretation") != "inventory-only" and not details.get("applicability")
+    return governance.applies(item) and details.get("interpretation") != "inventory-only" and not details.get("applicability")
 
 
 def _additional(snapshot: dict) -> list[dict]:
@@ -196,7 +196,7 @@ def _additional(snapshot: dict) -> list[dict]:
         if kind == "mcp-trust":
             findings.append(_finding("PALMA-MCP-004", "MCP tool-call confirmations are disabled", "low", "mcp", items,
                 "Connector trust preferences bypass tool-call confirmations when these declarations apply.",
-                "The agent can invoke exposed tools without a separate approval. Review these grants alongside the connector's Critical access finding.",
+                "The agent can invoke exposed tools without a separate approval. Review these grants alongside the connector's access finding.",
                 "Remove blanket trust where review is needed, narrow exposed tools, and confirm the intended permissions."))
         elif kind == "mcp-capability":
             findings.append(_finding("PALMA-CAPABILITY-004", "Connectors expose filesystem or agent-delegation capabilities", "low", "capabilities", items,

@@ -12,9 +12,12 @@ MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 KINDS = ("client", "mcp", "skill", "plugin", "agent", "setting", "hook")
 
 
+DEFAULT_BOOKING_URL = "https://calendar.app.google/qVE3L8fGgmQWv3Hx7"
+
+
 def booking_link(value):
-    if value is None:
-        return None
+    if value is None or value == DEFAULT_BOOKING_URL:
+        return DEFAULT_BOOKING_URL
     try:
         parts = urlsplit(value)
         # A "Talk to Palma" link must lead to Palma, not to a look-alike sign-in page.
@@ -25,7 +28,7 @@ def booking_link(value):
             raise ValueError
         _ = parts.port
     except ValueError:
-        raise ValueError("The optional booking link must be an HTTPS link on palma.ai without credentials or a fragment.") from None
+        raise ValueError("Use the published Palma calendar URL or an HTTPS link on palma.ai without credentials or a fragment.") from None
     return value
 
 
@@ -158,7 +161,7 @@ def summarize(snapshot):
             "limitationCount": len(snapshot["coverage"]["limitations"]),
             # Rule text only, in report order: an assistant can present priorities without
             # reading scanned names or locations.
-            "priorities": [{key: finding.get(key) for key in ("severity", "title", "ruleId", "declarations", "clients", "recommendation")}
+            "priorities": [{key: finding.get(key) for key in ("severity", "title", "ruleId", "declarations", "applies", "clients", "recommendation")}
                            for finding in snapshot["findings"]]}
 
 

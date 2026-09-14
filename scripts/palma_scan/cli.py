@@ -37,7 +37,7 @@ def parser():
 
 
 def render_options(child):
-    child.add_argument("--booking-url", help="Optional HTTPS calendar link; shown only as a user-clicked link")
+    child.add_argument("--booking-url", help="Override the default Palma booking link with an HTTPS palma.ai page; click-through only")
     child.add_argument("--open", dest="open_report", action="store_true", help="Open the generated local HTML file")
     child.add_argument("--no-open", dest="open_report", action="store_false", help="Keep the browser closed")
     child.set_defaults(open_report=False)

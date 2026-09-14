@@ -71,11 +71,14 @@ def snapshot():
 
 
 class ReportTests(unittest.TestCase):
-    def test_regulation_follows_review_first_with_four_native_review_tiles(self):
+    def test_regulation_is_collapsed_after_inventory_with_four_native_review_tiles(self):
         output = render_report(snapshot(), {})
         self.assertLess(output.index('id="overview"'), output.index('id="eu-ai-regulation"'))
-        self.assertLess(output.index('id="eu-ai-regulation"'), output.index('class="metric-strip"'))
+        self.assertLess(output.index('id="inventory-content"'), output.index('id="eu-ai-regulation"'))
+        self.assertLess(output.index('id="eu-ai-regulation"'), output.index('id="coverage"'))
         document = Document(output)
+        wrapper = next(attrs for tag, attrs in document.tags if tag == "details" and attrs.get("id") == "eu-ai-regulation")
+        self.assertNotIn("open", wrapper)
         tiles = [attrs for tag, attrs in document.tags if tag == "details" and attrs.get("class") == "regulation-tile"]
         self.assertEqual([item["id"] for item in tiles], ["regulation-oversight", "regulation-safeguards", "regulation-transparency", "regulation-classification"])
         self.assertTrue(all("open" not in item for item in tiles), "Details must not crowd the opening summary")
@@ -93,16 +96,25 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(any(attrs.get("class") == "regulation-count" for _, attrs in document.tags), "No findings must not look like a passed legal control")
 
     def test_regulation_indicator_cannot_infer_legal_status_from_priorities(self):
+        # No connector is governed in the fixture, so every priority leaves the areas not covered.
         for severity in ("critical", "high", "low", "info"):
             data = snapshot()
             data["findings"][1]["severity"] = severity
             output = render_report(data, {})
             document = Document(output)
             indicator = next((attrs for _, attrs in document.tags if attrs.get("id") == "regulation-indicator"), {})
-            self.assertEqual(indicator.get("data-status"), "review-needed")
+            self.assertEqual(indicator.get("data-status"), "not-covered")
             self.assertIn("Compliance not assessed", " ".join(document.text))
+            self.assertIn("No governance layer found", " ".join(document.text))
         data["findings"] = []
-        self.assertIn('data-status="review-needed"', render_report(data, {}))
+        self.assertIn('data-status="not-covered"', render_report(data, {}))
+        # A governed connector that applies as written changes the assumption, not the legal status.
+        data["observations"].append({"id": "o-gateway", "kind": "mcp", "client": "Codex", "name": "Space", "location": "~/.codex/config.toml",
+                                     "sourceId": "s-collected", "enabled": "enabled", "details": {"transport": "http", "governedBy": "palma-gateway"}})
+        governed = render_report(data, {})
+        self.assertIn('data-status="review-needed"', governed)
+        self.assertNotIn("No governance layer found", " ".join(Document(governed).text))
+        self.assertIn("Compliance not assessed", governed)
 
     def test_empty_and_declared_regulation_status_remains_unassessed(self):
         for mode, observations, expected in (
@@ -136,7 +148,7 @@ class ReportTests(unittest.TestCase):
         data["findings"] = [data["findings"][1]]
         data["findings"][0].update(ruleId="approval-prompts-disabled", severity="low", observationIds=["o-disabled"])
         output = render_report(data, {})
-        self.assertIn('data-status="review-needed"', output)
+        self.assertIn('data-status="not-covered"', output)
         document = Document(output)
         self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
         self.assertIn("Disabled in configuration", " ".join(document.text))
@@ -162,7 +174,7 @@ class ReportTests(unittest.TestCase):
         data["findings"][1].update(ruleId="sandbox-disabled", title='<img src="https://invalid.test" onerror="alert(1)">')
         document = Document(render_report(data, {}))
         self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
-        self.assertEqual(sum(tag == "img" for tag, _ in document.tags), 1)
+        self.assertEqual(sum(tag == "img" for tag, _ in document.tags), 2)
         self.assertFalse(any(key.startswith("on") for _, attrs in document.tags for key in attrs))
 
     def test_deterministic_and_does_not_mutate_inputs(self):
@@ -205,7 +217,7 @@ class ReportTests(unittest.TestCase):
         document = Document(output)
         self.assertIn('&lt;/script&gt;&lt;img', output)
         self.assertEqual(sum(tag == "script" for tag, _ in document.tags), 1)
-        self.assertEqual(sum(tag == "img" for tag, _ in document.tags), 1)
+        self.assertEqual(sum(tag == "img" for tag, _ in document.tags), 2)
         self.assertFalse(any(tag in ("iframe", "object", "embed", "form") for tag, _ in document.tags))
         self.assertFalse(any(key.startswith("on") for _, attrs in document.tags for key in attrs))
 
@@ -225,7 +237,11 @@ class ReportTests(unittest.TestCase):
         document = Document(render_report(snapshot(), {}))
         for tag, attrs in document.tags:
             if "src" in attrs:
-                self.assertTrue(tag == "img" and attrs["src"].startswith("data:image/png;base64,"))
+                self.assertTrue(tag == "img" and attrs["src"].startswith("data:image/svg+xml;base64,"))
+                self.assertEqual(attrs.get("alt"), "Palma AI")
+                logo = base64.b64decode(attrs["src"].split(",", 1)[1], validate=True)
+                self.assertEqual(hashlib.sha256(logo).hexdigest(),
+                                 "5663024457f028a6ef479de62e5a2a192154f7d30c43a95f9866d8a0c059ab61")
             self.assertNotIn("style", attrs)
             if tag == "link":
                 self.fail("Report must not load link resources")
@@ -247,36 +263,48 @@ class ReportTests(unittest.TestCase):
         self.assertIn("font-src data:", policy)
         self.assertIn("connect-src 'none'", policy)
 
-    def test_priority_ring_matches_findings_and_handles_empty_evidence(self):
+    def test_priority_bars_match_finding_counts_and_handle_empty_evidence(self):
         data = snapshot()
-        for counts in ({}, {"critical": 3, "high": 2, "medium": 1, "low": 4, "info": 1}, {"info": 1}):
+        severities = ("critical", "high", "medium", "low", "info")
+        for counts, widths in (({}, (0, 0, 0, 0, 0)),
+                               ({"critical": 3, "high": 2, "medium": 1, "low": 4, "info": 1}, (180, 120, 60, 240, 60)),
+                               ({"info": 1}, (0, 0, 0, 0, 240))):
             with self.subTest(counts=counts):
                 data["findings"] = [dict(snapshot()["findings"][0], id=f"{severity}-{i}", severity=severity)
                                     for severity, count in counts.items() for i in range(count)]
-                document = Document(render_report(data, {"findings": 9000}))
-                segments = [attrs for tag, attrs in document.tags
-                            if tag == "circle" and attrs.get("class", "").startswith("ring-segment ")]
-                self.assertEqual(len(segments), len(counts))
-                offset = 0.0
-                for segment, (severity, count) in zip(segments, counts.items()):
-                    share = 100 * count / sum(counts.values())
-                    self.assertEqual(segment["class"], f"ring-segment ring-{severity}")
-                    self.assertAlmostEqual(float(segment["stroke-dasharray"].split()[0]), share, places=5)
-                    self.assertAlmostEqual(float(segment["stroke-dashoffset"]), -offset, places=5)
-                    offset += share
+                output = render_report(data, {"findings": 9000})
+                chart = output.split('<aside class="priority-chart"', 1)[1].split('</aside>', 1)[0]
+                document = Document(chart)
+                bars = [attrs for tag, attrs in document.tags if tag == "rect" and attrs.get("class") in {f"bar-{severity}" for severity in severities}]
+                self.assertEqual([bar["class"] for bar in bars], [f"bar-{severity}" for severity in severities])
+                self.assertEqual([float(bar["width"]) for bar in bars], list(widths))
+                labels = re.findall(r'<span class="chart-number">(\d+)</span>', chart)
+                self.assertEqual(list(map(int, labels)), [counts.get(severity, 0) for severity in severities])
+                links = [attrs for tag, attrs in document.tags if tag == "a" and attrs.get("class") == "chart-row"]
+                self.assertEqual([link["data-priority"] for link in links], list(severities))
+                for link, severity in zip(links, severities):
+                    self.assertEqual(link["href"], "#findings")
+                    self.assertEqual(link["aria-label"], f"Show {counts.get(severity, 0)} {severity.title()} findings")
+                self.assertIn(f'{sum(counts.values())} findings', " ".join(document.text))
                 self.assertNotIn("9000", " ".join(document.text))
 
-    def test_leading_actions_include_escaped_recommendations(self):
+    def test_priority_preview_escapes_titles_and_keeps_recommendations_in_finding_details(self):
         data = snapshot()
-        data["findings"][1]["recommendation"] = 'Review <script>untrusted</script> & confirm access.'
+        data["findings"][1]["title"] = 'Review <script>untrusted</script> & confirm access.'
+        data["findings"][1]["recommendation"] = 'Narrow <script>untrusted</script> & confirm access.'
         output = render_report(data, {})
-        overview = output.split('id="overview"', 1)[1].split('<div class="metric-strip"', 1)[0]
-        self.assertIn('class="priority-action">Review &lt;script&gt;untrusted&lt;/script&gt; &amp; confirm access.', overview)
+        overview = output.split('id="overview"', 1)[1].split('id="client-map"', 1)[0]
+        self.assertIn('<strong>Review &lt;script&gt;untrusted&lt;/script&gt; &amp; confirm access.</strong>', overview)
         self.assertNotIn('<script>untrusted</script>', overview)
+        self.assertNotIn('Narrow', overview)
+        finding = output.split('<article class="finding"', 1)[1].split('</article>', 1)[0]
+        self.assertIn('<h4>Next step</h4><p>Narrow &lt;script&gt;untrusted&lt;/script&gt; &amp; confirm access.', finding)
+        details = next(attrs for tag, attrs in Document(finding).tags if tag == "details" and attrs.get("class") == "finding-details")
+        self.assertNotIn("open", details)
 
-    def test_booking_link_optional_and_only_safe_https(self):
+    def test_booking_link_default_and_only_supported_https(self):
         baseline = render_report(snapshot(), {})
-        self.assertNotIn('class="booking-link"', baseline)
+        self.assertIn('class="booking-link" href="https://calendar.app.google/qVE3L8fGgmQWv3Hx7"', baseline)
         for unsafe in ("javascript:alert(1)", "data:text/html,bad", "http://palma.ai", "//palma.ai", "https://user:secret@palma.ai", "https://palma.ai\n/path", "https://palma.ai\\@evil.invalid", "https://palma.ai:99999", "https://palma.ai:bad", "https://calendar.example.com/palma"):
             with self.subTest(url=unsafe):
                 self.assertNotIn('class="booking-link"', render_report(snapshot(), {}, booking_url=unsafe))
@@ -289,7 +317,7 @@ class ReportTests(unittest.TestCase):
         data["findings"][1]["references"] = ["javascript:alert(1)", "https://user:secret@example.com", "https://example.com/docs?a=1&b=2",
                                              "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"]
         document = Document(render_report(data, {}))
-        external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") not in {"artwork-reference", "regulation-source"} and not attrs["href"].startswith("#")]
+        external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") not in {"artwork-reference", "regulation-source", "booking-link"} and not attrs["href"].startswith("#")]
         # Only documentation the bundled rules cite is linked.
         self.assertEqual(external, ["https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"])
         for tag, attrs in document.tags:
@@ -303,7 +331,7 @@ class ReportTests(unittest.TestCase):
         self.assertIn("Disabled connector", output)
         self.assertIn("Disabled in configuration", output)
         self.assertIn("Enabled in configuration", output)
-        inventory = output.split('id="inventory"', 1)[1].split('id="coverage"', 1)[0]
+        inventory = output.split('id="inventory-content"', 1)[1].split('id="eu-ai-regulation"', 1)[0]
         self.assertNotIn("State unknown", output)
         self.assertNotIn("0 enabled", inventory)
         self.assertNotIn("0 disabled", inventory)
@@ -311,7 +339,7 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("Observed state", inventory)
         self.assertNotIn("Disabled connector</h3>", output)
 
-    def test_named_inventory_is_grouped_by_client_collapsed_and_keeps_locations(self):
+    def test_named_inventory_and_client_details_are_collapsed_and_keep_locations(self):
         data = snapshot()
         data["observations"] = [
             {"id": "skill-1", "kind": "skill", "client": "codex", "name": "skill-creator", "enabled": "unknown", "location": "~/.codex/skills/skill-creator/SKILL.md", "details": {"origin": "user", "activation": "present", "auditState": "unknown"}},
@@ -320,14 +348,14 @@ class ReportTests(unittest.TestCase):
         ]
         data["findings"][0]["observationIds"] = ["skill-2"]
         output = render_report(data, {})
-        inventory = output.split('id="inventory"', 1)[1].split('id="coverage"', 1)[0]
+        inventory = output.split('id="inventory-content"', 1)[1].split('id="eu-ai-regulation"', 1)[0]
         document = Document(output)
         groups = [attrs for tag, attrs in document.tags if tag == "details" and attrs.get("class") == "inventory-group"]
-        self.assertEqual(len(groups), 2)
+        self.assertEqual(len(groups), 3)  # Distinct skills, then two client details groups.
         self.assertTrue(all("open" not in group for group in groups), "inventory groups start collapsed")
         self.assertLess(inventory.index("<strong>Claude Code</strong>"), inventory.index("<strong>Codex</strong>"))
         self.assertIn('<span>2 skills</span>', inventory)
-        self.assertIn('data-total="2">2</span>', inventory)
+        self.assertIn('data-total="3">3</span>', inventory)
         self.assertLess(inventory.index('<strong>helper</strong>'), inventory.index('<strong>imagegen</strong>'))
         self.assertIn('id="inventory-search" type="search"', inventory)
         self.assertIn('Search inventory by name, client, or location', inventory)
@@ -342,7 +370,7 @@ class ReportTests(unittest.TestCase):
     def test_disabled_status_is_preserved_even_for_installed_artifacts(self):
         data = snapshot()
         data["observations"][2]["details"]["activation"] = "installed"
-        inventory = render_report(data, {}).split('id="inventory"', 1)[1].split('id="coverage"', 1)[0]
+        inventory = render_report(data, {}).split('id="inventory-content"', 1)[1].split('id="eu-ai-regulation"', 1)[0]
         self.assertIn('class="state state-disabled">Disabled in configuration', inventory)
 
     def test_finding_policy_context_and_counts_are_optional_and_escaped(self):
@@ -421,7 +449,7 @@ class ReportTests(unittest.TestCase):
         data["observations"].append({"id": "mcp-gateway", "name": "Space", "kind": "mcp", "enabled": "enabled", "details": {"execution": "remote", "endpointScope": "remote", "governedBy": "palma-gateway"}})
         counts = dict(re.findall(r'<div class="access-chart-row" data-reach="([^"]+)">.*?<strong>(\d+)</strong></div>', render_report(data, {})))
         self.assertEqual((counts["gateway"], counts["remote"]), ("1", "1"))
-        self.assertLess(output.index('class="metric-strip"'), output.index('class="access-overview"'))
+        self.assertLess(output.index('id="client-map"'), output.index('class="access-overview"'))
         self.assertLess(output.index('class="access-overview"'), output.index('id="findings"'))
 
     def test_mcp_access_overview_keeps_unknown_reach_unknown(self):
@@ -455,31 +483,18 @@ class ReportTests(unittest.TestCase):
         visible_text = " ".join("".join(Document(output).text).split())
         self.assertTrue(visible_text.endswith("Local by design. This report makes no network requests. You control any sharing."))
 
-    def test_team_teaser_explains_benefits_without_inventing_aggregation(self):
-        output = render_report(snapshot(), {})
-        teaser = output.split('<aside class="team-teaser"', 1)[1].split('</aside>', 1)[0]
-        self.assertIn("See the bigger picture", teaser)
-        self.assertIn("shared AI tools, repeated exposure, and governance priorities across people and devices", teaser)
-        self.assertEqual(teaser.count('<h3>'), 3)
-        self.assertIn("Illustrative team view · separate Palma offering", teaser)
-        self.assertIn("This report does not create an aggregated view or send any results", teaser)
-        self.assertIn('role="img" aria-labelledby="team-diagram-title team-diagram-description"', teaser)
-        self.assertIn("Interested in the team view?", teaser)
-        self.assertIn("Get in touch with Palma.", teaser)
-        self.assertNotIn('<button', teaser)
-        self.assertNotIn('<a ', teaser)
-        self.assertLess(output.index('id="coverage"'), output.index('<aside class="team-teaser"'))
-        self.assertLess(output.index('<aside class="team-teaser"'), output.index('class="local-note local-note-end"'))
-        empty_teaser = render_report({}, {}).split('<aside class="team-teaser"', 1)[1].split('</aside>', 1)[0]
-        self.assertEqual(teaser, empty_teaser, "Illustration must not look like invented team results derived from one snapshot")
-
-    def test_team_teaser_booking_is_only_the_explicit_optional_destination(self):
+    def test_explicit_booking_replaces_the_team_panels_default_destination(self):
         output = render_report(snapshot(), {}, booking_url="https://palma.ai/team")
-        teaser = output.split('<aside class="team-teaser"', 1)[1].split('</aside>', 1)[0]
-        links = [attrs for tag, attrs in Document(teaser).tags if tag == "a"]
+        panel = output.split('<aside class="team-teaser"', 1)[1].split('</aside>', 1)[0]
+        links = [attrs for tag, attrs in Document(panel).tags if tag == "a"]
         self.assertEqual(len(links), 1)
         self.assertEqual(links[0]["href"], "https://palma.ai/team")
-        self.assertNotIn("Interested in the team view?", teaser)
+        self.assertEqual(links[0]["rel"], "noreferrer noopener")
+        self.assertEqual(links[0]["target"], "_blank")
+        footer = output.split('<footer class="report-footer"', 1)[1].split('</footer>', 1)[0]
+        self.assertFalse(any(tag == "a" for tag, _ in Document(footer).tags), "one booking button in the team panel")
+        self.assertLess(output.index('id="coverage"'), output.index('<aside class="team-teaser"'))
+        self.assertLess(output.index('</footer>'), output.index('class="local-note local-note-end"'))
 
     def test_supported_client_icons_have_text_and_only_observed_clients_are_listed(self):
         data = snapshot()
@@ -492,10 +507,15 @@ class ReportTests(unittest.TestCase):
         for _, label in clients:
             self.assertIn(label, " ".join(document.text))
         self.assertIn('data-generic="shared"', output)
-        self.assertIn('aria-label="AI clients observed in this snapshot"', output)
+        client_map = output.split('id="client-map"', 1)[1].split('id="findings"', 1)[0]
+        mapped = [attrs for tag, attrs in Document(client_map).tags if tag == "a" and attrs.get("class") == "client-map-identity"]
+        self.assertEqual(len(mapped), len(clients))
+        self.assertEqual(len({item["href"] for item in mapped}), len(clients))
+        for _, label in clients:
+            self.assertIn(label, " ".join(Document(client_map).text))
         data["observations"] = []
         empty = render_report(data, {})
-        self.assertNotIn('class="client-overview"', empty)
+        self.assertNotIn('class="client-map-identity"', empty)
         self.assertNotIn('class="brand-sprite"', empty)
 
     def test_provider_catalog_includes_authentic_and_truthful_generic_icons(self):
@@ -589,17 +609,18 @@ class ReportTests(unittest.TestCase):
         high = data["findings"][1]
         data["findings"].extend([dict(copy.deepcopy(high), id=f"repeat-{i}") for i in range(4)])
         output = render_report(data, {})
-        overview = output.split('<section class="overview"', 1)[1].split('<div class="metric-strip"', 1)[0]
+        overview = output.split('id="overview"', 1)[1].split('id="client-map"', 1)[0]
         self.assertEqual(overview.count("Filesystem sandbox is disabled"), 1)
-        self.assertIn("Confirm the trust boundary of local skills", overview)
+        self.assertNotIn("Confirm the trust boundary of local skills", overview)
+        self.assertIn('data-priority="info" class="overview-info">1 informational', overview)
         self.assertEqual(len([1 for tag, attrs in Document(output).tags if tag == "article"]), 6)
 
     def test_empty_snapshot_is_useful_without_a_fabricated_score(self):
         output = render_report({}, {})
-        self.assertIn("No review items identified", output)
+        self.assertIn("No priority review items.", output)
         self.assertIn("No inventory observations were recorded", output)
         self.assertIn("No source records were included", output)
-        self.assertNotIn('class="booking-link"', output)
+        self.assertIn('class="booking-link"', output)
         visible_text = " ".join(Document(output).text)
         self.assertNotIn("100%", visible_text)
         self.assertNotIn("security score", visible_text.lower())

@@ -61,6 +61,7 @@ class CopiesTests(unittest.TestCase):
                 for raw in (syntax % "A", syntax % "B", "PALMA_UNRESOLVED"):
                     self.assertNotIn(raw, exported)
 
+    @unittest.skipIf(os.name == "nt", "executable bits are POSIX metadata")
     def test_a_single_observed_version_survives_an_unversioned_installation(self):
         for relative in (".local/bin/claude", ".local/share/claude/versions/2.1.10"):
             self.put(relative, "Synthetic payload; never executed.")
@@ -70,7 +71,7 @@ class CopiesTests(unittest.TestCase):
         self.assertEqual(client["details"]["installationState"], "installed")
         self.assertEqual(client["details"]["locationCount"], 2)
 
-    def test_different_credentials_stay_separate_and_a_copied_credential_names_every_file(self):
+    def test_different_credentials_stay_separate_and_a_copied_credential_keeps_every_file_in_evidence(self):
         self.put("code/app-one/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-ONE-0000000000000000"}})
         self.put("code/app-two/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-TWO-0000000000000000"}})
         for copy in ("code/mono", "code/mono/.claude/worktrees/copy"):
@@ -81,10 +82,16 @@ class CopiesTests(unittest.TestCase):
         snapshot = self.scan([self.home / "code/app-one", self.home / "code/app-two", self.home / "code/mono", self.home / "code/mono/.claude/worktrees/copy"])
         stored = self.finding(snapshot, "config-inline-credential")
         self.assertEqual(stored["declarations"], 3, "two different secrets, and one secret copied into a worktree")
-        self.assertIn("~/code/mono/.claude/settings.json, ~/code/app-one/.claude/settings.json and 2 other files", stored["summary"])
+        stored_ids = set(stored["observationIds"])
+        stored_locations = {location for item in snapshot["observations"] if item["id"] in stored_ids
+                            for location in item["details"].get("locations", [item["location"]])}
+        self.assertEqual(stored_locations, {
+            "~/code/app-one/.claude/settings.json", "~/code/app-two/.claude/settings.json",
+            "~/code/mono/.claude/settings.json", "~/code/mono/.claude/worktrees/copy/.claude/settings.json"})
         inline = self.finding(snapshot, "mcp-inline-credential")
         self.assertEqual(inline["declarations"], 1)
-        self.assertIn("~/code/mono/.mcp.json and ~/code/mono/.claude/worktrees/copy/.mcp.json", inline["summary"])
+        [connector] = [item for item in snapshot["observations"] if item["id"] in inline["observationIds"]]
+        self.assertEqual(set(connector["details"]["locations"]), {"~/code/mono/.mcp.json", "~/code/mono/.claude/worktrees/copy/.mcp.json"})
 
     def test_a_copy_in_a_malformed_file_never_stands_in_for_a_well_formed_copy(self):
         odd = {"type": "carrier-pigeon"}
@@ -141,16 +148,37 @@ class CopiesTests(unittest.TestCase):
         self.assertIn(skills[0]["details"]["parentId"], identities)
 
     def test_a_skill_keeps_its_plugin_when_identical_plugin_copies_merge(self):
-        for market in ("alpha", "beta"):
-            base = f".claude/plugins/cache/{market}/toolkit/1.0.0"
+        for cache_version in ("1.0.0", "1.0.0-copy"):
+            base = f".claude/plugins/cache/alpha/toolkit/{cache_version}"
             self.put(base + "/.claude-plugin/plugin.json", {"name": "toolkit", "version": "1.0.0"})
             self.put(base + "/skills/helper/SKILL.md", "---\nname: helper\n---\nSame body.")
-        # The longer path's copy is merged away, so its extra skill must follow the kept plugin.
-        self.put(".claude/plugins/cache/alpha/toolkit/1.0.0/skills/extra/SKILL.md", "---\nname: extra\n---\nOnly in one copy.")
+        # Same marketplace and manifest: the longer cache copy merges away, so
+        # its extra skill must follow the kept plugin observation.
+        self.put(".claude/plugins/cache/alpha/toolkit/1.0.0-copy/skills/extra/SKILL.md", "---\nname: extra\n---\nOnly in one copy.")
         snapshot = self.scan([])
         [plugin] = self.kind(snapshot, "plugin")
         extra = next(item for item in self.kind(snapshot, "skill") if item["name"] == "extra")
         self.assertEqual(extra["details"]["parentId"], plugin["id"])
+
+    def test_identical_plugins_from_different_marketplaces_keep_their_own_provenance(self):
+        for market in ("official", "custom"):
+            base = f".claude/plugins/cache/{market}/toolkit/1.0.0"
+            self.put(base + "/.claude-plugin/plugin.json", {"name": "toolkit", "version": "1.0.0"})
+            self.put(base + "/skills/helper/SKILL.md", "---\nname: helper\n---\nSame body.")
+        self.put(".claude/plugins/known_marketplaces.json", {
+            "official": {"source": {"source": "github", "repo": "anthropics/claude-plugins-official"}},
+            "custom": {"source": {"source": "github", "repo": "unknown/toolkit"}},
+        })
+        snapshot = self.scan([])
+        plugins = {item["id"]: item for item in self.kind(snapshot, "plugin")}
+        self.assertEqual(len(plugins), 2)
+        skills = self.kind(snapshot, "skill")
+        self.assertEqual(len(skills), 2)
+        for skill in skills:
+            parent = plugins[skill["details"]["parentId"]]
+            self.assertEqual(skill["details"]["marketplaceId"], parent["details"]["marketplaceId"])
+            self.assertEqual(skill["details"]["sourceTrust"], parent["details"]["sourceTrust"])
+        self.assertEqual({item["details"]["sourceTrust"] for item in plugins.values()}, {"allowlisted", "unapproved"})
 
     def test_copies_that_differ_in_env_headers_args_hook_commands_or_agent_body_stay_separate(self):
         variants = [({"env": {"MODE": "a"}}, "./check", "Check tests."), ({"env": {"MODE": "b"}}, "./check", "Check tests."),

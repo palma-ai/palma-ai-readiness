@@ -12,9 +12,9 @@ No artwork is fetched when collecting data, generating a report, or opening it. 
 
 ## Artwork sources and transformations
 
-- **Palma**: the Palma wordmark is supplied by Palma AI from its application asset library (`static/images/PalmaLogoLightMode.png`).
-- **Existing Palma client artwork**: Codex/OpenAI, Claude (Code and Desktop), Cursor, Gemini CLI, VS Code, and Windsurf were supplied by Palma from its application asset library (`images/mcp-hosts/`). These are existing product-identification assets; their original brand and trademark rights remain with their owners. This notice does not assert a new open-source license for the marks.
-- **Dashboard Icons**: GitHub, Slack, Notion, Linear, Atlassian, Figma, Google Drive, and Google Chrome use [Homarr Labs Dashboard Icons](https://github.com/homarr-labs/dashboard-icons/tree/03e8f8e22da16ccddf5e14afa90711391357231e), pinned to commit `03e8f8e22da16ccddf5e14afa90711391357231e`. Existing connector files were copied from Palma's vendored `static/brand-icons/` catalog at that pin. The Chrome asset came from the same pinned upstream. The upstream Apache License 2.0 is reproduced below, including its attribution notice.
+- **Palma**: the report uses Palma’s official [teal wordmark](https://palma.ai/brand/wordmark-teal.svg) and [teal brand mark](https://palma.ai/brand/brandmark-teal.svg), bundled as `assets/palma-logo.svg` and `assets/palma-mark.svg`. Palma retains the rights to its marks.
+- **Client artwork supplied by Palma**: Codex/OpenAI, Claude (Code and Desktop), Cursor, Gemini CLI, VS Code, and Windsurf artwork was supplied by Palma for this report. These are existing product-identification assets; their original brand and trademark rights remain with their owners. This notice does not assert a new open-source license for the marks.
+- **Dashboard Icons**: GitHub, Slack, Notion, Linear, Atlassian, Figma, Google Drive, and Google Chrome use [Homarr Labs Dashboard Icons](https://github.com/homarr-labs/dashboard-icons/tree/03e8f8e22da16ccddf5e14afa90711391357231e), pinned to commit `03e8f8e22da16ccddf5e14afa90711391357231e`. Palma supplied the connector artwork from that pinned catalog; the Chrome asset uses the same upstream revision. The upstream Apache License 2.0 is reproduced below, including its attribution notice.
 - **Playwright**: the Playwright mark is from [Microsoft's Playwright documentation artwork](https://playwright.dev/img/playwright-logo.svg). The [documentation repository license](https://github.com/microsoft/playwright.dev/blob/main/LICENSE) is Creative Commons Attribution 4.0 International, reproduced below. Retrieved 10 September 2026; the source digest is recorded below.
 - **Generic interface icons**: the shared-client, custom connector, filesystem, browser, and documentation glyphs are code-native interface symbols authored for this report. Browserbase and Context7 use these generic symbols with their names; the glyphs are not presented as their brand marks.
 
@@ -22,37 +22,37 @@ Development-time SVG normalization removes titles and metadata, converts CSS fil
 
 ## Additional client artwork
 
-Additional client artwork: Cline, Roo Code, Continue, and LM Studio come from Palma's existing product-identification asset library. Ollama comes from the same vendored Homarr Labs Dashboard Icons catalog at commit 03e8f8e22da16ccddf5e14afa90711391357231e (Apache 2.0). Original geometry and colors are retained, nonvisual metadata is removed, and SVG IDs are namespaced. GitHub Copilot CLI uses the GitHub organization mark; ChatGPT uses the OpenAI mark. Generic interface symbols accompany clients without a bundled product mark.
+Additional client artwork: Cline, Roo Code, Continue, and LM Studio artwork was supplied by Palma for this report. Ollama comes from the Homarr Labs Dashboard Icons catalog at commit 03e8f8e22da16ccddf5e14afa90711391357231e (Apache 2.0). Original geometry and colors are retained, nonvisual metadata is removed, and SVG IDs are namespaced. GitHub Copilot CLI uses the GitHub organization mark; ChatGPT uses the OpenAI mark. Generic interface symbols accompany clients without a bundled product mark.
 
 | Asset | Original source | SHA-256 |
 | --- | --- | --- |
-| cline | `images/mcp-hosts/cline.svg` | `d45d639d320e081227082561f07782d12f3d2ca56e7b419e3c1336737f2f3adf` |
-| continue | `images/mcp-hosts/continue.svg` | `1f1245058a428eed0dc2e6fdf393a035bb3219af3c10d9499ab3ba9c003fee7c` |
-| lm-studio | `images/mcp-hosts/lm-studio.svg` | `091b0b23a6824b4ed1a6ae36df2eca23bf88337879ecb0462e3fcd46672d2731` |
-| ollama | `brand-icons/ollama.svg` | `c2a14336a00c943cbbe1739d4a9d4146b0606c342fd6876defb6e35f918095bf` |
-| roo-code | `images/mcp-hosts/roo-code.svg` | `406990a41799ecbda801868620a276ec2d922ff21c455b52ffcff4c02374022c` |
+| cline | Palma-supplied Cline artwork | `d45d639d320e081227082561f07782d12f3d2ca56e7b419e3c1336737f2f3adf` |
+| continue | Palma-supplied Continue artwork | `1f1245058a428eed0dc2e6fdf393a035bb3219af3c10d9499ab3ba9c003fee7c` |
+| lm-studio | Palma-supplied LM Studio artwork | `091b0b23a6824b4ed1a6ae36df2eca23bf88337879ecb0462e3fcd46672d2731` |
+| ollama | Homarr Labs Dashboard Icons (pinned above) | `c2a14336a00c943cbbe1739d4a9d4146b0606c342fd6876defb6e35f918095bf` |
+| roo-code | Palma-supplied Roo Code artwork | `406990a41799ecbda801868620a276ec2d922ff21c455b52ffcff4c02374022c` |
 
 ## Original source checksums
 
-Paths in this table are relative to Palma's application asset directory unless a public URL is shown. Checksums identify the original bytes before SVG normalization.
+Source labels identify Palma-supplied artwork or the public upstream catalog described above. Checksums identify the original bytes before SVG normalization.
 
 | Catalog asset | Source | SHA-256 |
 | --- | --- | --- |
-| atlassian | `brand-icons/atlassian.svg` | `a8237d9afe82feb64291bdaad6d52174d1f693ea6d6900eaf78dad9c3a529a65` |
+| atlassian | Homarr Labs Dashboard Icons (pinned above) | `a8237d9afe82feb64291bdaad6d52174d1f693ea6d6900eaf78dad9c3a529a65` |
 | chrome | `https://raw.githubusercontent.com/homarr-labs/dashboard-icons/03e8f8e22da16ccddf5e14afa90711391357231e/svg/google-chrome.svg` | `4748547bb1d1cca359b67d3b164e57efb11eaeb41d2ac9cc3f97fccabfa05b0b` |
-| claude | `images/mcp-hosts/claude.svg` | `0010d8bd023d70c89bced1b9c26601ffeed0e5dbb312cd3d7d1a099b072317bd` |
-| codex | `images/mcp-hosts/codex.svg` | `4008e147d4715ea31a4281e746b65130edd886e5fd05b12021814cbc87e447d9` |
-| cursor | `images/mcp-hosts/cursor.svg` | `8235ce4a9d50961ebf8ed238841e0795a2a15ea65b7256c40a7d061742eb3d46` |
-| figma | `brand-icons/figma.svg` | `59f327ef3ae14b09c1c96ed5696f890c92efde2a5e6e52779e0515166385b6b9` |
-| gemini | `images/mcp-hosts/gemini.svg` | `cc4cfb30bd7ac48dc7ea4df873cfbc97c5f26ff97cac8920064b1b4f31afdaa1` |
-| github | `brand-icons/github.svg` | `cdfb82ff14c8c2484eacba9d211d86cd0c993c933855cad2b03633414fa10ddb` |
-| google-drive | `brand-icons/google-drive.svg` | `963477d7e4a0b0d8865dd7aec8e27d8fd9c3a4b4f2e5b81f9df8581f9f2eca11` |
-| linear | `brand-icons/linear.svg` | `586a989c79bcf2284193e3240f1d12cc5a2ad42fa00bd09c622dfbb95438bcd6` |
-| notion | `brand-icons/notion.svg` | `b98fea4bc3f3259c6907a40dae994c959c3240d7ee4b4afea144a555c638f6c2` |
+| claude | Palma-supplied Claude artwork | `0010d8bd023d70c89bced1b9c26601ffeed0e5dbb312cd3d7d1a099b072317bd` |
+| codex | Palma-supplied Codex/OpenAI artwork | `4008e147d4715ea31a4281e746b65130edd886e5fd05b12021814cbc87e447d9` |
+| cursor | Palma-supplied Cursor artwork | `8235ce4a9d50961ebf8ed238841e0795a2a15ea65b7256c40a7d061742eb3d46` |
+| figma | Homarr Labs Dashboard Icons (pinned above) | `59f327ef3ae14b09c1c96ed5696f890c92efde2a5e6e52779e0515166385b6b9` |
+| gemini | Palma-supplied Gemini artwork | `cc4cfb30bd7ac48dc7ea4df873cfbc97c5f26ff97cac8920064b1b4f31afdaa1` |
+| github | Homarr Labs Dashboard Icons (pinned above) | `cdfb82ff14c8c2484eacba9d211d86cd0c993c933855cad2b03633414fa10ddb` |
+| google-drive | Homarr Labs Dashboard Icons (pinned above) | `963477d7e4a0b0d8865dd7aec8e27d8fd9c3a4b4f2e5b81f9df8581f9f2eca11` |
+| linear | Homarr Labs Dashboard Icons (pinned above) | `586a989c79bcf2284193e3240f1d12cc5a2ad42fa00bd09c622dfbb95438bcd6` |
+| notion | Homarr Labs Dashboard Icons (pinned above) | `b98fea4bc3f3259c6907a40dae994c959c3240d7ee4b4afea144a555c638f6c2` |
 | playwright | `https://playwright.dev/img/playwright-logo.svg` | `6b0a4367bdeab10995bc239278f04c68c10e48adbec15e799e01909a0d66dcb9` |
-| slack | `brand-icons/slack.svg` | `62e556a75b94516fd8dcfa9c8ee4eae76268b4087ee927d91a5f2d3115d54118` |
-| vscode | `images/mcp-hosts/vscode.svg` | `27f78c66393a925b8702100d788a08427a971ac048c98843c448bf74a5f93b44` |
-| windsurf | `images/mcp-hosts/windsurf.svg` | `5870805d8313e7540b517bc9df7fc8a96bc16b8b7c07eeccb12920cddf818964` |
+| slack | Homarr Labs Dashboard Icons (pinned above) | `62e556a75b94516fd8dcfa9c8ee4eae76268b4087ee927d91a5f2d3115d54118` |
+| vscode | Palma-supplied VS Code artwork | `27f78c66393a925b8702100d788a08427a971ac048c98843c448bf74a5f93b44` |
+| windsurf | Palma-supplied Windsurf artwork | `5870805d8313e7540b517bc9df7fc8a96bc16b8b7c07eeccb12920cddf818964` |
 
 ## Dashboard Icons: Apache License 2.0
 

@@ -169,9 +169,11 @@ def _excluded(value, excluded):
         return True
     try:
         path = Path(value).expanduser().absolute()
+        # Both sides absolute on this host, so a POSIX exclusion judged on Windows keeps its drive.
+        folders = [Path(folder).expanduser().absolute() for folder in excluded]
     except (RuntimeError, OSError, ValueError):
         return True
-    return any(path == Path(folder) or Path(folder) in path.parents for folder in excluded)
+    return any(path == folder or folder in path.parents for folder in folders)
 
 
 def _volume_root(value):

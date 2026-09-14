@@ -12,7 +12,7 @@ from palma_scan import governance, rules
 
 FIXTURES = Path(__file__).parent / "fixtures/policy-baseline"
 CATALOG_SHA256 = "5ee97c64b7833de3ae04a68a051592eba7d1415dcc08f0913313e86d4f6063b1"
-CRITICAL_UPGRADES = {"mcp-network-direct", "skills-local-unreviewed", "hooks-declared"}
+HIGH_PRIORITY_OVERRIDES = {"mcp-local-unaudited", "mcp-network-direct", "skills-local-unreviewed", "hooks-declared"}
 LOW_PERMISSION_OVERRIDES = {"permissions-bypassed", "tools-auto-approved", "approval-prompts-disabled"}
 
 
@@ -87,16 +87,17 @@ class PolicyBaselineTests(unittest.TestCase):
                 self.assertEqual(sorted(finding["observationIds"]), matches[item["id"]])
                 self.assertEqual(len(finding["observationIds"]), item["declarations"])
                 self.assertEqual(finding["distinct"], item["distinct"])
-                expected_severity = "low" if item["id"] in LOW_PERMISSION_OVERRIDES else "critical" if item["id"] in CRITICAL_UPGRADES else item["severity"]
+                expected_severity = "low" if item["id"] in LOW_PERMISSION_OVERRIDES else "high" if item["id"] in HIGH_PRIORITY_OVERRIDES else item["severity"]
                 self.assertEqual(finding["severity"], expected_severity)
                 self.assertEqual(finding["baselineSeverity"], item["severity"])
+                self.assertEqual(finding["priorityPolicyVersion"], "2026-09-14.3")
                 self.assertIsInstance(finding["ratingReason"], str)
                 self.assertTrue(finding["ratingReason"])
 
     def test_default_has_no_gateway_exemption_or_external_context_requirement(self):
         findings = {item["ruleId"]: item for item in governance.evaluate(fixture_snapshot())}
         self.assertEqual(len(findings["mcp-network-direct"]["observationIds"]), 2)
-        self.assertEqual(findings["mcp-network-direct"]["severity"], "critical")
+        self.assertEqual(findings["mcp-network-direct"]["severity"], "high")
 
     def test_permission_only_findings_are_low_and_keep_catalog_severity(self):
         findings = {item["ruleId"]: item for item in governance.evaluate(fixture_snapshot())}
@@ -168,10 +169,15 @@ class PolicyBaselineTests(unittest.TestCase):
         local["enabled"] = "disabled"
         local["details"].update(context="cached", activation="cached", effectiveState="stale")
         findings = {item["ruleId"]: item for item in governance.evaluate(snapshot)}
-        self.assertIn(local["id"], findings["mcp-local-unaudited"]["observationIds"])
         self.assertIn(local["id"], findings["mcp-declared-disabled"]["observationIds"])
-        self.assertEqual(findings["mcp-local-unaudited"]["severity"], "critical")
-        evidence = json.dumps(findings["mcp-local-unaudited"]["evidence"])
+        finding = findings["mcp-local-unaudited"]
+        self.assertIn(local["id"], finding["observationIds"])
+        # Other local connectors in the fixture still apply, so the priority stays High and
+        # the summary states the split instead of dropping the disabled declaration.
+        self.assertEqual(finding["severity"], "high")
+        self.assertEqual(finding["applies"], finding["declarations"] - 1)
+        self.assertIn(f"{finding['applies']} of {finding['declarations']} apply as written; 1 is in a cached policy copy", finding["summary"])
+        evidence = json.dumps(finding["evidence"])
         self.assertIn("disabled", evidence)
         self.assertIn("cached", evidence)
         self.assertIn("settings-stale", findings)

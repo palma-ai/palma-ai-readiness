@@ -1,6 +1,7 @@
 """Hardening from the pre-release security audit: hidden text, identity, scope, cost and sharing."""
 from contextlib import redirect_stdout
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -183,7 +184,8 @@ class SummaryTests(Home):
         self.put(".cursor/mcp.json", {"mcpServers": {"PRIVATE_SERVER_NAME": {"command": "node"}}})
         summary = model.summarize(self.scan())
         self.assertTrue(summary["priorities"])
-        self.assertEqual(set(summary["priorities"][0]), {"severity", "title", "ruleId", "declarations", "clients", "recommendation"})
+        self.assertEqual(set(summary["priorities"][0]), {"severity", "title", "ruleId", "declarations", "applies", "clients", "recommendation"})
+        self.assertEqual(summary["priorities"][0]["applies"], 1)
         self.assertNotIn("PRIVATE_SERVER_NAME", json.dumps(summary))
 
     def test_snapshot_input_is_size_limited(self):
@@ -193,9 +195,10 @@ class SummaryTests(Home):
             model.read_snapshot(path)
 
     def test_messages_name_the_home_folder_as_tilde(self):
-        with patch.object(cli, "home_folder", return_value=Path("/Users/jo.smith")):
-            self.assertEqual(cli.shown(Path("/Users/jo.smith/readiness-run-1/report.html")), str(Path("~/readiness-run-1/report.html")))
-            self.assertEqual(cli.shown(Path("/srv/runs/report.html")), str(Path("/srv/runs/report.html")))
+        home = Path("/Users/jo.smith").absolute()  # a drive-qualified home on Windows hosts
+        with patch.object(cli, "home_folder", return_value=home):
+            self.assertEqual(cli.shown(home / "readiness-run-1/report.html"), str(Path("~") / "readiness-run-1/report.html"))
+            self.assertEqual(cli.shown(Path("/srv/runs/report.html")), str(Path("/srv/runs/report.html").absolute()))
 
 
 class ScopeTests(Home):
@@ -203,6 +206,10 @@ class ScopeTests(Home):
         volume = self.root / "volume"
         layout = {"os": "linux", "roots": [volume], "blockedMounts": set(), "networkMountCount": 0, "profiles": [],
                   "profileRoots": [], "currentHome": None, "gaps": [], "mountIndexVerified": True}
+        # The fixture volume lives in the OS temporary folder, which discovery skips by design.
+        patcher = patch.object(machine, "TEMPORARY_ROOTS", {"macos": (), "linux": ()})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         discovery = machine._Discovery(layout)
         discovery.accounts = [{"root": volume / "home/alice", "alias": "user-1"}]
         return volume, discovery
@@ -265,13 +272,19 @@ class CostTests(Home):
             (self.home / "code/app/.git" / name).mkdir()
         self.put("code/app/.gitignore", "".join(f"generated-{index}/\n" for index in range(1_001)))
         self.put("code/app/.claude/skills/kept/SKILL.md", "---\nname: kept\n---\nSteps.")
-        findings = [item for item in self.scan([self.home / "code/app"])["findings"] if item["ruleId"] == "skills-local-unreviewed"]
-        self.assertEqual([item["severity"] for item in findings], ["critical"])
+        snapshot = self.scan([self.home / "code/app"])
+        findings = [item for item in snapshot["findings"] if item["ruleId"] == "skills-local-unreviewed"]
+        self.assertEqual([item["severity"] for item in findings], ["high"])
+        skills = [item for item in snapshot["observations"] if item["kind"] == "skill"]
+        self.assertEqual(len(skills), 1)
+        self.assertNotEqual(skills[0]["details"].get("provenance"), "version-controlled")
 
     def test_collection_stops_at_its_overall_time_limit(self):
         self.put(".claude/settings.json", {})
         candidate = Candidate("claude-code", "user", self.home / ".claude/settings.json", "~/.claude/settings.json")
-        collection = collect_inventory(CollectOptions(home=self.home, os_name="linux", environ={}, max_total_seconds=1e-9), ("test",), [candidate])
+        clock = itertools.count(1000.0, 1.0)  # a coarse host clock might not tick between two reads
+        with patch("time.monotonic", side_effect=lambda: next(clock)):
+            collection = collect_inventory(CollectOptions(home=self.home, os_name="linux", environ={}, max_total_seconds=1e-9), ("test",), [candidate])
         self.assertIn("time_limit", {source["reason"] for source in collection.builder.sources.values()})
 
     @unittest.skipUnless(hasattr(os, "getuid") and hasattr(os, "link"), "POSIX hard links")

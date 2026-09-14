@@ -14,7 +14,7 @@ The local schema has no tenant or assessment fields. A minimal valid snapshot is
 ```json
 {
   "schemaVersion": "2.0",
-  "collector": {"name": "agent-declared", "version": "2.2.0", "rulesVersion": "not-applied"},
+  "collector": {"name": "agent-declared", "version": "2.3.0", "rulesVersion": "not-applied"},
   "mode": "declared",
   "startedAt": "2026-09-10T12:00:00+00:00",
   "completedAt": "2026-09-10T12:00:00+00:00",

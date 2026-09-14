@@ -1,8 +1,8 @@
 {
   "collector": {
     "name": "palma-ai-readiness",
-    "rulesVersion": "2026-09-14.1",
-    "version": "2.2.0"
+    "rulesVersion": "2026-09-14.3",
+    "version": "2.3.0"
   },
   "completedAt": "2026-09-10T12:00:01+00:00",
   "coverage": {
@@ -14,6 +14,293 @@
   },
   "findings": [
     {
+      "category": "capabilities",
+      "confidence": "high",
+      "declarations": 2,
+      "evidence": [
+        {
+          "key": "agents.overrides.browser_agent.enabled",
+          "location": "~/.gemini/settings.json",
+          "sourceId": "src-810d696bf06eec5b1fbf076a",
+          "value": {
+            "category": "browser",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": true,
+            "valueCollected": true
+          }
+        },
+        {
+          "key": "agents.browser.sessionMode",
+          "location": "~/.gemini/settings.json",
+          "sourceId": "src-810d696bf06eec5b1fbf076a",
+          "value": {
+            "category": "browser",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": "existing",
+            "valueCollected": true
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-689b3e39edf7dad0",
+      "impact": "A reused browser session may expose additional context, while selected actions can have fewer confirmation steps. Signed-in access is not verified.",
+      "observationIds": [
+        "obs-9b6606af7a9d850a",
+        "obs-d8a70501c6039d83"
+      ],
+      "recommendation": "Prefer isolated sessions and retain sensitive-action confirmation. Review file upload restrictions and browser-domain scope in the active agent.",
+      "references": [
+        "https://geminicli.com/docs/reference/configuration/",
+        "https://geminicli.com/docs/tools/mcp-server/"
+      ],
+      "ruleId": "PALMA-CAPABILITY-002",
+      "severity": "critical",
+      "summary": "The Gemini browser agent is declared enabled with an existing-session mode or reduced extra confirmation for selected sensitive actions. First-run consent and other policy checks may still apply.",
+      "title": "Review browser session reuse and sensitive actions"
+    },
+    {
+      "applies": 2,
+      "baselineSeverity": "critical",
+      "category": "execution",
+      "clients": [
+        "gemini-cli",
+        "vscode"
+      ],
+      "confidence": "high",
+      "declarations": 2,
+      "distinct": 2,
+      "evidence": [
+        {
+          "key": "workbench.browser.enableChatTools",
+          "location": "~/.config/Code/User/settings.json",
+          "sourceId": "src-42425f503bce20ed18ea2826",
+          "value": {
+            "category": "browser",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": true,
+            "valueCollected": true
+          }
+        },
+        {
+          "key": "agents.overrides.browser_agent.enabled",
+          "location": "~/.gemini/settings.json",
+          "sourceId": "src-810d696bf06eec5b1fbf076a",
+          "value": {
+            "category": "browser",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": true,
+            "valueCollected": true
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-edb000754ee226ce",
+      "impact": "The agent can browse and act in sites with your signed-in sessions. A page it reads can contain instructions that steer it into unintended actions or into sending data elsewhere, unless site access and sensitive actions require your approval.",
+      "observationIds": [
+        "obs-7c592dd16b033f5c",
+        "obs-9b6606af7a9d850a"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "references": [
+        "https://code.claude.com/docs/en/settings",
+        "https://developers.openai.com/codex/config-reference/"
+      ],
+      "ruleId": "browser-use-enabled",
+      "severity": "critical",
+      "summary": "2 settings enable or trust browser capabilities. Govern access to signed-in sessions and require confirmation for sensitive actions.",
+      "title": "Browser use turned on: acts as the signed-in user without governance"
+    },
+    {
+      "applies": 1,
+      "baselineSeverity": "critical",
+      "category": "execution",
+      "clients": [
+        "gemini-cli"
+      ],
+      "confidence": "high",
+      "declarations": 1,
+      "distinct": 1,
+      "evidence": [
+        {
+          "key": "agents.browser.confirmSensitiveActions",
+          "location": "~/.gemini/settings.json",
+          "sourceId": "src-810d696bf06eec5b1fbf076a",
+          "value": {
+            "category": "browser",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": false,
+            "valueCollected": true
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-a97a071c7f5198be",
+      "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
+      "observationIds": [
+        "obs-b1fbfc5f0f847844"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "recommendation": "Check how Palma AI can help: sensitive browser actions run behind an approval policy instead of silently.",
+      "references": [
+        "https://code.claude.com/docs/en/settings",
+        "https://developers.openai.com/codex/config-reference/"
+      ],
+      "ruleId": "browser-actions-unconfirmed",
+      "severity": "critical",
+      "summary": "1 client setting lets the browser agent fill forms and run scripts without asking on this machine",
+      "title": "Browser actions allowed without confirmation"
+    },
+    {
+      "applies": 1,
+      "baselineSeverity": "critical",
+      "category": "execution",
+      "clients": [
+        "codex"
+      ],
+      "confidence": "high",
+      "declarations": 1,
+      "distinct": 1,
+      "evidence": [
+        {
+          "key": "features.computer_use",
+          "location": "~/.codex/config.toml",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
+          "value": {
+            "category": "computer",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": true,
+            "valueCollected": true
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-bf2b4ef78f5b3031",
+      "impact": "The agent can see your screen and use the keyboard and mouse as you, across your signed-in apps. Actions may go unnoticed without active supervision or review. Content it reads can contain instructions that steer those actions, including sending data elsewhere.",
+      "observationIds": [
+        "obs-77d1bd6a329d258d"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "recommendation": "Check how Palma AI can help: desktop control becomes a governed capability with approval policies and an audit trail.",
+      "references": [
+        "https://code.claude.com/docs/en/settings",
+        "https://developers.openai.com/codex/config-reference/"
+      ],
+      "ruleId": "computer-use-enabled",
+      "severity": "critical",
+      "summary": "1 setting enables or trusts desktop capabilities. The agent can potentially act through the signed-in user's applications and operating-system permissions.",
+      "title": "Computer use turned on: acts as the signed-in user without governance"
+    },
+    {
+      "applies": 1,
+      "baselineSeverity": "critical",
+      "category": "execution",
+      "clients": [
+        "codex"
+      ],
+      "confidence": "high",
+      "declarations": 1,
+      "distinct": 1,
+      "evidence": [
+        {
+          "key": "browser",
+          "location": "~/.codex/config.toml",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": "browser",
+            "capabilityEvidence": "declared-package",
+            "context": "base",
+            "endpointScope": "unknown",
+            "execution": "local",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "stdio"
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-3de01bd58f9744a6",
+      "impact": "It can open pages, fill in forms and click in sites where you are signed in, as you. A page it visits can contain instructions that steer it into unintended actions or into sending data elsewhere.",
+      "observationIds": [
+        "obs-b535df37bb7664e8"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "references": [
+        "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
+      ],
+      "ruleId": "mcp-browser-automation",
+      "severity": "critical",
+      "summary": "\u201cbrowser\u201d can control a web browser as you.",
+      "title": "Browser automation via a connector: drives a browser without governance"
+    },
+    {
+      "baselineSeverity": "critical",
+      "category": "credentials",
+      "clients": [
+        "cursor"
+      ],
+      "confidence": "high",
+      "declarations": 1,
+      "distinct": 1,
+      "evidence": [
+        {
+          "key": "test-service",
+          "location": "~/.cursor/mcp.json",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
+          "value": {
+            "activation": "configured",
+            "auth": "bearer_header",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "remote",
+            "execution": "remote",
+            "inlineCredentialPresent": true,
+            "literalCredentialCount": 1,
+            "observedState": "unknown",
+            "transport": "http"
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-2d98d398fe71ba2f",
+      "impact": "If the value is a working credential, anyone who can read the file can use it as you: other processes, extensions and skills running under your account, and every backup, sync folder or dotfiles repository that copies the file. It keeps working until it is rotated.",
+      "observationIds": [
+        "obs-08d7bf373c0532b3"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "recommendation": "Move the credential behind the gateway and rotate the exposed value.",
+      "references": [
+        "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
+      ],
+      "ruleId": "mcp-inline-credential",
+      "severity": "critical",
+      "summary": "\u201ctest-service\u201d keeps a potential credential in plain text in configuration. The value is withheld from this report.",
+      "title": "Credentials stored in local client config"
+    },
+    {
+      "applies": 5,
       "baselineSeverity": "high",
       "category": "mcp",
       "clients": [
@@ -25,27 +312,9 @@
       "distinct": 5,
       "evidence": [
         {
-          "key": "team-messages",
-          "location": "~/.config/Code/User/mcp.json",
-          "sourceId": "src-b69f995696d23bc824396f67",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        },
-        {
           "key": "test-service",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
           "value": {
             "activation": "configured",
             "auth": "bearer_header",
@@ -61,9 +330,45 @@
           }
         },
         {
+          "key": "source-control",
+          "location": "~/.cursor/mcp.json",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "remote",
+            "execution": "remote",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "http"
+          }
+        },
+        {
+          "key": "team-messages",
+          "location": "~/.config/Code/User/mcp.json",
+          "sourceId": "src-1b5878f1fd090bad3017fcf1",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "remote",
+            "execution": "remote",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "http"
+          }
+        },
+        {
           "key": "design",
           "location": "~/.config/Code/User/mcp.json",
-          "sourceId": "src-b69f995696d23bc824396f67",
+          "sourceId": "src-1b5878f1fd090bad3017fcf1",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -81,25 +386,7 @@
         {
           "key": "documentation",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        },
-        {
-          "key": "source-control",
-          "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -116,26 +403,28 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-3bd9b227386d2c78",
+      "id": "finding-d42cd4a333a12eb7",
       "impact": "Connector requests may send PII, source code, or other sensitive data to remote services. Untrusted tool output can carry prompt injection, while excessive tool permissions increase the impact of unintended calls.",
       "observationIds": [
-        "obs-1c031fa9e459154d",
-        "obs-30ec29acccebdf9f",
-        "obs-35fb8d6a6d36774b",
-        "obs-ab6dec8b270f2fa3",
-        "obs-c4213fbf79398187"
+        "obs-08d7bf373c0532b3",
+        "obs-12e7c689537b49f7",
+        "obs-76ab0be45582be77",
+        "obs-7948140201a318de",
+        "obs-f4fbbcff83747a58"
       ],
-      "ratingReason": "Palma's standalone governance policy elevates this exposure to Critical.",
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
       "references": [
         "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
       ],
       "ruleId": "mcp-network-direct",
-      "severity": "critical",
+      "severity": "high",
       "summary": "5 remote connector declarations connect AI clients directly to services. Their tool access and data sharing need a governed policy and audit trail.",
       "title": "Remote connectors used outside Palma's governance"
     },
     {
+      "applies": 2,
       "baselineSeverity": "critical",
       "category": "mcp",
       "clients": [
@@ -148,9 +437,27 @@
       "distinct": 3,
       "evidence": [
         {
+          "key": "documentation",
+          "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
+          "sourceId": "src-32b802e0df0de79deb6edd32",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "unknown",
+            "execution": "local",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "stdio"
+          }
+        },
+        {
           "key": "browser",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -168,7 +475,7 @@
         {
           "key": "disabled",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -182,148 +489,143 @@
             "observedState": "disabled",
             "transport": "stdio"
           }
-        },
-        {
-          "key": "documentation",
-          "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
-          "sourceId": "src-6f44ce53668e226d19b9fce4",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "unknown",
-            "execution": "local",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "stdio"
-          }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-ae3c99061f6ca37c",
+      "id": "finding-713620a034857d1c",
       "impact": "A local MCP server can reach files, credentials, and personally identifiable information (PII) with its host permissions. Malicious code or prompt-injected tool interactions can cause unauthorized actions or data leakage.",
       "observationIds": [
-        "obs-810cdaa0f87dc450",
-        "obs-c6bc5f784cf71865",
-        "obs-f0eae420972b64dd"
+        "obs-804cfca89e60ff22",
+        "obs-b535df37bb7664e8",
+        "obs-fc5587d6842f51df"
       ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "The versioned Palma priority policy calibrates this declaration separately from its original catalog rating.",
       "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
       "references": [
         "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
       ],
       "ruleId": "mcp-local-unaudited",
-      "severity": "critical",
-      "summary": "3 local connector declarations can launch code with the endpoint user's access. Review their ownership, tool permissions, monitoring, and governance.",
+      "severity": "high",
+      "summary": "3 local connector declarations can launch code with the endpoint user's access. Review their ownership, tool permissions, monitoring, and governance. 2 of 3 apply as written; 1 is switched off.",
       "title": "Connectors running locally without monitoring or governance"
     },
     {
-      "category": "capabilities",
-      "confidence": "high",
-      "declarations": 2,
-      "evidence": [
-        {
-          "key": "agents.browser.sessionMode",
-          "location": "~/.gemini/settings.json",
-          "sourceId": "src-736057806085cf204a7b1197",
-          "value": {
-            "category": "browser",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": "existing",
-            "valueCollected": true
-          }
-        },
-        {
-          "key": "agents.overrides.browser_agent.enabled",
-          "location": "~/.gemini/settings.json",
-          "sourceId": "src-736057806085cf204a7b1197",
-          "value": {
-            "category": "browser",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": true,
-            "valueCollected": true
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-43b1a778afc4493d",
-      "impact": "A reused browser session may expose additional context, while selected actions can have fewer confirmation steps. Signed-in access is not verified.",
-      "observationIds": [
-        "obs-1a718ba4f4cea546",
-        "obs-474f596780c22486"
-      ],
-      "recommendation": "Prefer isolated sessions and retain sensitive-action confirmation. Review file upload restrictions and browser-domain scope in the active agent.",
-      "references": [
-        "https://geminicli.com/docs/reference/configuration/",
-        "https://geminicli.com/docs/tools/mcp-server/"
-      ],
-      "ruleId": "PALMA-CAPABILITY-002",
-      "severity": "critical",
-      "summary": "The Gemini browser agent is declared enabled with an existing-session mode or reduced extra confirmation for selected sensitive actions. First-run consent and other policy checks may still apply.",
-      "title": "Review browser session reuse and sensitive actions"
-    },
-    {
-      "baselineSeverity": "critical",
-      "category": "execution",
+      "baselineSeverity": "high",
+      "category": "extensions",
       "clients": [
-        "gemini-cli",
-        "vscode"
+        "claude-code"
       ],
       "confidence": "high",
       "declarations": 2,
       "distinct": 2,
       "evidence": [
         {
-          "key": "agents.overrides.browser_agent.enabled",
-          "location": "~/.gemini/settings.json",
-          "sourceId": "src-736057806085cf204a7b1197",
+          "key": "sample-plugin@demo",
+          "location": "~/.claude/settings.json",
+          "sourceId": "src-e86ccdddeb67b4e3cf5124a0",
           "value": {
-            "category": "browser",
+            "activation": "configured",
             "context": "base",
+            "installationState": "config_only",
+            "marketplaceId": "demo",
+            "observedState": "enabled",
+            "origin": "unknown",
+            "sourceEvidence": [],
+            "sourceTrust": "unresolved"
+          }
+        },
+        {
+          "key": "retired-plugin@demo",
+          "location": "~/.claude/settings.json",
+          "sourceId": "src-e86ccdddeb67b4e3cf5124a0",
+          "value": {
+            "activation": "configured",
+            "context": "base",
+            "installationState": "config_only",
+            "marketplaceId": "demo",
+            "observedState": "disabled",
+            "origin": "unknown",
+            "sourceEvidence": [],
+            "sourceTrust": "unresolved"
+          }
+        }
+      ],
+      "evidenceType": "inventory",
+      "id": "finding-fe61a91cf6ee756e",
+      "impact": "A pack of unknown origin can supply instructions or executable components that steer tool use, read credentials or disclose data. The finding asks for source verification; it is not evidence of malicious execution or of an unapproved source.",
+      "observationIds": [
+        "obs-79584c5d4dd060fc",
+        "obs-e01790f48c278094"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+      "recommendation": "Confirm where each pack came from in the client's marketplace registry, reinstall it from an approved source, or disable it until its origin is confirmed.",
+      "references": [
+        "https://code.claude.com/docs/en/plugins"
+      ],
+      "ruleId": "artifacts-unresolved-source",
+      "severity": "high",
+      "summary": "2 skill and plugin declarations sit under a marketplace whose source record could not be resolved locally. Their origin is unknown, not known to be outside the allowlist.",
+      "title": "Verify the source of skills and plugins with unresolved provenance"
+    },
+    {
+      "applies": 2,
+      "baselineSeverity": "high",
+      "category": "execution",
+      "clients": [
+        "claude-code",
+        "codex"
+      ],
+      "confidence": "high",
+      "declarations": 2,
+      "distinct": 2,
+      "evidence": [
+        {
+          "key": "sandbox.enabled",
+          "location": "~/project/.claude/settings.json",
+          "sourceId": "src-0d51d0f03e30095729155e0a",
+          "value": {
+            "category": "sandbox",
+            "context": "project",
             "effectiveState": "unknown",
             "observedState": "enabled",
-            "value": true,
+            "value": false,
             "valueCollected": true
           }
         },
         {
-          "key": "workbench.browser.enableChatTools",
-          "location": "~/.config/Code/User/settings.json",
-          "sourceId": "src-5f75b6abae1941a4f1d64cae",
+          "key": "sandbox_mode",
+          "location": "~/.codex/config.toml",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
           "value": {
-            "category": "browser",
+            "category": "sandbox",
             "context": "base",
             "effectiveState": "unknown",
             "observedState": "enabled",
-            "value": true,
+            "value": "danger-full-access",
             "valueCollected": true
           }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-a8698574623fa92e",
-      "impact": "The agent can browse and act in sites with your signed-in sessions. A page it reads can contain instructions that steer it into unintended actions or into sending data elsewhere, unless site access and sensitive actions require your approval.",
+      "id": "finding-8f8fab0e5428fba3",
+      "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-474f596780c22486",
-        "obs-f43086074f9e2957"
+        "obs-287d2a946ddbc9c9",
+        "obs-884a8b1260fa3d9e"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "recommendation": "Evidence for the security review now; managed settings from Palma later.",
       "references": [
         "https://code.claude.com/docs/en/settings",
         "https://developers.openai.com/codex/config-reference/"
       ],
-      "ruleId": "browser-use-enabled",
-      "severity": "critical",
-      "summary": "2 settings enable or trust browser capabilities. Govern access to signed-in sessions and require confirmation for sensitive actions.",
-      "title": "Browser use turned on: acts as the signed-in user without governance"
+      "ruleId": "sandbox-disabled",
+      "severity": "high",
+      "summary": "2 settings disable a sandbox or declare unrestricted access. Review which files, network destinations, and host services agent commands can reach.",
+      "title": "Sandbox turned off: agents run unconfined"
     },
     {
       "baselineSeverity": "high",
@@ -337,9 +639,9 @@
       "distinct": 1,
       "evidence": [
         {
-          "key": "release-helper",
-          "location": "~/.agents/skills/release-helper/SKILL.md",
-          "sourceId": "src-cf985d82d0e79a7e937ece3f",
+          "key": "research-helper",
+          "location": "~/.claude/skills/research-helper/SKILL.md",
+          "sourceId": "src-bbf89a6307bc75d7469aa312",
           "value": {
             "activation": "present",
             "context": "base",
@@ -349,9 +651,9 @@
           }
         },
         {
-          "key": "research-helper",
-          "location": "~/.claude/skills/research-helper/SKILL.md",
-          "sourceId": "src-9e96e4eafb65f99a46fc2e68",
+          "key": "release-helper",
+          "location": "~/.agents/skills/release-helper/SKILL.md",
+          "sourceId": "src-2aa2d821b0d9eaa24e1c8635",
           "value": {
             "activation": "present",
             "context": "base",
@@ -362,105 +664,25 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-2e8a0a66f0c64b4d",
+      "id": "finding-d6a2981f7abbf06f",
       "impact": "Unreviewed skill instructions and scripts can contain prompt injection, mishandle PII, disclose secrets, or steer tools into data leakage. Review evidence should identify the installed version.",
       "observationIds": [
-        "obs-44e619afe060d36f",
-        "obs-f80df07faefb7cf2"
+        "obs-4ecae42d35ace74c",
+        "obs-60bb5a1c3ac7598f"
       ],
-      "ratingReason": "Palma's standalone governance policy elevates this exposure to Critical.",
-      "recommendation": "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team.",
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "Local skill installation establishes available instructions, not malicious code or a missing prior audit. Source review is High priority.",
+      "recommendation": "Review the named skill instructions, scripts, dependencies, and update source. Retain the version approved for sensitive use; remove unused copies.",
       "references": [
         "https://agentskills.io/specification"
       ],
       "ruleId": "skills-local-unreviewed",
-      "severity": "critical",
-      "summary": "2 locally installed skill declarations need an audit record. Their instructions and scripts can influence agent decisions, tool use, and data access.",
-      "title": "Local unaudited skills installed"
+      "severity": "high",
+      "summary": "2 local skill declarations contain instructions and scripts that can influence agent decisions and tool use. Review their source and the version you intend to use; existing audits were not assessed.",
+      "title": "Local skills without a recorded review"
     },
     {
-      "baselineSeverity": "critical",
-      "category": "execution",
-      "clients": [
-        "gemini-cli"
-      ],
-      "confidence": "high",
-      "declarations": 1,
-      "distinct": 1,
-      "evidence": [
-        {
-          "key": "agents.browser.confirmSensitiveActions",
-          "location": "~/.gemini/settings.json",
-          "sourceId": "src-736057806085cf204a7b1197",
-          "value": {
-            "category": "browser",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": false,
-            "valueCollected": true
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-65e8a6deffc78152",
-      "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
-      "observationIds": [
-        "obs-ea6d61c79b8f9c6e"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Check how Palma AI can help: sensitive browser actions run behind an approval policy instead of silently.",
-      "references": [
-        "https://code.claude.com/docs/en/settings",
-        "https://developers.openai.com/codex/config-reference/"
-      ],
-      "ruleId": "browser-actions-unconfirmed",
-      "severity": "critical",
-      "summary": "1 client setting lets the browser agent fill forms and run scripts without asking on this machine",
-      "title": "Browser actions allowed without confirmation"
-    },
-    {
-      "baselineSeverity": "critical",
-      "category": "execution",
-      "clients": [
-        "codex"
-      ],
-      "confidence": "high",
-      "declarations": 1,
-      "distinct": 1,
-      "evidence": [
-        {
-          "key": "features.computer_use",
-          "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
-          "value": {
-            "category": "computer",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": true,
-            "valueCollected": true
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-bdaec0cc21b04907",
-      "impact": "The agent can see your screen and use the keyboard and mouse as you, across your signed-in apps. Content it reads can contain instructions that steer those actions, including sending data elsewhere.",
-      "observationIds": [
-        "obs-e37e8e3d9356bfd6"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Check how Palma AI can help: desktop control becomes a governed capability with approval policies and an audit trail.",
-      "references": [
-        "https://code.claude.com/docs/en/settings",
-        "https://developers.openai.com/codex/config-reference/"
-      ],
-      "ruleId": "computer-use-enabled",
-      "severity": "critical",
-      "summary": "1 setting enables or trust desktop capabilities. The agent can potentially act through the signed-in user's applications and operating-system permissions.",
-      "title": "Computer use turned on: acts as the signed-in user without governance"
-    },
-    {
+      "applies": 1,
       "baselineSeverity": "medium",
       "category": "automation",
       "clients": [
@@ -473,7 +695,7 @@
         {
           "key": "Hooks: PreToolUse",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
+          "sourceId": "src-e86ccdddeb67b4e3cf5124a0",
           "value": {
             "activation": "configured",
             "context": "base",
@@ -488,219 +710,22 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-0e82a6af4921aa6f",
+      "id": "finding-c5359cc76cec188f",
       "impact": "Hooks can execute custom logic automatically, access PII and credentials, transmit data, or inject instructions into an agent workflow. A compromised hook or writable script creates a path to data leakage.",
       "observationIds": [
-        "obs-ce952539b6cff3ac"
+        "obs-3c8c467eaaa58bc1"
       ],
-      "ratingReason": "Palma's standalone governance policy elevates this exposure to Critical.",
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "The versioned Palma priority policy calibrates this declaration separately from its original catalog rating.",
       "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
       "references": [
         "https://code.claude.com/docs/en/settings",
         "https://developers.openai.com/codex/config-reference/"
       ],
       "ruleId": "hooks-declared",
-      "severity": "critical",
+      "severity": "high",
       "summary": "1 hook declaration can run custom logic on agent events. Review scripts and destinations for credential access, unintended actions, and potential data leakage.",
       "title": "Scripts run automatically on agent events"
-    },
-    {
-      "baselineSeverity": "critical",
-      "category": "execution",
-      "clients": [
-        "codex"
-      ],
-      "confidence": "high",
-      "declarations": 1,
-      "distinct": 1,
-      "evidence": [
-        {
-          "key": "browser",
-          "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": "browser",
-            "capabilityEvidence": "declared-package",
-            "context": "base",
-            "endpointScope": "unknown",
-            "execution": "local",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "stdio"
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-c0d75224a56cfdbf",
-      "impact": "It can open pages, fill in forms and click in sites where you are signed in, as you. A page it visits can contain instructions that steer it into unintended actions or into sending data elsewhere.",
-      "observationIds": [
-        "obs-810cdaa0f87dc450"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
-      "references": [
-        "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
-      ],
-      "ruleId": "mcp-browser-automation",
-      "severity": "critical",
-      "summary": "\u201cbrowser\u201d can control a web browser as you. Declared in ~/.codex/config.toml.",
-      "title": "Browser automation via a connector: drives a browser without governance"
-    },
-    {
-      "baselineSeverity": "critical",
-      "category": "credentials",
-      "clients": [
-        "cursor"
-      ],
-      "confidence": "high",
-      "declarations": 1,
-      "distinct": 1,
-      "evidence": [
-        {
-          "key": "test-service",
-          "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
-          "value": {
-            "activation": "configured",
-            "auth": "bearer_header",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": true,
-            "literalCredentialCount": 1,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-bddf4b96f6b5733d",
-      "impact": "If the value is a working credential, anyone who can read the file can use it as you: other processes, extensions and skills running under your account, and every backup, sync folder or dotfiles repository that copies the file. It keeps working until it is rotated.",
-      "observationIds": [
-        "obs-30ec29acccebdf9f"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Move the credential behind the gateway and rotate the exposed value.",
-      "references": [
-        "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
-      ],
-      "ruleId": "mcp-inline-credential",
-      "severity": "critical",
-      "summary": "\u201ctest-service\u201d keeps a potential credential in plain text in ~/.cursor/mcp.json. The value is withheld from this report.",
-      "title": "Credentials stored in local client config"
-    },
-    {
-      "baselineSeverity": "high",
-      "category": "execution",
-      "clients": [
-        "claude-code",
-        "codex"
-      ],
-      "confidence": "high",
-      "declarations": 2,
-      "distinct": 2,
-      "evidence": [
-        {
-          "key": "sandbox.enabled",
-          "location": "~/project/.claude/settings.json",
-          "sourceId": "src-ff224cd17fbacb85995eb026",
-          "value": {
-            "category": "sandbox",
-            "context": "project",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": false,
-            "valueCollected": true
-          }
-        },
-        {
-          "key": "sandbox_mode",
-          "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
-          "value": {
-            "category": "sandbox",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": "danger-full-access",
-            "valueCollected": true
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-23c18942eac871cd",
-      "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
-      "observationIds": [
-        "obs-d0a760d394600e82",
-        "obs-e97e94ab5c13c1b3"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Evidence for the security review now; managed settings from Palma later.",
-      "references": [
-        "https://code.claude.com/docs/en/settings",
-        "https://developers.openai.com/codex/config-reference/"
-      ],
-      "ruleId": "sandbox-disabled",
-      "severity": "high",
-      "summary": "2 settings disable a sandbox or declare unrestricted access. Review which files, network destinations, and host services agent commands can reach.",
-      "title": "Sandbox turned off: agents run unconfined"
-    },
-    {
-      "baselineSeverity": "medium",
-      "category": "configuration",
-      "clients": [
-        "claude-code"
-      ],
-      "confidence": "high",
-      "declarations": 2,
-      "distinct": 2,
-      "evidence": [
-        {
-          "key": "sample-plugin@demo",
-          "location": "~/.claude/settings.json",
-          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
-          "value": {
-            "activation": "configured",
-            "context": "base",
-            "installationState": "config_only",
-            "observedState": "enabled",
-            "origin": "unknown"
-          }
-        },
-        {
-          "key": "retired-plugin@demo",
-          "location": "~/.claude/settings.json",
-          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
-          "value": {
-            "activation": "configured",
-            "context": "base",
-            "installationState": "config_only",
-            "observedState": "disabled",
-            "origin": "unknown"
-          }
-        }
-      ],
-      "evidenceType": "inventory",
-      "id": "finding-4bef1b8bfe0f8a64",
-      "impact": "Evidence the scan could not classify is neither safe nor unsafe: it is unknown. Resolving it is cheap and turns a gap into a decision.",
-      "observationIds": [
-        "obs-90339d79247ce601",
-        "obs-b2b37c7de1440e15"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Inventory them now; governed conversion registers the ones that stay.",
-      "references": [
-        "https://code.claude.com/docs/en/plugins"
-      ],
-      "ruleId": "plugins-unknown-origin",
-      "severity": "medium",
-      "summary": "2 packs have no recorded origin on this machine",
-      "title": "Packs of unknown origin"
     },
     {
       "category": "hygiene",
@@ -709,21 +734,8 @@
       "evidence": [
         {
           "key": "sandbox.enabled",
-          "location": "~/.claude/settings.json",
-          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
-          "value": {
-            "category": "sandbox",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": true,
-            "valueCollected": true
-          }
-        },
-        {
-          "key": "sandbox.enabled",
           "location": "~/project/.claude/settings.json",
-          "sourceId": "src-ff224cd17fbacb85995eb026",
+          "sourceId": "src-0d51d0f03e30095729155e0a",
           "value": {
             "category": "sandbox",
             "context": "project",
@@ -732,14 +744,27 @@
             "value": false,
             "valueCollected": true
           }
+        },
+        {
+          "key": "sandbox.enabled",
+          "location": "~/.claude/settings.json",
+          "sourceId": "src-e86ccdddeb67b4e3cf5124a0",
+          "value": {
+            "category": "sandbox",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": true,
+            "valueCollected": true
+          }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-ff97864bd427da1f",
+      "id": "finding-907f00699a6a95af",
       "impact": "Repeated or conflicting declarations can make maintenance and troubleshooting harder; this does not establish which value is effective.",
       "observationIds": [
-        "obs-14d877dc7dfd6232",
-        "obs-d0a760d394600e82"
+        "obs-287d2a946ddbc9c9",
+        "obs-3f6f2155ffe07fc4"
       ],
       "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
       "references": [
@@ -760,7 +785,7 @@
         {
           "key": "reviewer",
           "location": "~/.claude/agents/reviewer.md",
-          "sourceId": "src-f8c9b591c898f93d53bd701d",
+          "sourceId": "src-6f1507105576cc348ead6bf2",
           "value": {
             "activation": "present",
             "context": "base",
@@ -771,10 +796,10 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-9a75860b388dd45e",
+      "id": "finding-b97a4e42706e8601",
       "impact": "Prompt injection or unsafe instructions can steer an agent into unintended tool use, PII exposure, or data leakage.",
       "observationIds": [
-        "obs-362e0b21468ae977"
+        "obs-8d039e1f8feb987c"
       ],
       "recommendation": "Review instructions, declared tools, dependencies, and update sources; retain the reviewed version.",
       "references": [
@@ -795,7 +820,7 @@
         {
           "key": "browser",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -812,10 +837,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-294f1602d6617ce1",
+      "id": "finding-af3d1574b2a2a35e",
       "impact": "Later launches can obtain different code, increasing supply-chain exposure and making security review harder to reproduce.",
       "observationIds": [
-        "obs-810cdaa0f87dc450"
+        "obs-b535df37bb7664e8"
       ],
       "recommendation": "Pin a reviewed package version and establish an update review process.",
       "references": [
@@ -828,6 +853,7 @@
       "title": "An MCP package lacks an exact version"
     },
     {
+      "applies": 1,
       "baselineSeverity": "critical",
       "category": "execution",
       "clients": [
@@ -840,7 +866,7 @@
         {
           "key": "approval_policy",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
           "value": {
             "category": "permissions",
             "context": "base",
@@ -852,11 +878,12 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-9da5f2a60d6f3aec",
+      "id": "finding-48c9fb77301a01be",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-7378021f5cbc8819"
+        "obs-45f3a3ed70d8d677"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review.",
       "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
       "references": [
@@ -869,47 +896,7 @@
       "title": "Codex never asks before acting"
     },
     {
-      "baselineSeverity": "critical",
-      "category": "execution",
-      "clients": [
-        "claude-code"
-      ],
-      "confidence": "high",
-      "declarations": 1,
-      "distinct": 1,
-      "evidence": [
-        {
-          "key": "permissions.defaultMode",
-          "location": "~/.claude/remote-settings.json",
-          "sourceId": "src-b7dfac3f88f6f8eb6de6e151",
-          "value": {
-            "category": "permissions",
-            "context": "cached",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": "bypassPermissions",
-            "valueCollected": true
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-b33bd66bb32f3c68",
-      "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
-      "observationIds": [
-        "obs-3edb557f86f7ca8a"
-      ],
-      "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review.",
-      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
-      "references": [
-        "https://code.claude.com/docs/en/settings",
-        "https://developers.openai.com/codex/config-reference/"
-      ],
-      "ruleId": "permissions-bypassed",
-      "severity": "low",
-      "summary": "1 permission setting bypasses or automatically grant tool approvals. Apply scoped permissions and approval policies before sensitive use.",
-      "title": "Permission prompts turned off"
-    },
-    {
+      "applies": 1,
       "baselineSeverity": "critical",
       "category": "execution",
       "clients": [
@@ -922,7 +909,7 @@
         {
           "key": "chat.tools.global.autoApprove",
           "location": "~/.config/Code/User/settings.json",
-          "sourceId": "src-5f75b6abae1941a4f1d64cae",
+          "sourceId": "src-42425f503bce20ed18ea2826",
           "value": {
             "category": "permissions",
             "context": "base",
@@ -934,11 +921,12 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-c54d7e087ab47524",
+      "id": "finding-a83235fb68a229a7",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-73b8c0909ead77a2"
+        "obs-567ee7b7a4076d68"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review.",
       "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
       "references": [
@@ -968,9 +956,20 @@
       "distinct": 8,
       "evidence": [
         {
+          "key": "claude-code",
+          "location": "~/.claude.json",
+          "sourceId": "src-81e9c72e5b1b3bd91858c946",
+          "value": {
+            "activation": "present",
+            "context": "base",
+            "installationState": "config_only",
+            "observedState": "unknown"
+          }
+        },
+        {
           "key": "claude-desktop",
           "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
-          "sourceId": "src-6f44ce53668e226d19b9fce4",
+          "sourceId": "src-32b802e0df0de79deb6edd32",
           "value": {
             "activation": "present",
             "context": "base",
@@ -981,7 +980,7 @@
         {
           "key": "windsurf",
           "location": "~/.config/Windsurf/User/settings.json",
-          "sourceId": "src-267435219e47ba6512c3d729",
+          "sourceId": "src-e53e780350d0438d6a049a54",
           "value": {
             "activation": "present",
             "context": "base",
@@ -992,18 +991,7 @@
         {
           "key": "gemini-cli",
           "location": "~/.gemini/settings.json",
-          "sourceId": "src-736057806085cf204a7b1197",
-          "value": {
-            "activation": "present",
-            "context": "base",
-            "installationState": "config_only",
-            "observedState": "unknown"
-          }
-        },
-        {
-          "key": "claude-code",
-          "location": "~/.claude.json",
-          "sourceId": "src-33da539789fcc703a9b65d58",
+          "sourceId": "src-810d696bf06eec5b1fbf076a",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1014,7 +1002,7 @@
         {
           "key": "cursor",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1025,7 +1013,7 @@
         {
           "key": "codex",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-e5d597d926e294eb84a65a8b",
+          "sourceId": "src-4229d08c3737803a8cf4885e",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1036,7 +1024,7 @@
         {
           "key": "vscode",
           "location": "~/.config/Code/User/settings.json",
-          "sourceId": "src-5f75b6abae1941a4f1d64cae",
+          "sourceId": "src-42425f503bce20ed18ea2826",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1047,7 +1035,7 @@
         {
           "key": "shared",
           "location": "~/.agents/skills/release-helper/SKILL.md",
-          "sourceId": "src-cf985d82d0e79a7e937ece3f",
+          "sourceId": "src-2aa2d821b0d9eaa24e1c8635",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1057,18 +1045,19 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-81e3ad66d0479358",
+      "id": "finding-ca85ca6bb32bc28e",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
+        "obs-11f07e08f98baf41",
         "obs-3671ec6cfdbe6865",
         "obs-6e20edb3ea355b5a",
         "obs-81e9c66bae35cf73",
-        "obs-89256078b24c4ecf",
         "obs-cf3f6e2efb911626",
         "obs-eb34b63d965dabe4",
         "obs-f110289c9711463f",
         "obs-fa5193a766e09a47"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Remove stale configuration.",
       "references": [
@@ -1086,21 +1075,8 @@
       "evidence": [
         {
           "key": "permissions.defaultMode",
-          "location": "~/project/.claude/settings.json",
-          "sourceId": "src-ff224cd17fbacb85995eb026",
-          "value": {
-            "category": "permissions",
-            "context": "project",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": "default",
-            "valueCollected": true
-          }
-        },
-        {
-          "key": "permissions.defaultMode",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
+          "sourceId": "src-e86ccdddeb67b4e3cf5124a0",
           "value": {
             "category": "permissions",
             "context": "base",
@@ -1109,14 +1085,27 @@
             "value": "default",
             "valueCollected": true
           }
+        },
+        {
+          "key": "permissions.defaultMode",
+          "location": "~/project/.claude/settings.json",
+          "sourceId": "src-0d51d0f03e30095729155e0a",
+          "value": {
+            "category": "permissions",
+            "context": "project",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": "default",
+            "valueCollected": true
+          }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-12fbdff139b0d9f5",
+      "id": "finding-791d720216e4d11d",
       "impact": "Repeated or conflicting declarations can make maintenance and troubleshooting harder; this does not establish which value is effective.",
       "observationIds": [
-        "obs-27114bc0f7ae2f55",
-        "obs-726d8ee984947ea3"
+        "obs-3fb1960ce897004b",
+        "obs-7f70da8254629271"
       ],
       "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
       "references": [
@@ -1137,7 +1126,7 @@
         {
           "key": "projects.referenceInventory",
           "location": "~/.claude.json",
-          "sourceId": "src-33da539789fcc703a9b65d58",
+          "sourceId": "src-81e9c72e5b1b3bd91858c946",
           "value": {
             "category": "other",
             "context": "state",
@@ -1153,10 +1142,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-b29b5aaf37f18d09",
+      "id": "finding-c7886d02bccd959b",
       "impact": "Historical project entries can add clutter or preserve obsolete trust choices. Missing locations may also be temporarily unavailable or intentionally retained.",
       "observationIds": [
-        "obs-40aefc1d608802d5"
+        "obs-6ac4edf73c522223"
       ],
       "recommendation": "Review saved projects in the client and remove obsolete references after confirming their purpose. The scan does not alter settings or delete any files.",
       "references": [
@@ -1182,7 +1171,7 @@
         {
           "key": "disabled",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "sourceId": "src-4f873bf9d6cd69d2c1b035d0",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -1199,11 +1188,12 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-bf4a53ad0e8d4f84",
+      "id": "finding-cc4d89c8354c0cc6",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
-        "obs-c6bc5f784cf71865"
+        "obs-fc5587d6842f51df"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Remove them, or re-enable them deliberately.",
       "references": [
@@ -1213,6 +1203,49 @@
       "severity": "info",
       "summary": "1 connector entry is switched off but still in configuration on this machine",
       "title": "Disabled connector entries left in config"
+    },
+    {
+      "applies": 0,
+      "baselineSeverity": "critical",
+      "category": "execution",
+      "clients": [
+        "claude-code"
+      ],
+      "confidence": "high",
+      "declarations": 1,
+      "distinct": 1,
+      "evidence": [
+        {
+          "key": "permissions.defaultMode",
+          "location": "~/.claude/remote-settings.json",
+          "sourceId": "src-292ea966190fc188536a7be2",
+          "value": {
+            "category": "permissions",
+            "context": "cached",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": "bypassPermissions",
+            "valueCollected": true
+          }
+        }
+      ],
+      "evidenceType": "configuration",
+      "id": "finding-13d5ce0da177890d",
+      "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
+      "observationIds": [
+        "obs-dcdfee8d27febe91"
+      ],
+      "priorityPolicyVersion": "2026-09-14.3",
+      "ratingReason": "The evidence is kept, but no declaration applies as written: each is in a cached policy copy. Palma rates that Info; enabling or installing one restores the Low priority.",
+      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "references": [
+        "https://code.claude.com/docs/en/settings",
+        "https://developers.openai.com/codex/config-reference/"
+      ],
+      "ruleId": "permissions-bypassed",
+      "severity": "info",
+      "summary": "1 permission setting bypasses or automatically grant tool approvals. Apply scoped permissions and approval policies before sensitive use. This declaration does not apply as written: it is in a cached policy copy.",
+      "title": "Permission prompts turned off"
     },
     {
       "baselineSeverity": "info",
@@ -1227,22 +1260,26 @@
         {
           "key": "retired-plugin@demo",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
+          "sourceId": "src-e86ccdddeb67b4e3cf5124a0",
           "value": {
             "activation": "configured",
             "context": "base",
             "installationState": "config_only",
+            "marketplaceId": "demo",
             "observedState": "disabled",
-            "origin": "unknown"
+            "origin": "unknown",
+            "sourceEvidence": [],
+            "sourceTrust": "unresolved"
           }
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-d91ea14c73c12b5a",
+      "id": "finding-73ecf96d3fa64d21",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
-        "obs-b2b37c7de1440e15"
+        "obs-e01790f48c278094"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Hygiene: remove the entries, or re-enable them deliberately.",
       "references": [
@@ -1266,7 +1303,7 @@
         {
           "key": "projects.stale-1",
           "location": "~/.claude.json",
-          "sourceId": "src-33da539789fcc703a9b65d58",
+          "sourceId": "src-81e9c72e5b1b3bd91858c946",
           "value": {
             "category": "other",
             "context": "state",
@@ -1278,11 +1315,12 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-8aa40e5964d4854d",
+      "id": "finding-8efcf700af802df9",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
-        "obs-8552d433bdabf131"
+        "obs-1c55233f30eb75c2"
       ],
+      "priorityPolicyVersion": "2026-09-14.3",
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Hygiene: if a folder is gone for good, remove its entries from the client configuration; nothing can use them.",
       "references": [
@@ -1312,11 +1350,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-726d8ee984947ea3",
+      "id": "obs-3fb1960ce897004b",
       "kind": "setting",
       "location": "~/.claude/settings.json",
       "name": "permissions.defaultMode",
-      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
+      "sourceId": "src-e86ccdddeb67b4e3cf5124a0"
     },
     {
       "client": "claude-code",
@@ -1333,11 +1371,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-14d877dc7dfd6232",
+      "id": "obs-3f6f2155ffe07fc4",
       "kind": "setting",
       "location": "~/.claude/settings.json",
       "name": "sandbox.enabled",
-      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
+      "sourceId": "src-e86ccdddeb67b4e3cf5124a0"
     },
     {
       "client": "claude-code",
@@ -1349,14 +1387,17 @@
         "context": "base",
         "declaration": "enabledPlugins[\"retired-plugin@demo\"]",
         "installationState": "config_only",
-        "origin": "unknown"
+        "marketplaceId": "demo",
+        "origin": "unknown",
+        "sourceEvidence": [],
+        "sourceTrust": "unresolved"
       },
       "enabled": "disabled",
-      "id": "obs-b2b37c7de1440e15",
+      "id": "obs-e01790f48c278094",
       "kind": "plugin",
       "location": "~/.claude/settings.json",
       "name": "retired-plugin@demo",
-      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
+      "sourceId": "src-e86ccdddeb67b4e3cf5124a0"
     },
     {
       "client": "claude-code",
@@ -1368,14 +1409,17 @@
         "context": "base",
         "declaration": "enabledPlugins[\"sample-plugin@demo\"]",
         "installationState": "config_only",
-        "origin": "unknown"
+        "marketplaceId": "demo",
+        "origin": "unknown",
+        "sourceEvidence": [],
+        "sourceTrust": "unresolved"
       },
       "enabled": "enabled",
-      "id": "obs-90339d79247ce601",
+      "id": "obs-79584c5d4dd060fc",
       "kind": "plugin",
       "location": "~/.claude/settings.json",
       "name": "sample-plugin@demo",
-      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
+      "sourceId": "src-e86ccdddeb67b4e3cf5124a0"
     },
     {
       "client": "claude-code",
@@ -1396,11 +1440,11 @@
         }
       },
       "enabled": "unknown",
-      "id": "obs-ce952539b6cff3ac",
+      "id": "obs-3c8c467eaaa58bc1",
       "kind": "hook",
       "location": "~/.claude/settings.json",
       "name": "Hooks: PreToolUse",
-      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
+      "sourceId": "src-e86ccdddeb67b4e3cf5124a0"
     },
     {
       "client": "claude-code",
@@ -1421,11 +1465,11 @@
         "valueType": "object"
       },
       "enabled": "unknown",
-      "id": "obs-40aefc1d608802d5",
+      "id": "obs-6ac4edf73c522223",
       "kind": "setting",
       "location": "~/.claude.json",
       "name": "Saved project references",
-      "sourceId": "src-33da539789fcc703a9b65d58"
+      "sourceId": "src-81e9c72e5b1b3bd91858c946"
     },
     {
       "client": "codex",
@@ -1442,11 +1486,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-7378021f5cbc8819",
+      "id": "obs-45f3a3ed70d8d677",
       "kind": "setting",
       "location": "~/.codex/config.toml",
       "name": "approval_policy",
-      "sourceId": "src-e5d597d926e294eb84a65a8b"
+      "sourceId": "src-4229d08c3737803a8cf4885e"
     },
     {
       "client": "codex",
@@ -1463,11 +1507,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-e97e94ab5c13c1b3",
+      "id": "obs-884a8b1260fa3d9e",
       "kind": "setting",
       "location": "~/.codex/config.toml",
       "name": "sandbox_mode",
-      "sourceId": "src-e5d597d926e294eb84a65a8b"
+      "sourceId": "src-4229d08c3737803a8cf4885e"
     },
     {
       "client": "codex",
@@ -1484,11 +1528,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-e37e8e3d9356bfd6",
+      "id": "obs-77d1bd6a329d258d",
       "kind": "setting",
       "location": "~/.codex/config.toml",
       "name": "features.computer_use",
-      "sourceId": "src-e5d597d926e294eb84a65a8b"
+      "sourceId": "src-4229d08c3737803a8cf4885e"
     },
     {
       "client": "codex",
@@ -1497,6 +1541,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": "browser",
@@ -1521,11 +1566,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-810cdaa0f87dc450",
+      "id": "obs-b535df37bb7664e8",
       "kind": "mcp",
       "location": "~/.codex/config.toml",
       "name": "browser",
-      "sourceId": "src-e5d597d926e294eb84a65a8b"
+      "sourceId": "src-4229d08c3737803a8cf4885e"
     },
     {
       "client": "cursor",
@@ -1534,6 +1579,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
@@ -1558,11 +1604,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "disabled",
-      "id": "obs-c6bc5f784cf71865",
+      "id": "obs-fc5587d6842f51df",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "disabled",
-      "sourceId": "src-74c9f2b82a0b00416bff9266"
+      "sourceId": "src-4f873bf9d6cd69d2c1b035d0"
     },
     {
       "client": "cursor",
@@ -1571,6 +1617,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
@@ -1595,11 +1642,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-ab6dec8b270f2fa3",
+      "id": "obs-f4fbbcff83747a58",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "documentation",
-      "sourceId": "src-74c9f2b82a0b00416bff9266"
+      "sourceId": "src-4f873bf9d6cd69d2c1b035d0"
     },
     {
       "client": "cursor",
@@ -1608,6 +1655,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
@@ -1632,11 +1680,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-c4213fbf79398187",
+      "id": "obs-12e7c689537b49f7",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "source-control",
-      "sourceId": "src-74c9f2b82a0b00416bff9266"
+      "sourceId": "src-4f873bf9d6cd69d2c1b035d0"
     },
     {
       "client": "cursor",
@@ -1645,6 +1693,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "bearer_header",
+        "authSecretByReference": false,
         "authSecretInline": true,
         "autoApproval": "unknown",
         "capability": null,
@@ -1669,11 +1718,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-30ec29acccebdf9f",
+      "id": "obs-08d7bf373c0532b3",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "test-service",
-      "sourceId": "src-74c9f2b82a0b00416bff9266"
+      "sourceId": "src-4f873bf9d6cd69d2c1b035d0"
     },
     {
       "client": "gemini-cli",
@@ -1690,11 +1739,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-474f596780c22486",
+      "id": "obs-9b6606af7a9d850a",
       "kind": "setting",
       "location": "~/.gemini/settings.json",
       "name": "agents.overrides.browser_agent.enabled",
-      "sourceId": "src-736057806085cf204a7b1197"
+      "sourceId": "src-810d696bf06eec5b1fbf076a"
     },
     {
       "client": "gemini-cli",
@@ -1711,11 +1760,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-1a718ba4f4cea546",
+      "id": "obs-d8a70501c6039d83",
       "kind": "setting",
       "location": "~/.gemini/settings.json",
       "name": "agents.browser.sessionMode",
-      "sourceId": "src-736057806085cf204a7b1197"
+      "sourceId": "src-810d696bf06eec5b1fbf076a"
     },
     {
       "client": "gemini-cli",
@@ -1732,11 +1781,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-ea6d61c79b8f9c6e",
+      "id": "obs-b1fbfc5f0f847844",
       "kind": "setting",
       "location": "~/.gemini/settings.json",
       "name": "agents.browser.confirmSensitiveActions",
-      "sourceId": "src-736057806085cf204a7b1197"
+      "sourceId": "src-810d696bf06eec5b1fbf076a"
     },
     {
       "client": "claude-desktop",
@@ -1745,6 +1794,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
@@ -1769,11 +1819,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-f0eae420972b64dd",
+      "id": "obs-804cfca89e60ff22",
       "kind": "mcp",
       "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "name": "documentation",
-      "sourceId": "src-6f44ce53668e226d19b9fce4"
+      "sourceId": "src-32b802e0df0de79deb6edd32"
     },
     {
       "client": "claude-code",
@@ -1790,11 +1840,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-3edb557f86f7ca8a",
+      "id": "obs-dcdfee8d27febe91",
       "kind": "setting",
       "location": "~/.claude/remote-settings.json",
       "name": "permissions.defaultMode",
-      "sourceId": "src-b7dfac3f88f6f8eb6de6e151"
+      "sourceId": "src-292ea966190fc188536a7be2"
     },
     {
       "client": "vscode",
@@ -1811,11 +1861,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-73b8c0909ead77a2",
+      "id": "obs-567ee7b7a4076d68",
       "kind": "setting",
       "location": "~/.config/Code/User/settings.json",
       "name": "chat.tools.global.autoApprove",
-      "sourceId": "src-5f75b6abae1941a4f1d64cae"
+      "sourceId": "src-42425f503bce20ed18ea2826"
     },
     {
       "client": "vscode",
@@ -1832,11 +1882,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-f43086074f9e2957",
+      "id": "obs-7c592dd16b033f5c",
       "kind": "setting",
       "location": "~/.config/Code/User/settings.json",
       "name": "workbench.browser.enableChatTools",
-      "sourceId": "src-5f75b6abae1941a4f1d64cae"
+      "sourceId": "src-42425f503bce20ed18ea2826"
     },
     {
       "client": "vscode",
@@ -1845,6 +1895,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
@@ -1869,11 +1920,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-35fb8d6a6d36774b",
+      "id": "obs-7948140201a318de",
       "kind": "mcp",
       "location": "~/.config/Code/User/mcp.json",
       "name": "design",
-      "sourceId": "src-b69f995696d23bc824396f67"
+      "sourceId": "src-1b5878f1fd090bad3017fcf1"
     },
     {
       "client": "vscode",
@@ -1882,6 +1933,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretByReference": false,
         "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
@@ -1906,11 +1958,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-1c031fa9e459154d",
+      "id": "obs-76ab0be45582be77",
       "kind": "mcp",
       "location": "~/.config/Code/User/mcp.json",
       "name": "team-messages",
-      "sourceId": "src-b69f995696d23bc824396f67"
+      "sourceId": "src-1b5878f1fd090bad3017fcf1"
     },
     {
       "client": "windsurf",
@@ -1929,11 +1981,11 @@
         "valueType": "object"
       },
       "enabled": "enabled",
-      "id": "obs-9f8d45065a639e20",
+      "id": "obs-58dcb4f3cdfe153d",
       "kind": "setting",
       "location": "~/.config/Windsurf/User/settings.json",
       "name": "windsurf.cascadeCommandsAllowList",
-      "sourceId": "src-267435219e47ba6512c3d729"
+      "sourceId": "src-e53e780350d0438d6a049a54"
     },
     {
       "client": "windsurf",
@@ -1952,11 +2004,11 @@
         "valueType": "object"
       },
       "enabled": "enabled",
-      "id": "obs-3f72d442da11a781",
+      "id": "obs-95f8a95c95ef6186",
       "kind": "setting",
       "location": "~/.config/Windsurf/User/settings.json",
       "name": "windsurf.cascadeCommandsDenyList",
-      "sourceId": "src-267435219e47ba6512c3d729"
+      "sourceId": "src-e53e780350d0438d6a049a54"
     },
     {
       "client": "claude-code",
@@ -1973,11 +2025,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-27114bc0f7ae2f55",
+      "id": "obs-7f70da8254629271",
       "kind": "setting",
       "location": "~/project/.claude/settings.json",
       "name": "permissions.defaultMode",
-      "sourceId": "src-ff224cd17fbacb85995eb026"
+      "sourceId": "src-0d51d0f03e30095729155e0a"
     },
     {
       "client": "claude-code",
@@ -1994,11 +2046,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-d0a760d394600e82",
+      "id": "obs-287d2a946ddbc9c9",
       "kind": "setting",
       "location": "~/project/.claude/settings.json",
       "name": "sandbox.enabled",
-      "sourceId": "src-ff224cd17fbacb85995eb026"
+      "sourceId": "src-0d51d0f03e30095729155e0a"
     },
     {
       "client": "claude-code",
@@ -2010,7 +2062,7 @@
           "unknown"
         ],
         "context": "base",
-        "contextId": "context-fa19348d85323968",
+        "contextId": "context-2cab7808573a852b",
         "installationState": "config_only",
         "locationCount": 3,
         "locations": [
@@ -2022,11 +2074,11 @@
         "variant": "cli"
       },
       "enabled": "unknown",
-      "id": "obs-89256078b24c4ecf",
+      "id": "obs-11f07e08f98baf41",
       "kind": "client",
       "location": "~/.claude.json",
       "name": "claude-code",
-      "sourceId": "src-33da539789fcc703a9b65d58"
+      "sourceId": "src-81e9c72e5b1b3bd91858c946"
     },
     {
       "client": "claude-code",
@@ -2034,7 +2086,7 @@
         "accountAlias": "~",
         "category": "other",
         "context": "state",
-        "contextId": "context-fa19348d85323968",
+        "contextId": "context-2cab7808573a852b",
         "declaredState": "stale",
         "effectiveState": "stale",
         "interpretation": "inventory-only",
@@ -2045,11 +2097,11 @@
         "valueType": "object"
       },
       "enabled": "unknown",
-      "id": "obs-8552d433bdabf131",
+      "id": "obs-1c55233f30eb75c2",
       "kind": "setting",
       "location": "~/.claude.json",
       "name": "projects.stale-1",
-      "sourceId": "src-33da539789fcc703a9b65d58"
+      "sourceId": "src-81e9c72e5b1b3bd91858c946"
     },
     {
       "client": "codex",
@@ -2070,7 +2122,7 @@
       "kind": "client",
       "location": "~/.codex/config.toml",
       "name": "codex",
-      "sourceId": "src-e5d597d926e294eb84a65a8b"
+      "sourceId": "src-4229d08c3737803a8cf4885e"
     },
     {
       "client": "cursor",
@@ -2091,7 +2143,7 @@
       "kind": "client",
       "location": "~/.cursor/mcp.json",
       "name": "cursor",
-      "sourceId": "src-74c9f2b82a0b00416bff9266"
+      "sourceId": "src-4f873bf9d6cd69d2c1b035d0"
     },
     {
       "client": "gemini-cli",
@@ -2112,7 +2164,7 @@
       "kind": "client",
       "location": "~/.gemini/settings.json",
       "name": "gemini-cli",
-      "sourceId": "src-736057806085cf204a7b1197"
+      "sourceId": "src-810d696bf06eec5b1fbf076a"
     },
     {
       "client": "claude-code",
@@ -2131,11 +2183,11 @@
         "origin": "user"
       },
       "enabled": "unknown",
-      "id": "obs-f80df07faefb7cf2",
+      "id": "obs-4ecae42d35ace74c",
       "kind": "skill",
       "location": "~/.claude/skills/research-helper/SKILL.md",
       "name": "research-helper",
-      "sourceId": "src-9e96e4eafb65f99a46fc2e68"
+      "sourceId": "src-bbf89a6307bc75d7469aa312"
     },
     {
       "client": "shared",
@@ -2156,7 +2208,7 @@
       "kind": "client",
       "location": "~/.agents/skills/release-helper/SKILL.md",
       "name": "shared",
-      "sourceId": "src-cf985d82d0e79a7e937ece3f"
+      "sourceId": "src-2aa2d821b0d9eaa24e1c8635"
     },
     {
       "client": "shared",
@@ -2175,11 +2227,11 @@
         "origin": "user"
       },
       "enabled": "unknown",
-      "id": "obs-44e619afe060d36f",
+      "id": "obs-60bb5a1c3ac7598f",
       "kind": "skill",
       "location": "~/.agents/skills/release-helper/SKILL.md",
       "name": "release-helper",
-      "sourceId": "src-cf985d82d0e79a7e937ece3f"
+      "sourceId": "src-2aa2d821b0d9eaa24e1c8635"
     },
     {
       "client": "claude-code",
@@ -2198,11 +2250,11 @@
         "toolCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-362e0b21468ae977",
+      "id": "obs-8d039e1f8feb987c",
       "kind": "agent",
       "location": "~/.claude/agents/reviewer.md",
       "name": "reviewer",
-      "sourceId": "src-f8c9b591c898f93d53bd701d"
+      "sourceId": "src-6f1507105576cc348ead6bf2"
     },
     {
       "client": "claude-desktop",
@@ -2223,7 +2275,7 @@
       "kind": "client",
       "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "name": "claude-desktop",
-      "sourceId": "src-6f44ce53668e226d19b9fce4"
+      "sourceId": "src-32b802e0df0de79deb6edd32"
     },
     {
       "client": "vscode",
@@ -2244,7 +2296,7 @@
       "kind": "client",
       "location": "~/.config/Code/User/settings.json",
       "name": "vscode",
-      "sourceId": "src-5f75b6abae1941a4f1d64cae"
+      "sourceId": "src-42425f503bce20ed18ea2826"
     },
     {
       "client": "windsurf",
@@ -2265,7 +2317,7 @@
       "kind": "client",
       "location": "~/.config/Windsurf/User/settings.json",
       "name": "windsurf",
-      "sourceId": "src-267435219e47ba6512c3d729"
+      "sourceId": "src-e53e780350d0438d6a049a54"
     }
   ],
   "schemaVersion": "2.0",
@@ -2282,9 +2334,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-807d5c7aa41fc7f84ab00cf9",
+      "id": "src-e86ccdddeb67b4e3cf5124a0",
       "location": "~/.claude/settings.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.761Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 246,
@@ -2296,9 +2348,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "state",
-      "id": "src-33da539789fcc703a9b65d58",
+      "id": "src-81e9c72e5b1b3bd91858c946",
       "location": "~/.claude.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.761Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 200,
@@ -2311,9 +2363,9 @@
       "client": "codex",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-e5d597d926e294eb84a65a8b",
+      "id": "src-4229d08c3737803a8cf4885e",
       "location": "~/.codex/config.toml",
-      "modifiedAt": "2026-09-14T11:54:52.856Z",
+      "modifiedAt": "2026-09-14T19:30:42.761Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 155,
@@ -2326,9 +2378,9 @@
       "client": "cursor",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-74c9f2b82a0b00416bff9266",
+      "id": "src-4f873bf9d6cd69d2c1b035d0",
       "location": "~/.cursor/mcp.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 309,
@@ -2340,9 +2392,9 @@
       "client": "gemini-cli",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-736057806085cf204a7b1197",
+      "id": "src-810d696bf06eec5b1fbf076a",
       "location": "~/.gemini/settings.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 137,
@@ -2355,9 +2407,9 @@
       "client": "windsurf",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-767571b0aabb4067d59dc4e9",
+      "id": "src-beba6cc2651a1614935e1d34",
       "location": "~/.codeium/windsurf/mcp_config.json",
-      "modifiedAt": "2026-09-14T11:54:52.858Z",
+      "modifiedAt": "2026-09-14T19:30:42.763Z",
       "reason": "parse_error",
       "scope": "user",
       "sizeBytes": 15,
@@ -2369,9 +2421,9 @@
       "client": "claude-code",
       "componentKind": "skill",
       "context": "base",
-      "id": "src-9e96e4eafb65f99a46fc2e68",
+      "id": "src-bbf89a6307bc75d7469aa312",
       "location": "~/.claude/skills/research-helper/SKILL.md",
-      "modifiedAt": "2026-09-14T11:54:52.858Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 34,
@@ -2383,9 +2435,9 @@
       "client": "shared",
       "componentKind": "skill",
       "context": "base",
-      "id": "src-cf985d82d0e79a7e937ece3f",
+      "id": "src-2aa2d821b0d9eaa24e1c8635",
       "location": "~/.agents/skills/release-helper/SKILL.md",
-      "modifiedAt": "2026-09-14T11:54:52.858Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 34,
@@ -2397,9 +2449,9 @@
       "client": "claude-code",
       "componentKind": "agent",
       "context": "base",
-      "id": "src-f8c9b591c898f93d53bd701d",
+      "id": "src-6f1507105576cc348ead6bf2",
       "location": "~/.claude/agents/reviewer.md",
-      "modifiedAt": "2026-09-14T11:54:52.858Z",
+      "modifiedAt": "2026-09-14T19:30:42.763Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 34,
@@ -2412,9 +2464,9 @@
       "client": "claude-desktop",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-6f44ce53668e226d19b9fce4",
+      "id": "src-32b802e0df0de79deb6edd32",
       "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 94,
@@ -2426,9 +2478,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "cached",
-      "id": "src-b7dfac3f88f6f8eb6de6e151",
+      "id": "src-292ea966190fc188536a7be2",
       "location": "~/.claude/remote-settings.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.761Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 53,
@@ -2440,9 +2492,9 @@
       "client": "vscode",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-5f75b6abae1941a4f1d64cae",
+      "id": "src-42425f503bce20ed18ea2826",
       "location": "~/.config/Code/User/settings.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 82,
@@ -2455,9 +2507,9 @@
       "client": "vscode",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-b69f995696d23bc824396f67",
+      "id": "src-1b5878f1fd090bad3017fcf1",
       "location": "~/.config/Code/User/mcp.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 148,
@@ -2469,9 +2521,9 @@
       "client": "windsurf",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-267435219e47ba6512c3d729",
+      "id": "src-e53e780350d0438d6a049a54",
       "location": "~/.config/Windsurf/User/settings.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 81,
@@ -2483,9 +2535,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "project",
-      "id": "src-ff224cd17fbacb85995eb026",
+      "id": "src-0d51d0f03e30095729155e0a",
       "location": "~/project/.claude/settings.json",
-      "modifiedAt": "2026-09-14T11:54:52.857Z",
+      "modifiedAt": "2026-09-14T19:30:42.762Z",
       "reason": "",
       "scope": "workspace",
       "sizeBytes": 74,

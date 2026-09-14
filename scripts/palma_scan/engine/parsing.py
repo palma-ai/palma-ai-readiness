@@ -24,6 +24,15 @@ class MetadataLoader(yaml.SafeLoader):
             raise ParseError("YAML aliases are unsupported")
         return super().compose_node(parent, index)
 
+    def construct_scalar(self, node):
+        value = super().construct_scalar(node)
+        # Bound numeric work before the bundled constructors normalize or
+        # convert it: sexagesimal integers otherwise grow bigints quadratically.
+        # Count underscores too, and leave ordinary text scalars unrestricted.
+        if node.tag in {"tag:yaml.org,2002:int", "tag:yaml.org,2002:float"} and len(value) > 1024:
+            raise ParseError("YAML numeric scalar limit")
+        return value
+
 
 def _yaml_mapping(loader, node):
     return unique_pairs((loader.construct_object(key), loader.construct_object(value)) for key, value in node.value)

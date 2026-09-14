@@ -106,6 +106,8 @@ SETTING_TYPES = {
 ABSENT = object()
 SENSITIVE_KEY = re.compile(r"(?:^|[_\-.])(?:api[_-]?key|token|secret|password|passwd|authorization|bearer|cookie)(?:$|[_\-.])", re.I)
 CREDENTIAL_FLAGS = {"--api-key", "--apikey", "--token", "--access-token", "--password", "--secret", "--bearer-token"}
+# Exact header and environment names that carry a credential without matching SENSITIVE_KEY.
+CREDENTIAL_KEYS = {"x-api-key", "x-auth", "apikey", "api_key", "credential", "credentials", "x-credential", "x-credentials"}
 REFERENCE = re.compile(r"^(?:\$\{(?:env:)?[A-Za-z_][A-Za-z0-9_]*\}|\$\{input:[A-Za-z_][A-Za-z0-9_.-]*\}|\$\{file:[^{}]+\}|\$[A-Za-z_][A-Za-z0-9_]*|%[A-Za-z_][A-Za-z0-9_]*%)$")
 
 
@@ -173,7 +175,7 @@ def _credential_counts(data):
         values = data.get(field, {})
         if isinstance(values, dict):
             for key, value in values.items():
-                if SENSITIVE_KEY.search(key) or key.lower() in {"x-api-key", "x-auth", "apikey", "api_key"}:
+                if SENSITIVE_KEY.search(key) or key.lower() in CREDENTIAL_KEYS:
                     found, refs = _credential_value(value)
                     literal, reference = literal + found, reference + refs
     for field in ("apiKey", "api_key", "bearerToken", "bearer_token", "accessToken"):
@@ -433,8 +435,9 @@ class _Collector:
             details.setdefault("artifactType", "plugin")
             details.setdefault("origin", "unknown")
             details.setdefault("installationState", {"configured": "config_only", "cached": "cached", "installed": "installed"}.get(details.get("activation"), "unknown"))
-        if source.get("packageState"):
-            details.setdefault("packageState", source["packageState"])
+        for key in ("packageState", "packageEnabled"):
+            if source.get(key):
+                details.setdefault(key, source[key])
         item = {"id": "obs-" + _id(source["id"], kind, discriminator or name), "kind": kind, "client": source["client"], "name": name, "sourceId": source["id"], "location": location, "enabled": enabled, "details": details}
         self.observations.append(item)
         return item
@@ -565,15 +568,16 @@ class _Collector:
                 family = "computer"
             from .engine.adapters.mcp import auth_metadata
             auth, _ = auth_metadata(entry)
-            # Whether the header used to sign in holds the secret itself, not a reference.
-            auth_inline = _credential_counts({key: entry[key] for key in ("headers", "http_headers") if key in entry})[0] > 0
+            # Whether the header used to sign in holds the secret itself, or a reference to it.
+            auth_inline, auth_reference = (count > 0 for count in _credential_counts({key: entry[key] for key in ("headers", "http_headers") if key in entry}))
             allow_key = "enabled_tools" if source["client"] == "codex" else "includeTools" if source["client"] == "gemini-cli" else None
             deny_key = "disabled_tools" if source["client"] == "codex" else "excludeTools" if source["client"] == "gemini-cli" else "disabledTools"
             allow = isinstance(entry.get(allow_key), list) if allow_key else False
             deny = isinstance(entry.get(deny_key), list)
             approval = "all" if source["client"] == "gemini-cli" and entry.get("trust") is True else "none" if source["client"] == "gemini-cli" and entry.get("trust") is False else "unknown"
             details = {"transport": transport, "execution": execution, **endpoint, "toolFamily": family, "literalCredentialCount": literal + endpoint["urlCredentialCount"], "credentialReferenceCount": references, "toolAllowlistConfigured": allow, "toolDenylistConfigured": deny, "autoApproval": approval, "unversionedPackage": unversioned, "activation": "configured", "auditStatus": "not-assessed", "context": context}
-            details.update(capability, auth=auth, authSecretInline=auth_inline, inlineCredentialPresent=literal + endpoint["urlCredentialCount"] > 0)
+            details.update(capability, auth=auth, authSecretInline=auth_inline, authSecretByReference=auth_reference,
+                           inlineCredentialPresent=literal + endpoint["urlCredentialCount"] > 0)
             if malformed:
                 details["configurationIssue"] = "unsupported-mcp-shape"
             elif transport == "unknown" or (url is not None and endpoint["endpointScope"] == "unknown"):

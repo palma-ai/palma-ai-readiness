@@ -7,11 +7,19 @@ import re
 
 from .engine.redaction import visible
 
-RULES_VERSION = "2026-09-14.1"
+RULES_VERSION = "2026-09-14.3"
+PRIORITY_POLICY_VERSION = "2026-09-14.3"
 INSTRUCTION_REVIEW_BYTES = 64 * 1024
 ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-UPGRADES = {"mcp-network-direct", "skills-local-unreviewed", "hooks-declared"}
+PRIORITY_OVERRIDES = {"mcp-local-unaudited": "high", "mcp-network-direct": "high",
+                      "skills-local-unreviewed": "high", "hooks-declared": "high"}
 LOW_PERMISSIONS = {"permissions-bypassed", "tools-auto-approved", "approval-prompts-disabled"}
+# Rules that describe an access path, a capability or a permission switch: the catalog's
+# access and permissions areas, except the credential rule (a secret written in the file is
+# exposure whether or not its entry is switched on). A declaration that cannot take effect
+# as written keeps its evidence in the finding, but when none of a rule's declarations
+# applies, the finding is rated Info instead of an active risk.
+ACTIVATION_AREAS = {"access", "permissions"}
 # Connectors routed through a Palma-operated gateway are governed. The catalog expresses its
 # exemption as `endpointOrigin notInParam gatewayOrigins`; this marker joins that list.
 PALMA_GATEWAY = "palma-gateway"
@@ -186,7 +194,7 @@ SUMMARIES = {
     "mcp-network-direct": "{n} remote connector declarations connect AI clients directly to services. Their tool access and data sharing need a governed policy and audit trail.",
     "mcp-inline-credential": "{n} connector declarations contain potential credential literals. Values are redacted; review the named configuration files for exposure.",
     "mcp-static-secret-auth": "{n} connectors declare authentication using a fixed header secret. Review ownership, scope, rotation, and storage.",
-    "skills-local-unreviewed": "{n} locally installed skill declarations need an audit record. Their instructions and scripts can influence agent decisions, tool use, and data access.",
+    "skills-local-unreviewed": "{n} local skill declarations contain instructions and scripts that can influence agent decisions and tool use. Review their source and the version you intend to use; existing audits were not assessed.",
     "skills-unverifiable": "{n} skill declarations have no complete content digest. Their exact contents cannot be compared with a reviewed version.",
     "mcp-computer-use": "{n} connectors declare desktop control capabilities. These can reach the screen, keyboard, mouse, and applications available to the signed-in user.",
     "mcp-browser-automation": "{n} connectors declare browser automation. Review access to signed-in sessions, page data, form submissions, and script execution.",
@@ -208,10 +216,10 @@ IMPACTS = {
     "mcp-network-direct": "Connector requests may send PII, source code, or other sensitive data to remote services. Untrusted tool output can carry prompt injection, while excessive tool permissions increase the impact of unintended calls.",
     "mcp-inline-credential": "If the value is a working credential, anyone who can read the file can use it as you: other processes, extensions and skills running under your account, and every backup, sync folder or dotfiles repository that copies the file. It keeps working until it is rotated.",
     "mcp-static-secret-auth": "The connector signs in with a fixed secret instead of a short-lived sign-in. If the secret is copied or leaks, it keeps granting access until someone rotates it.",
-    "mcp-computer-use": "It can see your screen and use the keyboard and mouse as you, in any app you are signed in to. A page, document or message it reads can contain instructions that steer those actions, including sending data somewhere else.",
+    "mcp-computer-use": "It can see your screen and use the keyboard and mouse as you, in any app you are signed in to. Actions may go unnoticed without active supervision or review. A page, document or message it reads can contain instructions that steer those actions, including sending data somewhere else.",
     "mcp-browser-automation": "It can open pages, fill in forms and click in sites where you are signed in, as you. A page it visits can contain instructions that steer it into unintended actions or into sending data elsewhere.",
     "browser-use-enabled": "The agent can browse and act in sites with your signed-in sessions. A page it reads can contain instructions that steer it into unintended actions or into sending data elsewhere, unless site access and sensitive actions require your approval.",
-    "computer-use-enabled": "The agent can see your screen and use the keyboard and mouse as you, across your signed-in apps. Content it reads can contain instructions that steer those actions, including sending data elsewhere.",
+    "computer-use-enabled": "The agent can see your screen and use the keyboard and mouse as you, across your signed-in apps. Actions may go unnoticed without active supervision or review. Content it reads can contain instructions that steer those actions, including sending data elsewhere.",
     "skills-local-unreviewed": "Unreviewed skill instructions and scripts can contain prompt injection, mishandle PII, disclose secrets, or steer tools into data leakage. Review evidence should identify the installed version.",
     "hooks-declared": "Hooks can execute custom logic automatically, access PII and credentials, transmit data, or inject instructions into an agent workflow. A compromised hook or writable script creates a path to data leakage.",
 }
@@ -223,6 +231,7 @@ def _evidence(item):
         "transport", "execution", "endpointScope", "auth", "inlineCredentialPresent", "literalCredentialCount",
         "capability", "capabilityEvidence", "origin", "digest", "installationState", "toolCount",
         "category", "valueCollected", "effectiveState", "context", "activation", "profileSelected", "applicability",
+        "packageState", "packageEnabled", "sourceTrust", "sourcePolicyId", "sourceEvidence", "marketplaceId",
         "shadowedBySelectedProfile", "typeCounts", "event", "value") if key in details}
     value["observedState"] = item.get("enabled", "unknown")
     return {"sourceId": item["sourceId"], "location": item["location"],
@@ -233,11 +242,67 @@ def _evidence(item):
 # invisible direction characters, so a name cannot close its quotation or reorder the text.
 _UNSAFE_PROSE = re.compile(r'[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff\u201c\u201d"]')
 PROSE_NAME_LIMIT = 60
-PROSE_LOCATION_LIMIT = 512
 
 
-def _join(parts):
-    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+def _join(parts, word="and"):
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " " + word + " " + parts[-1]
+
+
+def activation_rule(spec):
+    return spec.get("area") in ACTIVATION_AREAS and "credential" not in spec["id"]
+
+
+def _inactive_reason(item):
+    """Why a declaration cannot take effect as written, or None when it applies.
+
+    An entry in a profile that is not selected (or shadowed by the selected one), a
+    cached copy of a policy, an entry inside a plugin pack that is switched off or only
+    downloaded without an installation record, and a switched-off entry are declarations
+    to review before enabling, not access that exists now.
+    """
+    details = item.get("details", {})
+    if details.get("profileSelected") is False or details.get("shadowedBySelectedProfile"):
+        return "in an unselected profile"
+    if details.get("context") == "cached":
+        return "in a cached policy copy"
+    if details.get("packageEnabled") == "disabled":
+        return "in a plugin pack that is switched off"
+    if details.get("packageState") == "cached":
+        return "in a plugin pack that is cached without an installation record"
+    if item.get("enabled") == "disabled":
+        return "switched off"
+    return None
+
+
+def applies(item):
+    """Whether a declaration can take effect as written."""
+    return _inactive_reason(item) is None
+
+
+def governance_layer(observations):
+    """Whether a connector routed through a Palma-operated gateway applies as written.
+
+    This is the only governance evidence the collector records; other governance
+    systems are not detected.
+    """
+    return any(isinstance(item, dict) and isinstance(item.get("details"), dict)
+               and item["details"].get("governedBy") == PALMA_GATEWAY and applies(item) for item in observations)
+
+
+def _inactive_reasons(items):
+    reasons = list(dict.fromkeys(reason for reason in map(_inactive_reason, items) if reason))
+    return _join(reasons, "or") if reasons else "not active as written"
+
+
+def _activation_note(items, applying, reasons):
+    """A sentence for the summary when some declarations cannot take effect as written."""
+    inactive = len(items) - len(applying)
+    if not applying:
+        if len(items) == 1:
+            return f" This declaration does not apply as written: it is {reasons}."
+        return f" None of these declarations applies as written: each is {reasons}."
+    return (f" {len(applying):,} of {len(items):,} {'applies' if len(applying) == 1 else 'apply'} as written; "
+            f"{inactive:,} {'is' if inactive == 1 else 'are'} {reasons}.")
 
 
 def _prose_name(name):
@@ -256,19 +321,6 @@ def _names(items, limit=3):
     if not listed:
         return f"{rest:,} {'connector' if rest == 1 else 'connectors'}"
     return _join(listed + ([f"{rest:,} more"] if rest > 0 else []))
-
-
-def _files(items, limit=2):
-    """The files a summary names; merged copies count, and very long paths are only counted."""
-    # The least nested file first: normally the main checkout rather than a copy.
-    files = sorted({location for item in items for location in [item["location"], *item.get("details", {}).get("locations", [])]},
-                   key=lambda location: (location.count("/"), len(location), location))
-    unlisted = sum(max(0, item.get("details", {}).get("locationCount", 0) - len(item.get("details", {}).get("locations", []))) for item in items)
-    named = [location for location in files if len(location) <= PROSE_LOCATION_LIMIT][:limit]
-    rest = len(files) + unlisted - len(named)
-    if not named:
-        return f"{rest:,} {'file' if rest == 1 else 'files'}"
-    return _join(named + ([f"{rest:,} other {'file' if rest == 1 else 'files'}"] if rest > 0 else []))
 
 
 def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text=None, impact=None, recommendation=None, rating_reason=None):
@@ -294,6 +346,7 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text
             ("skill declarations need", "skill declaration needs"),
             ("skill declarations have", "skill declaration has"),
             ("skill declarations are", "skill declaration is"),
+            ("settings enable or trust", "setting enables or trusts"),
             ("settings enable", "setting enables"), ("settings disable", "setting disables"),
             ("settings automatically", "setting automatically"),
             ("settings declare", "setting declares"),
@@ -306,6 +359,10 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text
             ("automatically approve", "automatically approves"),
             ("components exceed", "component exceeds"),
             ("configuration files contain", "configuration file contains"),
+            ("skill and plugin declarations come", "skill and plugin declaration comes"),
+            ("skill and plugin declarations sit", "skill and plugin declaration sits"),
+            ("skill and plugin declarations have", "skill and plugin declaration has"),
+            ("Their origin is unknown", "Its origin is unknown"),
         ):
             sentence = sentence.replace(plural, singular)
     severity = severity or spec["severity"]
@@ -320,8 +377,8 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text
         facts = {key: source[key] for key in ("reason", "artifactRole", "componentKind", "packageState", "classification", "issueKind", "sizeBytes", "limitBytes", "reviewThresholdBytes") if key in source}
         evidence.append({"sourceId": source["id"], "location": source["location"], "key": source.get("componentKind", "configuration"), "value": facts})
     return {"id": "finding-" + identity, "ruleId": spec["id"], "title": spec["title"],
-            "severity": severity, "baselineSeverity": spec["severity"],
-            "ratingReason": rating_reason or ("Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review." if severity == "low" and (spec["id"] in LOW_PERMISSIONS or spec["id"] == "sandbox-disabled") else "Palma's standalone governance policy elevates this exposure to Critical." if severity != spec["severity"] else "Palma governance policy prioritizes this observed configuration pattern and its potential impact."),
+            "severity": severity, "baselineSeverity": spec["severity"], "priorityPolicyVersion": PRIORITY_POLICY_VERSION,
+            "ratingReason": rating_reason or ("Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review." if severity == "low" and (spec["id"] in LOW_PERMISSIONS or spec["id"] == "sandbox-disabled") else "The versioned Palma priority policy calibrates this declaration separately from its original catalog rating." if severity != spec["severity"] else "Palma governance policy prioritizes this observed configuration pattern and its potential impact."),
             "category": category, "confidence": "high", "evidenceType": "inventory" if spec.get("kind") in {"skill", "plugin", "agent", "client"} else "configuration",
             "summary": sentence, "impact": impact or IMPACTS.get(spec["id"], catalog()["areas"]["guidance"][area]["why"]),
             "recommendation": recommendation or spec["action"], "observationIds": ids, "evidence": evidence,
@@ -331,24 +388,42 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text
 
 
 def _skill_findings(spec, items):
-    """Local skills keep Critical priority; version-controlled project skills keep High.
+    """Local skill content warrants review without implying an audit failure."""
+    # The catalog calls these "unaudited"; the scan only knows that no review record was
+    # collected, which is not evidence that no review happened.
+    return [_finding({**spec, "title": "Local skills without a recorded review"}, items, severity="high",
+        recommendation="Review the named skill instructions, scripts, dependencies, and update source. Retain the version approved for sensitive use; remove unused copies.",
+        rating_reason="Local skill installation establishes available instructions, not malicious code or a missing prior audit. Source review is High priority.")]
 
-    A skill committed to the project's repository has change history and can go through
-    code review, unlike a copied or downloaded folder. Its installed version still needs
-    a review record, so the catalog's High rating applies rather than the Critical upgrade.
-    """
-    recommendation = "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team."
-    versioned = [item for item in items if item.get("details", {}).get("provenance") == "version-controlled"]
-    local = [item for item in items if item.get("details", {}).get("provenance") != "version-controlled"]
-    findings = []
-    if local:
-        findings.append(_finding(spec, local, severity="critical", recommendation=recommendation))
-    if versioned:
-        findings.append(_finding({**spec, "title": "Project skills in version control need a review record"}, versioned, severity="high",
-            summary="{n} project skill declarations are inside the project's git repository and not excluded by its .gitignore, so their changes can be reviewed like code. The installed version has no recorded review.",
-            recommendation="Review the skill instructions and scripts through the repository's code review, and record the reviewed version before sensitive use.",
-            rating_reason="Version-controlled project skills keep the catalog's High priority: their changes can be reviewed like code, but the installed version still needs a review record."))
-    return findings
+
+def _artifact_source_findings(observations):
+    artifacts = [item for item in observations if item["kind"] in {"skill", "plugin"}]
+    approved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "allowlisted"]
+    unapproved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "unapproved"
+                  and item.get("details", {}).get("marketplaceId")]
+    unresolved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "unresolved"
+                  and item.get("details", {}).get("marketplaceId")]
+    result = []
+    if approved:
+        result.append(_finding({"id": "artifacts-allowlisted-source", "kind": "skill", "area": "content", "severity": "info",
+            "title": "Skills and plugins from allowlisted sources",
+            "action": "Keep the source and installed version current with your review policy. Review separate credential or access findings where present."}, approved,
+            summary="{n} skill and plugin declarations have local source records matching Palma's maintained allowlist.",
+            impact="Allowlisted source describes the declared distribution origin. Local metadata is not a signature or a security audit of the installed contents; configured capabilities are evaluated separately."))
+    if unapproved:
+        result.append(_finding({"id": "artifacts-unapproved-marketplace", "kind": "plugin", "area": "content", "severity": "critical",
+            "title": "Audit skills and plugins from unapproved marketplaces before use",
+            "action": "Audit the source, installed instructions, scripts, dependencies and requested access before use. Disable unused packs or obtain them from an approved source."}, unapproved,
+            summary="{n} skill and plugin declarations come from a marketplace whose declared source is outside Palma's allowlist.",
+            impact="An unapproved distribution source can supply instructions or executable components that steer tool use, read credentials or disclose data. The finding identifies a required source audit, not evidence of malicious execution."))
+    if unresolved:
+        # Unknown provenance is a verification task, not a known-bad source.
+        result.append(_finding({"id": "artifacts-unresolved-source", "kind": "plugin", "area": "content", "severity": "high",
+            "title": "Verify the source of skills and plugins with unresolved provenance",
+            "action": "Confirm where each pack came from in the client's marketplace registry, reinstall it from an approved source, or disable it until its origin is confirmed."}, unresolved,
+            summary="{n} skill and plugin declarations sit under a marketplace whose source record could not be resolved locally. Their origin is unknown, not known to be outside the allowlist.",
+            impact="A pack of unknown origin can supply instructions or executable components that steer tool use, read credentials or disclose data. The finding asks for source verification; it is not evidence of malicious execution or of an unapproved source."))
+    return result
 
 
 def evaluate(snapshot, params=None):
@@ -366,10 +441,13 @@ def evaluate(snapshot, params=None):
     # credential is.
     inline = {item["id"] for item in observations if item["kind"] == "mcp"
               and item.get("details", {}).get("authSecretInline", attributes(item)["inlineCredentialPresent"]) is True}
-    result = []
+    result = _artifact_source_findings(observations)
     for spec in catalog()["rules"]:
         items = [item for item in observations if item["kind"] == spec["kind"]
                  and all(matches(condition, attributes(item), params) for condition in spec["conditions"])]
+        if spec["id"] in {"skills-local-unreviewed", "skills-unverifiable", "skills-managed", "plugins-sideloaded", "plugins-unknown-origin"}:
+            items = [item for item in items if item.get("details", {}).get("sourceTrust") != "allowlisted"
+                     and not (item.get("details", {}).get("marketplaceId") and item.get("details", {}).get("sourceTrust") in {"unapproved", "unresolved"})]
         if spec["id"] == "mcp-unknown-transport":
             items = [item for item in items if item["sourceId"] not in malformed]
         if spec["id"] == "hooks-declared":
@@ -380,33 +458,51 @@ def evaluate(snapshot, params=None):
             items = [item for item in items if item["id"] not in inline]
         if not items:
             continue
-        severity = "low" if spec["id"] in LOW_PERMISSIONS else "critical" if spec["id"] in UPGRADES else spec["severity"]
+        severity = "low" if spec["id"] in LOW_PERMISSIONS else PRIORITY_OVERRIDES.get(spec["id"], spec["severity"])
         if spec["id"] == "sandbox-disabled" and all(attributes(item).get("value") == "danger-full-access" for item in items):
             severity = "low"
             spec = {**spec, "title": "Unrestricted folder and command access is configured"}
         if spec["id"] == "skills-local-unreviewed":
             result.extend(_skill_findings(spec, items))
             continue
+        activation = activation_rule(spec)
+        applying = [item for item in items if applies(item)] if activation else items
+        rating_reason, note = None, ""
+        if activation and len(applying) < len(items):
+            reasons = _inactive_reasons(items)
+            note = _activation_note(items, applying, reasons)
+            if not applying:
+                rating_reason = (f"The evidence is kept, but no declaration applies as written: each is {reasons}. "
+                                 f"Palma rates that Info; enabling or installing one restores the {severity.capitalize()} priority.")
+                severity = "info"
         summary = None
         if spec["id"] == "mcp-inline-credential":
-            summary = f"{_names(items)} {'keeps' if len({item['name'] for item in items}) == 1 else 'keep'} a potential credential in plain text in {_files(items)}. The value is withheld from this report."
+            summary = f"{_names(items)} {'keeps' if len({item['name'] for item in items}) == 1 else 'keep'} a potential credential in plain text in configuration. The value is withheld from this report."
         elif spec["id"] == "mcp-static-secret-auth":
-            summary = f"{_names(items)} {'signs' if len({item['name'] for item in items}) == 1 else 'sign'} in with a fixed secret supplied through configuration, declared in {_files(items)}."
+            # Declarations whose secret is written in the file are reported under the credential
+            # rule instead. Only a header that holds a reference is described as one.
+            by_reference = all(item.get("details", {}).get("authSecretByReference") is True for item in items)
+            tail = "supplied by reference; the value itself is not stored in the file." if by_reference else "rather than a short-lived sign-in."
+            summary = f"{_names(items)} {'signs' if len({item['name'] for item in items}) == 1 else 'sign'} in with a fixed secret {tail}"
         elif spec["id"] in {"mcp-computer-use", "mcp-browser-automation"}:
             reach = "the screen, keyboard and mouse" if spec["id"] == "mcp-computer-use" else "a web browser"
-            summary = f"{_names(items)} can control {reach} as you. Declared in {_files(items)}."
-        result.append(_finding(spec, items, severity=severity, text=summary))
+            summary = f"{_names(items)} can control {reach} as you."
+        finding = _finding(spec, items, severity=severity, text=summary, rating_reason=rating_reason)
+        if activation:
+            finding["summary"] += note
+            finding["applies"] = len(applying)
+        result.append(finding)
 
     credentials = [item for item in observations if item["kind"] != "mcp" and _positive_count(item.get("details", {}).get("literalCredentialCount"))]
     if credentials:
         result.append(_finding({"id": "config-inline-credential", "kind": "setting", "area": "access", "severity": "critical",
             "title": "Potential credentials stored in configuration files", "action": "Replace literal secrets with supported secret references or credential storage. Review exposure and rotate affected credentials."}, credentials,
-            text=f"Potential credentials are stored in plain text in {_files(credentials)}. Values are withheld from this report.",
+            text="Potential credentials are stored in plain text in configuration. Values are withheld from this report.",
             impact="If these values are working credentials, anyone who can read the files can use them as you: other processes, extensions and skills running under your account, and every backup, sync folder or repository that copies them. They keep working until they are rotated."))
-    packaged_skills = [item for item in observations if item["kind"] == "skill" and attributes(item).get("origin") == "plugin"]
+    packaged_skills = [item for item in observations if item["kind"] == "skill" and attributes(item).get("origin") == "plugin" and not item.get("details", {}).get("sourceTrust")]
     if packaged_skills:
-        result.append(_finding({"id": "skills-plugin-unreviewed", "kind": "skill", "area": "content", "severity": "critical",
-            "title": "Plugin skills need a recorded security review", "action": "Review the installed skill instructions and scripts, verify their source and version, and retain an audit record before sensitive use."}, packaged_skills,
+        result.append(_finding({"id": "skills-plugin-unreviewed", "kind": "skill", "area": "content", "severity": "high",
+            "title": "Review the source and contents of plugin skills", "action": "Review the installed skill instructions and scripts, verify their source and version, and retain an audit record before sensitive use."}, packaged_skills,
             summary="{n} skill declarations are supplied by local plugin packs. Installation or marketplace distribution alone does not establish a security review for the version present.",
             impact="Plugin skills can carry prompt injection or executable components that mishandle PII, access credentials, and cause data leakage. Review the exact installed version and its dependencies."))
     oversized = [source for source in sources if source.get("reason") == "size_limit" and source.get("componentKind") in {"skill", "agent", "plugin", "hook"}]

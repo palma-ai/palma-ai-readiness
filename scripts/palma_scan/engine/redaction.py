@@ -276,7 +276,7 @@ _IDENTIFIER_KEYS = frozenset({"id", "sourceId", "parentId", "contextId", "profil
 # Keys whose strings are locations or messages. The account name is removed only from
 # these and from absolute paths: client ids, setting keys and values are fixed
 # vocabulary that a login name such as "vscode" or "sandbox" must not rewrite.
-_TEXT_KEYS = frozenset({"location", "locations", "declaration", "configuredLocations", "reason", "reasons", "limitations"})
+_TEXT_KEYS = frozenset({"location", "locations", "declaration", "configuredLocations", "marketplaceId", "reason", "reasons", "limitations"})
 _ABSOLUTE_PATH = re.compile(r"~?[\\/]|[A-Za-z]:[\\/]")
 # The snapshot validator's field limit; an alias or token can be longer than what it replaces.
 MAX_SCRUBBED_LENGTH = 10_000
@@ -315,9 +315,10 @@ class IdentityScrubber:
         for account in accounts:
             alias = account["alias"]
             root = str(account.get("root") or "").rstrip("/\\")
-            variants = {root, root.replace("\\", "/")}
-            if root.startswith("/Users/"):
-                variants.add("/System/Volumes/Data" + root)  # macOS firmlinked form
+            forward = root.replace("\\", "/")
+            variants = {root, forward}
+            if forward.startswith("/Users/"):
+                variants.add("/System/Volumes/Data" + forward)  # macOS firmlinked form
             for variant in variants:
                 split = max(variant.rfind("/"), variant.rfind("\\")) + 1
                 if 0 < split < len(variant):

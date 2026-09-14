@@ -9,8 +9,13 @@ The catalog SHA-256 is
 that fixture, using its documented `gatewayOrigins` parameter. It is a frozen
 expectation, not a second implementation of the local evaluator.
 
-The personal skill preserves those matching rules and applies the specified
-rating policy. Its default has no gateway metadata, so both network fixture
+The skill preserves these original matching fixtures and separately applies the
+versioned priority policy documented in `references/risk-rules.md`. Version
+2026-09-14.3 calibrates ordinary local MCP, direct remote MCP, hooks and local
+skills to High, evaluates marketplace provenance separately, and rates a connector
+finding Info when none of its declarations applies as written (switched off, in an
+unselected profile, or in a plugin pack that is cached, not installed). The conformance
+test declares these intentional overrides without rewriting the frozen oracle. Its default has no gateway metadata, so both network fixture
 entries are direct/unverified. The optional evaluator parameter exists only for
 pure conformance; it does not authorize a network request or upload.
 
