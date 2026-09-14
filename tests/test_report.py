@@ -141,6 +141,22 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
         self.assertIn("Disabled in configuration", " ".join(document.text))
 
+    def test_regulation_article_links_open_exactly_the_articles_they_name(self):
+        output = render_report(snapshot(), {})
+        links = re.findall(r'<a class="regulation-source" href="([^"]+)"[^>]*>([^<]+)<', output)
+        expected = {"Read Article 14": "article-14", "Read Article 26": "article-26", "Read Article 15": "article-15",
+                    "Read Article 50": "article-50", "Prohibited practices": "article-5", "High-risk criteria": "article-6"}
+        for label, slug in expected.items():
+            with self.subTest(label):
+                self.assertIn((f"https://ai-act-service-desk.ec.europa.eu/en/ai-act/{slug}", label), links)
+        for href, label in links:
+            number = re.fullmatch(r"Read Article (\d+)", label)
+            if number:
+                self.assertTrue(href.endswith("/article-" + number.group(1)), (label, href))
+        oversight = output.split('id="regulation-oversight"', 1)[1].split("</details>", 1)[0]
+        self.assertIn("ai-act/article-14", oversight)
+        self.assertIn("ai-act/article-26", oversight)
+
     def test_regulation_link_escapes_untrusted_finding_title(self):
         data = snapshot()
         data["findings"][1].update(ruleId="sandbox-disabled", title='<img src="https://invalid.test" onerror="alert(1)">')

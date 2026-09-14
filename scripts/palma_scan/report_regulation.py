@@ -12,11 +12,12 @@ _GUIDANCE = "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framew
 
 # Exact rule IDs only: review inputs, never tests of the cited articles.
 _CONTROL_TOPICS = (
-    ("oversight", "Human oversight", "Articles 14 & 26", "ai-act/article-26",
+    ("oversight", "Human oversight", "Articles 14 & 26",
+     (("Read Article 14", "ai-act/article-14"), ("Read Article 26", "ai-act/article-26")),
      "For high-risk uses, confirm who can supervise, intervene and stop the system. Review these local approval settings as a starting point.",
      frozenset({"permissions-bypassed", "tools-auto-approved", "approval-prompts-disabled",
                 "browser-actions-unconfirmed", "unrestricted-folder-access"})),
-    ("safeguards", "Technical safeguards", "Article 15", "ai-act/article-15",
+    ("safeguards", "Technical safeguards", "Article 15", (("Read Article 15", "ai-act/article-15"),),
      "For high-risk uses, review isolation, credentials and connected tools alongside the system’s wider robustness and cybersecurity controls.",
      frozenset({"sandbox-disabled", "mcp-inline-credential", "mcp-static-secret-auth",
                 "mcp-network-direct", "mcp-local-unaudited", "hooks-declared",
@@ -60,7 +61,7 @@ def _tile(slug: str, title: str, article: str, body: str, count: int = 0) -> str
 def render_regulation_section(findings: list[tuple[str, dict]], observations: list[dict], declared: bool) -> str:
     status, label = _status(observations, declared)
     tiles = []
-    for slug, title, articles, path, guidance, rule_ids in _CONTROL_TOPICS:
+    for slug, title, articles, sources, guidance, rule_ids in _CONTROL_TOPICS:
         matched = [(anchor, item) for anchor, item in findings
                    if isinstance(item.get("ruleId"), str) and item["ruleId"] in rule_ids]
         count = len(matched)
@@ -70,14 +71,16 @@ def render_regulation_section(findings: list[tuple[str, dict]], observations: li
             for anchor, item in matched)
         evidence = (f'<p class="regulation-evidence-label">{count} existing {"finding" if count == 1 else "findings"}</p><ul>{links}</ul>'
                     if links else '<p>No mapped findings. The control remains unassessed.</p>')
-        body = f'<p>{guidance}</p>{evidence}<p>{_reference("Read " + articles, _DESK + path)}</p>'
+        # Each label names exactly the article its link opens.
+        articles_html = " · ".join(_reference(label, _DESK + path) for label, path in sources)
+        body = f'<p>{guidance}</p>{evidence}<p>{articles_html}</p>'
         tiles.append(_tile(slug, title, articles, body, count))
     tiles.append(_tile("transparency", "Transparency", "Article 50",
         '<p>Check whether people interact with your AI or see its generated content. Notices, marking and disclosure duties depend on the use and your role.</p>'
         '<p><strong>Next step:</strong> Review customer-facing AI, deepfakes and public-interest text, including relevant exceptions. Published outputs are not inspected by this scan.</p>'
         f'<p>{_reference("Read Article 50", _DESK + "ai-act/article-50")}</p>'))
     tiles.append(_tile("classification", "Risk classification", "Articles 5 & 6",
-        '<p>Intended use determines whether prohibited-practice or high-risk rules apply. Tool names and local permissions cannot establish a legal risk class.</p>'
+        '<p>Prohibited-practice and high-risk rules depend on how a system is used and what it does. Some prohibitions also cover a practice’s effect or reasonably foreseeable outcomes. Tool names and local permissions cannot establish a legal risk class.</p>'
         '<p><strong>Next step:</strong> Document the purpose, affected people and your role. Check prohibited practices, qualifying regulated products and Annex III uses, including exceptions.</p>'
         f'<p>{_reference("Prohibited practices", _DESK + "ai-act/article-5")} · {_reference("High-risk criteria", _DESK + "ai-act/article-6")}</p>'))
     return f'''<section class="regulation-panel" id="eu-ai-regulation" aria-labelledby="regulation-title">

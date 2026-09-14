@@ -32,9 +32,12 @@ severity, IDs, evidence, summary counts or the snapshot schema.
   non-EU providers/deployers; its personal-use exclusion concerns natural persons'
   purely personal, non-professional use. [Article 2](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-2).
 - **Purpose and classification:** review prohibited practices separately from
-  high-risk criteria. Article 6 covers qualifying regulated products and Annex III
-  uses, with conditions and exceptions. An MCP server or permission bypass does not
-  itself establish a prohibited or high-risk use. [Commission risk framework](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai),
+  high-risk criteria. Intended purpose is not the only test: some prohibitions also
+  cover a practice's objective or effect, and reasonably foreseeable outcomes.
+  Article 6 covers qualifying regulated products and Annex III uses, with conditions
+  and exceptions. An MCP server or permission bypass does not itself establish a
+  prohibited or high-risk use. [Commission risk framework](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai),
+  [Article 5](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-5),
   [Article 6](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6).
 - **Transparency:** distinguish provider interaction/marking duties from deployer
   disclosures for specified uses, including deepfakes and public-interest text.
@@ -42,14 +45,18 @@ severity, IDs, evidence, summary counts or the snapshot schema.
   missing disclosure. [Article 50](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-50).
 - **Operational review:** for applicable high-risk systems, assess human oversight,
   operating instructions, monitoring, logs and technical safeguards. Configurations
-  are only possible inputs to this work. [Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26),
+  are only possible inputs to this work. [Article 14](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14),
+  [Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26),
   [Article 15](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-15).
 
-The Commission confirms that the AI Omnibus entered into force on **27 July 2026**.
-It changed the general AI literacy provision, among other changes. Do not reuse the
-original Article 4 text to assert a universal company training obligation, or treat
-missing local training records as a breach. Some official Article Explorer pages
-explicitly flag that their text still awaits amendment updates.
+The Digital Omnibus on AI, **Regulation (EU) 2026/1744**, entered into force on
+**27 July 2026**. Among other changes it replaced Article 4: providers and deployers
+must still take measures to support the development of AI literacy, but the Act no
+longer requires them to guarantee a specific level. Local configuration cannot show
+whether such measures exist, so never treat missing local training records as a
+breach. Some AI Act Service Desk article pages state that their text has not yet been
+updated for the amendments; check amended provisions against the Official Journal.
+[Regulation (EU) 2026/1744](http://data.europa.eu/eli/reg/2026/1744/oj),
 [Commission amendment summary](https://digital-strategy.ec.europa.eu/en/news/ai-omnibus-enters-force).
 
 Research background for maintainers (not displayed in the report): original prohibitions from
