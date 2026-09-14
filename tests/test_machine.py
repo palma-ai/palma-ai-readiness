@@ -163,6 +163,16 @@ class MachineTests(unittest.TestCase):
         self.assertFalse([path for path in opened if path == self.other or self.other in path.parents])
         self.assertEqual(snapshot["scope"]["discovery"]["excludedDirectories"], 3)
 
+    def test_client_staging_and_temporary_folders_are_not_projects(self):
+        for relative in (".codex/.tmp/plugins/pack/.mcp.json", ".codex/.tmp/bundled-marketplaces/openai-bundled/plugins/browser/.mcp.json",
+                         ".claude/plugins/marketplaces/official/plugins/tool/.mcp.json", "work/.tmp/scratch/.mcp.json"):
+            self.put(self.home / relative, {})
+        self.put(self.home / "work/app/.mcp.json", {})
+        self.scan()
+        workspaces = self.received["workspaces"]
+        self.assertIn(self.home / "work/app", workspaces)
+        self.assertFalse([path for path in workspaces if ".tmp" in path.parts or "marketplaces" in path.parts], workspaces)
+
     @unittest.skipIf(os.name == "nt", "POSIX symbolic-link layout")
     def test_another_accounts_linked_home_is_not_searched_where_it_points(self):
         target = self.volume / "data/PRIVATE_OTHER"

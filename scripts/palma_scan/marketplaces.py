@@ -7,6 +7,7 @@ import configparser
 from dataclasses import replace
 from functools import lru_cache
 import json
+import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 from urllib.parse import urlsplit
@@ -45,9 +46,32 @@ def repository_origin(value):
         return None
 
 
+def _managed_local_policy(client, source):
+    """Codex's reserved marketplaces live at paths Codex manages and refuses to let a person add.
+
+    Codex compares the configured local source with the managed path; a home copied
+    elsewhere keeps the original absolute path, so the managed folders at the end of the
+    path are compared, as for Claude's installation records.
+    """
+    record, home = _record_path(source.get('root')), source.get('codexHome')
+    if record is None or not isinstance(home, str) or any(ord(c) < 32 for c in source['root']):
+        return None
+    for entry in policy()['sources']:
+        expected = entry.get('managedLocal', {}).get(source.get('marketplace'))
+        if client not in entry['clients'] or not expected:
+            continue
+        managed = Path(os.path.normpath(os.path.join(home, expected)))
+        depth = len(managed.parts) - len(Path(home).parent.parts)
+        if depth > 0 and [os.path.normcase(part) for part in record.parts[-depth:]] == [os.path.normcase(part) for part in managed.parts[-depth:]]:
+            return entry
+    return None
+
+
 def source_policy(client, source):
     if not isinstance(source, dict):
         return None
+    if source.get('source') == 'managed-local':
+        return _managed_local_policy(client, source)
     # A ref/subdirectory changes the source selection. Only listed refs and the
     # marketplace's root are accepted, never attacker-selected nested catalogs.
     if (source.get('source') == 'github' and set(source) <= {'source', 'repo', 'ref'}
@@ -91,6 +115,8 @@ def _config_sources(builder, root, market):
                 sources.append(None)
             elif item.get('sparse_paths'):
                 sources.append(None)
+            elif item.get('source_type') == 'local':
+                sources.append({'source': 'managed-local', 'marketplace': market, 'root': item.get('source'), 'codexHome': str(root)})
             else:
                 sources.append({'source': item.get('source_type'), 'url': item.get('source'), 'ref': item.get('ref')})
     return sources
@@ -218,7 +244,9 @@ def _system_skill(collection, item, candidate, verified):
     if candidate is None or candidate.scope != 'user' or item.get('sourceTrust') == 'allowlisted':
         return
     folder = candidate.path.parent.parent
-    entry = next((x for x in policy()['sources'] if x.get('systemSkillsDir') and candidate.family in x['clients']
+    # Another client (Cursor reads .codex/skills too) inventories the same Codex-managed folder.
+    owner = candidate.family if '.codex' not in folder.parts else 'codex'
+    entry = next((x for x in policy()['sources'] if x.get('systemSkillsDir') and owner in x['clients']
                   and folder.match(x['systemSkillsDir'])), None)
     if entry is None:
         return
@@ -244,9 +272,14 @@ def _configured(builder, item, candidate, roots):
     data = builder.documents.get(item['sourceId'], {})
     enabled = data.get('enabledPlugins')
     if candidate.family == 'claude-code' and isinstance(enabled, dict) and name in enabled:
-        roots = [root for root in roots if root.family == candidate.family and root.path.parent.parent == candidate.path.parent]
+        beside = [root for root in roots if root.family == candidate.family and root.path.parent.parent == candidate.path.parent]
+        # A project's settings file has no registry of its own; the account's registry applies.
+        roots = beside or [root for root in roots if root.family == candidate.family]
         source_records = [source for root in roots for source in _claude_sources(builder, root.path.parent, market)]
         item.update(_decision(candidate.family, market, source_records, ['marketplace-registry'] if source_records else []))
+    elif candidate.family == 'codex' and candidate.path.name == 'config.toml' and isinstance(data.get('plugins'), dict) and name in data['plugins']:
+        source_records = _config_sources(builder, candidate.path.parent, market)
+        item.update(_decision(candidate.family, market, source_records, ['marketplace-config'] if source_records else []))
 
 
 def annotate(collection):
@@ -295,7 +328,7 @@ def annotate(collection):
                     if (isinstance(data, dict) and set(data) == {'schema_version', 'remote_plugin_id'}
                             and type(data.get('schema_version')) is int and data['schema_version'] == 1
                             and isinstance(data.get('remote_plugin_id'), str)
-                            and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,199}', data['remote_plugin_id'])):
+                            and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.~:@+-]{0,199}', data['remote_plugin_id'])):
                         facts.update(sourceTrust='allowlisted', sourcePolicyId=allowed['id'], sourceEvidence=['codex-remote-install'])
                     elif data is not None:
                         source.update(status='unsupported', reason='unknown_schema')

@@ -396,13 +396,21 @@ def _skill_findings(spec, items):
         rating_reason="Local skill installation establishes available instructions, not malicious code or a missing prior audit. Source review is High priority.")]
 
 
+def _cached_only(item):
+    details = item.get("details", {})
+    state = details.get("installationState") if item["kind"] == "plugin" else details.get("packageState")
+    return state == "cached"
+
+
 def _artifact_source_findings(observations):
     artifacts = [item for item in observations if item["kind"] in {"skill", "plugin"}]
     approved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "allowlisted"]
     unapproved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "unapproved"
                   and item.get("details", {}).get("marketplaceId")]
+    # A pack that is only downloaded, with no installation record, is reported as cached
+    # (Info); its unresolved origin becomes a verification task once it is installed.
     unresolved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "unresolved"
-                  and item.get("details", {}).get("marketplaceId")]
+                  and item.get("details", {}).get("marketplaceId") and not _cached_only(item)]
     result = []
     if approved:
         result.append(_finding({"id": "artifacts-allowlisted-source", "kind": "skill", "area": "content", "severity": "info",

@@ -117,8 +117,8 @@ process: its profile, AI project markers on local volumes, supported application
 installations, configuration layers, managed policy, profiles/state, extension components,
 browser integrations, the AI apps it is running, and known AI runtime/service metadata.
 Folders that belong to other accounts (their homes wherever they are, and on macOS and
-Linux any folder another person's account owns), backups, OS temporary folders and the
-scanner's own folder are not traversed. The report's coverage section says when any were
+Linux any folder another person's account owns), backups, OS temporary folders, `.tmp`
+folders, client-managed marketplace clones and the scanner's own folder are not traversed. The report's coverage section says when any were
 skipped; scan such a project with `--workspace`.
 
 - `--workspace DIR` supplements automatic discovery with another project (repeatable).

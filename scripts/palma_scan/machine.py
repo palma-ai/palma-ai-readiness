@@ -43,7 +43,7 @@ PROJECT_MARKERS = {".codex", ".claude", ".cursor", ".gemini", ".vscode", ".agent
                    ".continue", ".roo", ".kilocode", ".kiro", ".aider.conf.yml", ".copilot", ".openclaw"}
 PRUNE_NAMES = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__",
                "site-packages", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
-               ".cache", "Cache", "Caches", "cache", "CachedData", "Code Cache",
+               ".tmp", ".cache", "Cache", "Caches", "cache", "CachedData", "Code Cache",
                "GPUCache", "Service Worker", ".Trash", ".Trashes", "$RECYCLE.BIN",
                "System Volume Information", ".Spotlight-V100", ".fseventsd",
                ".DocumentRevisions-V100", "Backups.backupdb", ".timemachine",
@@ -65,6 +65,11 @@ TEMPORARY_ROOTS = {"macos": ("/private/tmp", "/private/var/tmp", "/private/var/f
                    "linux": ("/tmp", "/var/tmp")}
 # This scanner's own folder: a development clone or extracted release is not user evidence.
 SCANNER_ROOT = Path(__file__).resolve().parents[2]
+# Folders a client manages as a catalog clone or staging area, relative to the account's
+# home. Their plugin folders carry AI markers but are not the person's projects; installed
+# copies live in the plugin cache, which has its own adapter. Codex's staging is ``.codex/.tmp``,
+# covered by the ``.tmp`` prune above.
+CLIENT_STAGING = (".claude/plugins/marketplaces", ".claude/plugins/repos")
 AI_EXTENSION_NAME = re.compile(r"\b(?:ChatGPT|Claude|Copilot|Gemini|Ollama|Perplexity|Sider|Monica|Merlin|HARPA AI|MaxAI|AI assistant)\b", re.I)
 EXTENSION_PERMISSIONS = {"debugger", "nativeMessaging", "tabs", "scripting", "cookies",
                          "downloads", "clipboardRead", "clipboardWrite", "webRequest"}
@@ -629,6 +634,7 @@ class _Discovery:
         if self.layout.get("os") == "windows":
             excluded.update(item["root"] / "AppData/Local/Temp" for item in profiles)
         excluded.add(SCANNER_ROOT)
+        excluded.update(item["root"] / relative for item in profiles for relative in CLIENT_STAGING)
         homes = profiles_set | ({self.layout["currentHome"]} if self.layout.get("currentHome") else set())
 
         for path in list(excluded):

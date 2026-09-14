@@ -54,11 +54,17 @@ class MarketplacePolicyTests(unittest.TestCase):
         self.assertTrue(all(x['details']['auditStatus'] == 'not-assessed' for x in self.artifacts(result)))
 
     def test_official_marketplace_label_without_origin_does_not_establish_trust(self):
-        self.plugin('claude', 'claude-plugins-official')
+        base = self.plugin('claude', 'claude-plugins-official')
         result = self.scan()
         self.assertTrue(all(x['details'].get('sourceTrust') == 'unresolved' for x in self.artifacts(result)))
+        rules = {x['ruleId'] for x in result['findings']}
+        # Downloaded without an installation record: cached (Info), not a verification task yet.
+        self.assertNotIn('artifacts-unresolved-source', rules)
+        self.assertIn('plugins-cached-only', rules)
+        self.write('.claude/plugins/installed_plugins.json', {'version': 2, 'plugins': {'example@claude-plugins-official': [{'scope': 'user', 'installPath': str(self.home / base), 'version': '1.0.0'}]}})
+        result = self.scan()
         ids = {x['id'] for x in self.artifacts(result)}
-        # Unknown provenance is a verification task (High), not a known-unapproved source (Critical).
+        # Installed with unknown provenance is a verification task (High), not a known-unapproved source (Critical).
         [finding] = [x for x in result['findings'] if x['ruleId'] == 'artifacts-unresolved-source']
         self.assertEqual(finding['severity'], 'high')
         self.assertTrue(ids <= set(finding['observationIds']))
@@ -142,6 +148,67 @@ class MarketplacePolicyTests(unittest.TestCase):
         self.assertTrue(all(x['details'].get('sourceTrust') == 'allowlisted' for x in self.artifacts(self.scan())))
         self.write('.codex/config.toml', '[marketplaces.openai-curated-remote]\nsource_type="git"\nsource="https://github.com/unapproved/plugins.git"\n')
         self.assertTrue(all(x['details'].get('sourceTrust') == 'unapproved' for x in self.artifacts(self.scan())))
+
+    def test_remote_install_record_ids_keep_the_characters_codex_writes(self):
+        self.plugin('codex', 'openai-curated-remote')
+        self.write('.codex/plugins/cache/openai-curated-remote/example/.codex-remote-plugin-install.json',
+                   {'schema_version': 1, 'remote_plugin_id': 'plugin_~abc123~DEF456'})
+        result = self.scan()
+        self.assertTrue(all(x['details'].get('sourceTrust') == 'allowlisted' for x in self.artifacts(result)))
+        [pack] = [x for x in result['observations'] if x['kind'] == 'plugin']
+        self.assertEqual(pack['details']['installationState'], 'installed')
+
+    def test_codex_managed_local_marketplaces_are_allowlisted_only_at_their_managed_paths(self):
+        cases = (('openai-bundled', '.codex/.tmp/bundled-marketplaces/openai-bundled'),
+                 ('openai-primary-runtime', '.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime'))
+        for market, relative in cases:
+            self.plugin('codex', market)
+        managed = ''.join(f'[marketplaces.{market}]\nsource_type="local"\nsource=\'{self.home / relative}\'\n[plugins."example@{market}"]\nenabled=true\n'
+                          for market, relative in cases)
+        self.write('.codex/config.toml', managed)
+        result = self.scan()
+        packs = [x for x in self.artifacts(result) if x['kind'] == 'plugin']
+        self.assertEqual({x['details'].get('marketplaceId') for x in packs}, {market for market, _ in cases})
+        self.assertTrue(all(x['details'].get('sourceTrust') == 'allowlisted' and x['details']['installationState'] == 'installed'
+                            and x['enabled'] == 'enabled' for x in packs), [x['details'] for x in packs])
+        self.assertEqual({x['details'].get('sourcePolicyId') for x in packs}, {'openai-codex-bundled-plugins', 'openai-codex-primary-runtime'})
+        elsewhere = ''.join(f'[marketplaces.{market}]\nsource_type="local"\nsource=\'{self.home / "elsewhere" / market}\'\n' for market, _ in cases)
+        self.write('.codex/config.toml', elsewhere)
+        result = self.scan()
+        self.assertTrue(all(x['details'].get('sourceTrust') == 'unapproved' for x in self.artifacts(result)), 'a reserved name at another path is not Codex-managed')
+
+    def test_codex_config_only_pack_entries_take_their_marketplaces_provenance(self):
+        managed = self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled'
+        self.write('.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource=\'{managed}\'\n'
+                   '[marketplaces.team]\nsource_type="git"\nsource="https://example.invalid/team.git"\n'
+                   '[plugins."app-tools@openai-bundled"]\nenabled=true\n[plugins."helper@team"]\nenabled=true\n[plugins."loose@nowhere"]\nenabled=false\n')
+        result = self.scan()
+        entries = {x['name']: x['details'] for x in result['observations'] if x['kind'] == 'plugin'}
+        self.assertEqual({name: d.get('sourceTrust') for name, d in entries.items()},
+                         {'app-tools@openai-bundled': 'allowlisted', 'helper@team': 'unapproved', 'loose@nowhere': 'unresolved'})
+        self.assertTrue(all(d['installationState'] == 'config_only' for d in entries.values()))
+        self.assertEqual({x['name']: x['enabled'] for x in result['observations'] if x['kind'] == 'plugin'}['loose@nowhere'], 'disabled')
+        rules = {x['ruleId']: x['severity'] for x in result['findings']}
+        self.assertEqual(rules.get('artifacts-unapproved-marketplace'), 'critical')
+        self.assertEqual(rules.get('artifacts-unresolved-source'), 'high')
+        self.assertNotIn('plugins-unknown-origin', rules)
+
+    def test_system_skills_read_through_another_client_keep_their_bundled_provenance(self):
+        self.write('.codex/skills/.system/skill-creator/SKILL.md', '---\nname: skill-creator\n---\nBundled fixture')
+        self.write('.codex/skills/.system/.codex-system-skills.marker', 'c0ffee1234abcdef\n')
+        result = self.scan()
+        copies = [x for x in result['observations'] if x['kind'] == 'skill' and x['name'] == 'skill-creator']
+        self.assertTrue(copies)
+        self.assertTrue(all(x['details'].get('sourcePolicyId') == 'openai-codex-system-skills' for x in copies),
+                        {x['client']: x['details'].get('sourceTrust') for x in copies})
+
+    def test_project_settings_use_the_accounts_marketplace_registry(self):
+        self.write('.claude/plugins/known_marketplaces.json', {'claude-plugins-official': {'source': {'source': 'github', 'repo': 'anthropics/claude-plugins-official'}}})
+        self.write('code/app/.claude/settings.json', {'enabledPlugins': {'example@claude-plugins-official': True}})
+        with patch('subprocess.Popen', side_effect=AssertionError('no process')):
+            result = collect(self.home, [self.home / 'code/app'], scope_type='copied-home')
+        [pack] = [x for x in result['observations'] if x['kind'] == 'plugin']
+        self.assertEqual((pack['details'].get('sourceTrust'), pack['details'].get('sourcePolicyId')), ('allowlisted', 'anthropic-official-plugins'))
 
     def test_remote_metadata_wrong_shape_or_symlink_cannot_establish_trust(self):
         self.plugin('codex', 'openai-curated-remote')

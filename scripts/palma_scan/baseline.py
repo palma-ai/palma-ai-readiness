@@ -340,14 +340,18 @@ def _merge(collector, collection, alias, workspaces):
                 details.update(key=key, nativeKey=key, effectiveState=old.get('effectiveState', 'unknown'), value=old.get('value'), valueCollected=old.get('valueCollected', False), valueType=old.get('valueType', 'unknown'), category=old.get('category', 'other'), interpretation='inventory-only', declaredState=old.get('effectiveState', 'unknown'))
                 name = key
             elif kind in {'skill', 'agent', 'plugin'}:
-                # Configured plugin declarations already have exact enabled flags.
-                if kind == 'plugin' and old.get('installationState') == 'config_only' and any(o['kind'] == 'plugin' and o['sourceId'] == source['id'] for o in collector.observations):
-                    for existing in collector.observations:
-                        if existing['kind'] == 'plugin' and existing['sourceId'] == source['id'] and existing['name'] == collector.display_text(old.get('name', '')):
-                            existing['details'].update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
-                            if 'marketplaceId' in old:
-                                existing['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
-                    continue
+                # A configured pack the collector already lists (Claude's enabledPlugins) keeps
+                # its exact enabled flag and gains the provenance; other entries, such as
+                # Codex's [plugins] table, are listed here, one observation per entry.
+                if kind == 'plugin' and old.get('installationState') == 'config_only':
+                    listed = [existing for existing in collector.observations if existing['kind'] == 'plugin'
+                              and existing['sourceId'] == source['id'] and existing['name'] == collector.display_text(old.get('name', ''))]
+                    for existing in listed:
+                        existing['details'].update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
+                        if 'marketplaceId' in old:
+                            existing['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
+                    if listed:
+                        continue
                 details.update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
                 details.update(activation={'config_only': 'configured', 'cached': 'cached', 'installed': 'installed'}.get(old.get('installationState'), 'present'), auditStatus='not-assessed', origin=old.get('origin', 'unknown'))
                 if type(source.get('sizeBytes')) is int:
