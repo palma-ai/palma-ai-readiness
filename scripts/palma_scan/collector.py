@@ -320,6 +320,31 @@ def _provider_metadata(entry):
     return unknown
 
 
+# Palma-operated MCP gateway hosts, for example gateway.palma.ai or a regional form such as
+# gateway.eu1.palma.ai. Only Palma controls names under palma.ai.
+PALMA_GATEWAY_HOST = re.compile(r"gateway(?:-[a-z0-9]+)?(?:\.[a-z0-9]+)?\.palma\.ai")
+
+
+def _palma_gateway(entry, transport):
+    """Whether a remote connector is routed through a Palma-operated gateway.
+
+    Only an exact HTTPS host on the default port qualifies. Connector names, paths and
+    labels are ignored, and a gateway hosted on another domain is not recognized.
+    """
+    if transport not in {"http", "sse", "websocket"}:
+        return False
+    url = next((entry.get(key) for key in ("httpUrl", "url", "serverUrl") if key in entry), None)
+    if not isinstance(url, str) or "\\" in url or any(ord(character) < 33 for character in url):
+        return False
+    try:
+        parts = urlsplit(url)
+        return (parts.scheme in {"https", "wss"} and parts.username is None and parts.password is None
+                and parts.port in (None, 443) and parts.hostname is not None
+                and PALMA_GATEWAY_HOST.fullmatch(parts.hostname) is not None)
+    except (ValueError, UnicodeError):
+        return False
+
+
 class _LocalRedactor(Redactor):
     def _remember(self, value, level):
         # A credential reference may also contain a literal default. Keep the
@@ -532,6 +557,8 @@ class _Collector:
                 details["configurationIssue"] = "uninterpreted-mcp-transport"
             details["declaration"] = declaration
             details.update(_provider_metadata(entry))
+            if _palma_gateway(entry, transport):
+                details["governedBy"] = "palma-gateway"
             if type(entry.get("sandboxEnabled")) is bool:
                 details["sandboxConfigured"] = entry["sandboxEnabled"]
             item = self.observe(source, "mcp", display_name, details, enabled, context + ":" + item_id)

@@ -124,7 +124,10 @@ Do not invent CVEs, exploitation, security scores, or organization-wide results.
 Use the bundled Palma policy catalog as the severity baseline. Preserve every original
 rule and apply the documented Critical upgrades: local MCP, direct or unverified remote
 MCP, computer/browser capabilities, locally sourced skills requiring review, potential
-credentials in configuration, and configured hooks. Use Low priority for
+credentials in configuration, and configured hooks. Project skills in version control keep
+the catalog's High priority. Connectors routed through a Palma-operated gateway host are
+governed, not direct remote access. A fixed secret written into configuration is one
+credential finding, not also a fixed-secret finding. Use Low priority for
 permission bypass, automatic/no-prompt approval and unrestricted folder grants. Aggregate
 and highlight these Low findings; retain their original catalog severity for traceability.
 True sandbox-off settings remain High. These are governance priorities; a Critical label

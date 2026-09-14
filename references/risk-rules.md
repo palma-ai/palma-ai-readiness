@@ -12,7 +12,7 @@ The scan records **configuration declarations, installation metadata, and select
 
 Apply the defined rating policy; do not independently change it because the scan is personal, offline, or based on configuration:
 
-- **Critical:** local MCP, direct or unverified remote MCP, computer/browser capabilities, locally sourced skills requiring review, potential configuration credentials, and configured hooks. These conditions need immediate governance attention without waiting for a demonstrated attack. The permission-only exceptions below are Low.
+- **Critical:** local MCP, direct or unverified remote MCP, computer/browser capabilities, locally sourced skills requiring review (project skills in version control keep the catalog's High), potential configuration credentials, and configured hooks. These conditions need immediate governance attention without waiting for a demonstrated attack. The permission-only exceptions below are Low.
 - **High:** actual sandbox-off, supported authentication and data-sharing concerns, side-loaded plugins, and oversized cached skill/plugin components that can waste agent context, tokens or usage. Size alone does not prove that a component was loaded or billed.
 - **Medium:** scoped catalog concerns such as unknown origin, absent content digests and unknown transport unless a specifically unsupported/malformed MCP shape is established.
 - **Low:** permission bypass, automatic or absent approval prompts, unrestricted folder grants, and specifically malformed/unsupported MCP shapes. Group and highlight these observations instead of discarding them. Original catalog ratings remain visible as `baselineSeverity`.
@@ -94,11 +94,11 @@ The evaluator preserves the Palma catalog matches and uses the priorities shown 
 | --- | --- | --- |
 | `mcp-local-unaudited` | Critical | Local `stdio` or `sdk` MCP declaration |
 | `mcp-inline-credential` | Critical | Potential credential stored inline in MCP configuration |
-| `mcp-network-direct` | Critical | Direct or unverified network MCP route |
-| `mcp-static-secret-auth` | High | Static/bearer-header authentication metadata; inline literals also match the Critical credential rule |
+| `mcp-network-direct` | Critical | Direct or unverified network MCP route; connectors routed through a Palma-operated gateway host are governed and excluded |
+| `mcp-static-secret-auth` | High | Static/bearer-header authentication metadata whose secret is not stored inline; a declaration that also stores the secret inline is reported once, under `mcp-inline-credential` |
 | `mcp-unknown-transport` | Medium | Unknown transport; the explicit unsupported-shape exception below is Low |
 | `mcp-declared-disabled` | Info | Disabled MCP declaration retained in configuration |
-| `skills-local-unreviewed` | Critical | Skill origin recorded as user or project; audit status remains separately stated |
+| `skills-local-unreviewed` | Critical / High | Skill origin recorded as user or project; audit status remains separately stated. A project skill inside a git working tree keeps the catalog's High, as its changes can be reviewed like code |
 | `skills-unverifiable` | Medium | Skill without a content digest |
 | `skills-managed` | Info | Skill with managed-distribution provenance |
 | `plugins-sideloaded` | High | Plugin with local installation provenance |
@@ -204,6 +204,10 @@ Treat native desktop interaction, browser automation, and web search as separate
 Retain observed tool/component names, actionable source locations, bounded typed settings, structural counts and reason codes. Withhold commands, arguments, credential-bearing URLs, credential/header/env values and unrelated raw configuration. Reject symlinks, special files, oversize inputs, excessive nesting, duplicate keys and ambiguous types with the appropriate source issue and policy finding. Do not evaluate configuration as code. HTML-escape names and all other display content; keep the report self-contained without remote fonts, images, analytics or upload behavior.
 
 Evaluation records the rule version and evidence IDs so that the same sanitized snapshot produces the same findings. Missing evidence remains a stated limitation.
+
+## Palma gateway endpoints
+
+A connector is governed by Palma when its declared endpoint is an HTTPS host operated by Palma for its MCP gateway on the default port: `gateway.palma.ai`, or a variant directly under `palma.ai` such as a regional host (`gateway.<region>.palma.ai`) or a suffixed host (`gateway-<name>.palma.ai`). Only Palma controls names under `palma.ai`. Connector names, paths and labels are never evidence of governance; cleartext URLs, other ports, embedded credentials, lookalike domains and trailing-dot hosts are not recognized. A self-hosted gateway on your organization's own domain is not recognized and keeps the direct-remote finding. Governed connectors are excluded from the catalog rules that carry the gateway exemption (`mcp-network-direct`, `mcp-computer-use`, `mcp-browser-automation`); credential rules still apply to them.
 
 ## Public provider identification for report icons
 

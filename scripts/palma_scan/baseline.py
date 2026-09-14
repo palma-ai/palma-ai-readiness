@@ -109,6 +109,23 @@ def _known_candidates(root, alias, workspace=False):
     return list(result.values())
 
 
+def _version_controlled(path, stop):
+    """Whether a project file sits in a git working tree (a .git folder or worktree file).
+
+    Metadata only; the search stops at the account home so a dotfiles repository
+    there does not mark every project as version-controlled.
+    """
+    for parent in list(path.parents)[:16]:
+        if parent == stop or parent.parent == parent:
+            break
+        try:
+            (parent / '.git').lstat()
+            return True
+        except OSError:
+            continue
+    return False
+
+
 def _safe_version(value):
     return value if isinstance(value, str) and re.fullmatch(r'\d{1,5}(?:\.\d{1,7}){0,4}(?:[-+][A-Za-z0-9.-]{1,32})?', value) else None
 
@@ -344,6 +361,8 @@ def _merge(collector, collection, alias, workspaces):
                     details['version'] = version
                 if kind == 'skill':
                     details.update(digest=old.get('digest'), digestAlgorithm=old.get('digestAlgorithm'), filesHashed=old.get('filesHashed', 0), manifestType='SKILL.md')
+                    if old.get('origin') == 'project' and candidate and _version_controlled(candidate.path, collection.home):
+                        details['provenance'] = 'version-controlled'
                 if kind == 'agent':
                     details.update(toolCount=len(old.get('toolNames', [])), declaredToolCount=len(old.get('toolNames', [])), modelConfigured=bool(old.get('model')))
                     data = builder.documents.get(old['sourceId'], {})
