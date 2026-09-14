@@ -43,7 +43,7 @@ PROJECT_MARKERS = {".codex", ".claude", ".cursor", ".gemini", ".vscode", ".agent
                    ".continue", ".roo", ".kilocode", ".kiro", ".aider.conf.yml", ".copilot", ".openclaw"}
 PRUNE_NAMES = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycache__",
                "site-packages", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
-               ".tmp", ".cache", "Cache", "Caches", "cache", "CachedData", "Code Cache",
+               ".cache", "Cache", "Caches", "cache", "CachedData", "Code Cache",
                "GPUCache", "Service Worker", ".Trash", ".Trashes", "$RECYCLE.BIN",
                "System Volume Information", ".Spotlight-V100", ".fseventsd",
                ".DocumentRevisions-V100", "Backups.backupdb", ".timemachine",
@@ -67,9 +67,21 @@ TEMPORARY_ROOTS = {"macos": ("/private/tmp", "/private/var/tmp", "/private/var/f
 SCANNER_ROOT = Path(__file__).resolve().parents[2]
 # Folders a client manages as a catalog clone or staging area, relative to the account's
 # home. Their plugin folders carry AI markers but are not the person's projects; installed
-# copies live in the plugin cache, which has its own adapter. Codex's staging is ``.codex/.tmp``,
-# covered by the ``.tmp`` prune above.
-CLIENT_STAGING = (".claude/plugins/marketplaces", ".claude/plugins/repos")
+# copies live in the plugin cache, which has its own adapter.
+CLIENT_STAGING = (".codex/.tmp", ".claude/plugins/marketplaces", ".claude/plugins/repos")
+# The same staging areas when a client home is relocated by its environment variable.
+OVERRIDE_STAGING = {"CODEX_HOME": (".tmp",), "CLAUDE_CONFIG_DIR": ("plugins/marketplaces", "plugins/repos")}
+
+
+def _override_staging(profiles):
+    """Staging folders under relocated client homes, when the relocation stays in an account."""
+    result = set()
+    for variable, relatives in OVERRIDE_STAGING.items():
+        value = os.environ.get(variable, "")
+        root = Path(value) if value and "\x00" not in value else None
+        if root is not None and root.is_absolute() and ".." not in root.parts and any(root == home or home in root.parents for home in profiles):
+            result.update(root / relative for relative in relatives)
+    return result
 AI_EXTENSION_NAME = re.compile(r"\b(?:ChatGPT|Claude|Copilot|Gemini|Ollama|Perplexity|Sider|Monica|Merlin|HARPA AI|MaxAI|AI assistant)\b", re.I)
 EXTENSION_PERMISSIONS = {"debugger", "nativeMessaging", "tabs", "scripting", "cookies",
                          "downloads", "clipboardRead", "clipboardWrite", "webRequest"}
@@ -635,6 +647,7 @@ class _Discovery:
             excluded.update(item["root"] / "AppData/Local/Temp" for item in profiles)
         excluded.add(SCANNER_ROOT)
         excluded.update(item["root"] / relative for item in profiles for relative in CLIENT_STAGING)
+        excluded.update(_override_staging(profiles_set))
         homes = profiles_set | ({self.layout["currentHome"]} if self.layout.get("currentHome") else set())
 
         for path in list(excluded):

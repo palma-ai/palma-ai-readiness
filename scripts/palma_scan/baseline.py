@@ -25,7 +25,7 @@ from .engine.paths import installation_candidates, bounded_environment
 from .engine.parsing import validate_tree, ParseError
 from .engine.filesystem import SafeFiles, Budget, ReadGap
 from .engine.adapters.configs import collect_config, collect_cached_settings
-from .dedup import collapse_declarations, content_digest, fold_pack_switches
+from .dedup import collapse_declarations, content_digest
 from .engine.git_provenance import version_controlled as _version_controlled
 
 
@@ -343,16 +343,19 @@ def _merge(collector, collection, alias, workspaces):
                 # A configured pack the collector already lists (Claude's enabledPlugins) keeps
                 # its exact enabled flag and gains the provenance; other entries, such as
                 # Codex's [plugins] table, are listed here, one observation per entry.
+                trust = {key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old}
                 if kind == 'plugin' and old.get('installationState') == 'config_only':
                     listed = [existing for existing in collector.observations if existing['kind'] == 'plugin'
                               and existing['sourceId'] == source['id'] and existing['name'] == collector.display_text(old.get('name', ''))]
                     for existing in listed:
-                        existing['details'].update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
+                        existing['details'].update(trust)
                         if 'marketplaceId' in old:
                             existing['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
-                    if listed:
+                    # Claude's enabledPlugins entries are the collector's rows; an entry it did not
+                    # list (a name outside its limits) is not listed twice.
+                    if listed or source['client'] == 'claude-code':
                         continue
-                details.update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
+                details.update(trust)
                 details.update(activation={'config_only': 'configured', 'cached': 'cached', 'installed': 'installed'}.get(old.get('installationState'), 'present'), auditStatus='not-assessed', origin=old.get('origin', 'unknown'))
                 if type(source.get('sizeBytes')) is int:
                     details['manifestSizeBytes'] = source['sizeBytes']
@@ -387,6 +390,11 @@ def _merge(collector, collection, alias, workspaces):
                 item['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
             if kind == 'agent' or (kind == 'plugin' and old.get('installationState') in {'cached', 'installed'}):
                 item['_content'] = builder.content.get(old['sourceId'])
+    for identity, name in getattr(builder, 'consumed_switches', ()):
+        # The pack row carries the switch's state; the switch's own row would list the pack twice.
+        consumed = 'src-' + identity[:24]
+        collector.observations[:] = [o for o in collector.observations
+                                     if not (o['kind'] == 'plugin' and o['sourceId'] == consumed and o['name'] == collector.display_text(name))]
 
 
 def _collect_in_memory(builder, candidate, data, normalize=None):
@@ -518,7 +526,7 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         _merge(collector, collection, 'system', roots)
     # Shared graph edges and repeated candidates resolve to one deterministic row.
     malformed = {source['id'] for source in collector.sources if source.get('issueKind') == 'unsupported-mcp-shape'}
-    observations = collapse_declarations(fold_pack_switches(list({o['id']: o for o in collector.observations}.values())), malformed)
+    observations = collapse_declarations(list({o['id']: o for o in collector.observations}.values()), malformed)
     # Keep sources that back evidence or record a problem. An absent candidate path is the
     # normal case, and a file that was read without yielding evidence (or whose declaration
     # merged into another copy, which lists its location) is only counted.

@@ -70,8 +70,8 @@
         "codex"
       ],
       "managedLocal": {
-        "openai-bundled": ".tmp/bundled-marketplaces/openai-bundled",
-        "openai-bundled-alpha": ".tmp/bundled-marketplaces/openai-bundled-alpha"
+        "openai-bundled": "<codexHome>/.tmp/bundled-marketplaces/openai-bundled",
+        "openai-bundled-alpha": "<codexHome>/.tmp/bundled-marketplaces/openai-bundled-alpha"
       },
       "evidence": "https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace_policy.rs"
     },
@@ -82,7 +82,7 @@
         "codex"
       ],
       "managedLocal": {
-        "openai-primary-runtime": "../.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+        "openai-primary-runtime": "<cacheHome>/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
       },
       "evidence": "https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace_policy.rs"
     }

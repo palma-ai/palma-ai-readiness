@@ -14,7 +14,7 @@ for this repository. Do not open a public issue for a security problem, and do n
 attach a real scan result: describe the configuration shape that triggers the defect,
 or build a fictional fixture the way `tests/` does.
 
-Include the release tag (`build-<run>-<commit>` from `BUILD-INFO.json`), the operating
+Include the release tag (`build-<run>-<commit>` from the release page, or the `sourceCommit` in `BUILD-INFO.json`), the operating
 system, the Python version, and the smallest configuration that reproduces the problem.
 
 ## Scope

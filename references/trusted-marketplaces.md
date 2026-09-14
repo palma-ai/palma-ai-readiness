@@ -19,14 +19,15 @@ Reviewed **14 September 2026**; allowlist version **2026-09-14.3**.
 | `openai-plugins` | `github.com/openai/plugins` | Codex's explicit Git marketplace source, selecting the repository root with no ref or `main`. |
 | `openai-curated-remote` | Codex's reserved global remote marketplace | Exact cache layout plus schema version 1 of Codex's persisted remote installation record, with a nonempty valid remote plugin ID and no conflicting configured marketplace source. |
 | `openai-curated-skills` | `github.com/openai/skills`, `skills/.curated/<skill>` | A bounded repository metadata check and the exact Git `origin` repository alongside the curated skill path. Experimental skills are excluded. |
-| `openai-codex-bundled-plugins` | Codex's reserved `openai-bundled` and `openai-bundled-alpha` marketplaces | A `[marketplaces.<name>]` entry in `config.toml` with `source_type = "local"` whose source is `<CODEX_HOME>/.tmp/bundled-marketplaces/<name>`, the managed path in [Codex's marketplace policy](https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace_policy.rs), compared by its trailing folders so that a copied home keeps the result. Codex refuses user-added marketplaces with reserved names, so the entry is Codex-written. The same name at another path is unapproved. |
-| `openai-codex-primary-runtime` | Codex's reserved `openai-primary-runtime` marketplace | The same `config.toml` shape with the source at `<home>/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime`, Codex's runtime cache on macOS, Windows and Linux (a Linux `XDG_CACHE_HOME` override is not recognized). |
+| `openai-codex-bundled-plugins` | Codex's reserved `openai-bundled` and `openai-bundled-alpha` marketplaces | A `[marketplaces.<name>]` entry in the account's `config.toml` with `source_type = "local"` whose source is exactly `<CODEX_HOME>/.tmp/bundled-marketplaces/<name>`, the managed path in [Codex's marketplace policy](https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace_policy.rs). Codex refuses user-added marketplaces with reserved names, so the entry is Codex-written; the same name at another path in the home is unapproved. A home copied elsewhere keeps its original absolute paths, so a source outside the scanned home is compared by the managed folders at its end. |
+| `openai-codex-primary-runtime` | Codex's reserved `openai-primary-runtime` marketplace | The same `config.toml` shape with the source exactly at `<home>/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime`; a source outside the scanned home (a copied home, or a cache folder Codex resolved elsewhere) is compared by the managed folders at its end. |
 | `openai-codex-system-skills` | Codex's embedded system skills, installed by Codex into `<CODEX_HOME>/skills/.system/<skill>` | The exact `skills/.system` folder in the account's own Codex home together with Codex's `.codex-system-skills.marker` file, the hexadecimal fingerprint Codex writes when it installs its embedded skills ([source](https://github.com/openai/codex/blob/main/codex-rs/skills/src/lib.rs)). The marker is checked for presence and shape only and is never exported. A `.system` folder inside a project checkout, or one without the marker, keeps ordinary local review. |
 
 The remote Codex marketplace is distinct from the public `openai/plugins` Git
 marketplace. Codex maps its global remote scope to `openai-curated-remote` and stores
 `.codex-remote-plugin-install.json` alongside each plugin's cached version directories,
-holding `schema_version` 1 and a `remote_plugin_id` (letters, digits and `_ . ~ : @ + -`).
+holding `schema_version` 1 and a nonempty `remote_plugin_id` of printable characters without
+spaces. The id's format is Codex's, and its value is never exported.
 The record identifies a remote installation; it is not a cryptographic attestation.
 A cache folder named `openai-curated-remote` without that record stays unresolved.
 
@@ -38,10 +39,13 @@ version path components beneath a collected plugin-cache root. Supported version
 plugin and version folders); they do not establish live activation. A project's own
 `enabledPlugins` entries are resolved against the account's registry, since a project
 folder has no registry of its own, and a Codex `[plugins]` entry without a cached pack takes
-the provenance of its marketplace entry in the same `config.toml`. Codex packs count as
+the provenance of the marketplace entry in the account's `config.toml`, wherever the entry
+itself is declared; without such an entry, a `[plugins]` switch naming one of Codex's
+reserved marketplaces names Codex's own catalog and is allowlisted on that basis. A
+marketplace entry in a shape this scan does not read is unresolved, not unapproved. Codex packs count as
 installed through their remote installation record or a `[plugins."<plugin>@<marketplace>"]`
 entry in `config.toml`. The `enabledPlugins` and `[plugins]` switches give a cached pack its
-enabled or disabled state; an account-level switch whose pack is installed is listed as that
+enabled or disabled state; an account-level switch whose pack is present is listed as that
 pack, not as a second entry, while a switch in a project's own settings stays a separate
 declaration. Bundled connectors inherit the pack's state when the priority policy
 decides whether they apply as written.
@@ -66,11 +70,12 @@ Source URLs and installation IDs are used only in memory; the report retains fix
 IDs, reason codes and the sanitized marketplace name.
 
 Artifacts with an allowlisted source receive an Info source finding and remain in inventory.
-Marketplace artifacts whose declared source is outside the allowlist receive Critical priority
-and an audit-before-use action. Installed artifacts whose marketplace source could not be
-resolved locally receive High priority and a verify-the-source action: their origin is
-unknown, not known to be unapproved. A pack that is only downloaded, with no installation
-record, stays in the Info cached-packs finding until it is installed. Local skills outside a marketplace receive High source-review
+Installed marketplace artifacts whose declared source is outside the allowlist receive
+Critical priority and an audit-before-use action. Installed artifacts whose marketplace
+source could not be resolved locally receive High priority and a verify-the-source action:
+their origin is unknown, not known to be unapproved. A pack that is only downloaded, with
+no installation record and no enabled switch, stays in the Info cached-packs finding,
+whatever its source record says, until it is installed or switched on. Local skills outside a marketplace receive High source-review
 priority. These priorities describe the source policy, not proof of malicious behavior.
 
 ## Maintaining the allowlist

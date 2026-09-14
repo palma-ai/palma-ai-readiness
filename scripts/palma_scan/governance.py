@@ -267,7 +267,7 @@ def _inactive_reason(item):
         return "in a cached policy copy"
     if details.get("packageEnabled") == "disabled":
         return "in a plugin pack that is switched off"
-    if details.get("packageState") == "cached":
+    if details.get("packageState") == "cached" and details.get("packageEnabled") != "enabled":
         return "in a plugin pack that is cached without an installation record"
     if item.get("enabled") == "disabled":
         return "switched off"
@@ -397,20 +397,21 @@ def _skill_findings(spec, items):
 
 
 def _cached_only(item):
+    """Downloaded without an installation record and not switched on: not in use as written."""
     details = item.get("details", {})
-    state = details.get("installationState") if item["kind"] == "plugin" else details.get("packageState")
-    return state == "cached"
+    if item["kind"] == "plugin":
+        return details.get("installationState") == "cached" and item.get("enabled") != "enabled"
+    return details.get("packageState") == "cached" and details.get("packageEnabled") != "enabled"
 
 
 def _artifact_source_findings(observations):
     artifacts = [item for item in observations if item["kind"] in {"skill", "plugin"}]
     approved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "allowlisted"]
-    unapproved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "unapproved"
-                  and item.get("details", {}).get("marketplaceId")]
     # A pack that is only downloaded, with no installation record, is reported as cached
-    # (Info); its unresolved origin becomes a verification task once it is installed.
-    unresolved = [item for item in artifacts if item.get("details", {}).get("sourceTrust") == "unresolved"
-                  and item.get("details", {}).get("marketplaceId") and not _cached_only(item)]
+    # (Info); its source becomes an audit or verification task once it is installed.
+    present = [item for item in artifacts if not _cached_only(item)]
+    unapproved = [item for item in present if item.get("details", {}).get("sourceTrust") == "unapproved"]
+    unresolved = [item for item in present if item.get("details", {}).get("sourceTrust") == "unresolved"]
     result = []
     if approved:
         result.append(_finding({"id": "artifacts-allowlisted-source", "kind": "skill", "area": "content", "severity": "info",
@@ -454,8 +455,8 @@ def evaluate(snapshot, params=None):
         items = [item for item in observations if item["kind"] == spec["kind"]
                  and all(matches(condition, attributes(item), params) for condition in spec["conditions"])]
         if spec["id"] in {"skills-local-unreviewed", "skills-unverifiable", "skills-managed", "plugins-sideloaded", "plugins-unknown-origin"}:
-            items = [item for item in items if item.get("details", {}).get("sourceTrust") != "allowlisted"
-                     and not (item.get("details", {}).get("marketplaceId") and item.get("details", {}).get("sourceTrust") in {"unapproved", "unresolved"})]
+            # Classified marketplace artifacts are covered by the source findings above.
+            items = [item for item in items if not item.get("details", {}).get("sourceTrust")]
         if spec["id"] == "mcp-unknown-transport":
             items = [item for item in items if item["sourceId"] not in malformed]
         if spec["id"] == "hooks-declared":

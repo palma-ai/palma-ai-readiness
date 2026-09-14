@@ -74,8 +74,15 @@ class MarketplacePolicyTests(unittest.TestCase):
         self.assertFalse(any(x['ruleId'] == 'skills-local-unreviewed' for x in result['findings']))
 
     def test_declared_source_outside_the_allowlist_is_critical(self):
-        self.plugin('claude', 'claude-plugins-official')
+        base = self.plugin('claude', 'claude-plugins-official')
         self.write('.claude/plugins/known_marketplaces.json', {'claude-plugins-official': {'source': {'source': 'github', 'repo': 'other/claude-plugins-official'}}})
+        result = self.scan()
+        rules = {x['ruleId'] for x in result['findings']}
+        # Downloaded but not installed: the cached-pack finding, not an audit task yet.
+        self.assertTrue(all(x['details'].get('sourceTrust') == 'unapproved' for x in self.artifacts(result)))
+        self.assertNotIn('artifacts-unapproved-marketplace', rules)
+        self.assertIn('plugins-cached-only', rules)
+        self.write('.claude/plugins/installed_plugins.json', {'version': 2, 'plugins': {'example@claude-plugins-official': [{'scope': 'user', 'installPath': str(self.home / base), 'version': '1.0.0'}]}})
         result = self.scan()
         ids = {x['id'] for x in self.artifacts(result)}
         [finding] = [x for x in result['findings'] if x['ruleId'] == 'artifacts-unapproved-marketplace']
@@ -150,14 +157,18 @@ class MarketplacePolicyTests(unittest.TestCase):
         self.write('.codex/config.toml', '[marketplaces.openai-curated-remote]\nsource_type="git"\nsource="https://github.com/unapproved/plugins.git"\n')
         self.assertTrue(all(x['details'].get('sourceTrust') == 'unapproved' for x in self.artifacts(self.scan())))
 
-    def test_remote_install_record_ids_keep_the_characters_codex_writes(self):
+    def test_remote_install_record_ids_are_opaque_printable_tokens(self):
         self.plugin('codex', 'openai-curated-remote')
-        self.write('.codex/plugins/cache/openai-curated-remote/example/.codex-remote-plugin-install.json',
-                   {'schema_version': 1, 'remote_plugin_id': 'plugin_~abc123~DEF456'})
-        result = self.scan()
-        self.assertTrue(all(x['details'].get('sourceTrust') == 'allowlisted' for x in self.artifacts(result)))
-        [pack] = [x for x in result['observations'] if x['kind'] == 'plugin']
-        self.assertEqual(pack['details']['installationState'], 'installed')
+        metadata = '.codex/plugins/cache/openai-curated-remote/example/.codex-remote-plugin-install.json'
+        for accepted in ('plugin_~abc123~DEF456', 'id/with+base64=', 'x' * 200):
+            self.write(metadata, {'schema_version': 1, 'remote_plugin_id': accepted})
+            result = self.scan()
+            self.assertTrue(all(x['details'].get('sourceTrust') == 'allowlisted' for x in self.artifacts(result)), accepted)
+            [pack] = [x for x in result['observations'] if x['kind'] == 'plugin']
+            self.assertEqual(pack['details']['installationState'], 'installed')
+        for rejected in ('plugin id', 'x' * 201, 'tab\tid', 'newline\n', 'caf\u00e9'):
+            self.write(metadata, {'schema_version': 1, 'remote_plugin_id': rejected})
+            self.assertTrue(all(x['details'].get('sourceTrust') != 'allowlisted' for x in self.artifacts(self.scan())), rejected)
 
     def test_codex_managed_local_marketplaces_are_allowlisted_only_at_their_managed_paths(self):
         cases = (('openai-bundled', '.codex/.tmp/bundled-marketplaces/openai-bundled'),
@@ -177,6 +188,11 @@ class MarketplacePolicyTests(unittest.TestCase):
         self.write('.codex/config.toml', elsewhere)
         result = self.scan()
         self.assertTrue(all(x['details'].get('sourceTrust') == 'unapproved' for x in self.artifacts(result)), 'a reserved name at another path is not Codex-managed')
+        # Codex resolves its runtime cache per platform; the managed folders below it are what count.
+        self.write('.codex/config.toml', '[marketplaces.openai-primary-runtime]\nsource_type="local"\nsource="/data/xdg-cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"\n'
+                   '[marketplaces.openai-bundled]\nsource_type="local"\nsource="/opt/codex-home/.tmp/bundled-marketplaces/openai-bundled"\n')
+        result = self.scan()
+        self.assertTrue(all(x['details'].get('sourceTrust') == 'allowlisted' for x in self.artifacts(result)), [x['details'] for x in self.artifacts(result)])
 
     def test_codex_config_only_pack_entries_take_their_marketplaces_provenance(self):
         managed = self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled'
@@ -187,6 +203,7 @@ class MarketplacePolicyTests(unittest.TestCase):
         entries = {x['name']: x['details'] for x in result['observations'] if x['kind'] == 'plugin'}
         self.assertEqual({name: d.get('sourceTrust') for name, d in entries.items()},
                          {'app-tools@openai-bundled': 'allowlisted', 'helper@team': 'unapproved', 'loose@nowhere': 'unresolved'})
+        self.assertEqual(entries['app-tools@openai-bundled']['sourceEvidence'], ['marketplace-config'])
         self.assertTrue(all(d['installationState'] == 'config_only' for d in entries.values()))
         self.assertEqual({x['name']: x['enabled'] for x in result['observations'] if x['kind'] == 'plugin'}['loose@nowhere'], 'disabled')
         rules = {x['ruleId']: x['severity'] for x in result['findings']}
@@ -202,7 +219,9 @@ class MarketplacePolicyTests(unittest.TestCase):
         with patch('subprocess.Popen', side_effect=AssertionError('no process')):
             result = collect(self.home, [self.home / 'code/app'], scope_type='copied-home')
         trust = {(x['name'], x['details'].get('installationState')): x['details'].get('sourceTrust') for x in result['observations'] if x['kind'] == 'plugin'}
-        self.assertEqual(trust, {('example', 'cached'): 'unresolved', ('other@openai-bundled', 'config_only'): 'unresolved', ('tool@openai-bundled', 'config_only'): 'unresolved'})
+        # Cached content under a reserved name needs Codex's own marketplace entry; a bare switch only names Codex's catalog.
+        self.assertEqual(trust, {('example', 'cached'): 'unresolved', ('other@openai-bundled', 'config_only'): 'allowlisted', ('tool@openai-bundled', 'config_only'): 'allowlisted'})
+        self.assertTrue(all(x['details'].get('sourceEvidence') == ['reserved-marketplace-name'] for x in result['observations'] if x['kind'] == 'plugin' and '@' in x['name']))
         account = self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled'
         self.write('.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource=\'{account}\'\n[plugins."other@openai-bundled"]\nenabled=true\n')
         with patch('subprocess.Popen', side_effect=AssertionError('no process')):
@@ -248,17 +267,76 @@ class MarketplacePolicyTests(unittest.TestCase):
                                 ('claude-code', 'example@claude-plugins-official', 'disabled', 'config_only', 'project'),
                                 ('codex', 'absent@openai-curated-remote', 'enabled', 'config_only', 'base'),
                                 ('codex', 'example', 'disabled', 'installed', 'package')])
+        # A switch naming Codex's reserved remote marketplace names Codex's own catalog, pack or no pack.
+        [absent] = [x for x in result['observations'] if x['name'] == 'absent@openai-curated-remote']
+        self.assertEqual((absent['details'].get('sourceTrust'), absent['details'].get('sourceEvidence')), ('allowlisted', ['reserved-marketplace-name']))
         # The switched-off Codex pack and the project's own switch are the disabled declarations; the account switch folded into its pack.
         [disabled] = [x for x in result['findings'] if x['ruleId'] == 'plugins-declared-disabled']
         names = {x['id']: x['name'] for x in result['observations']}
         self.assertEqual(sorted(names[i] for i in disabled['observationIds']), ['example', 'example@claude-plugins-official'])
+
+    def test_a_switch_for_another_pack_name_is_not_folded_by_a_mismatched_manifest(self):
+        base = self.plugin('claude', 'm', 'legit')
+        self.write(base + '/.claude-plugin/plugin.json', {'name': 'other', 'version': '1.0.0'})
+        self.write('.claude/plugins/known_marketplaces.json', {'m': {'source': {'source': 'github', 'repo': 'anthropics/claude-plugins-official'}}})
+        self.write('.claude/plugins/installed_plugins.json', {'version': 2, 'plugins': {'legit@m': [{'scope': 'user', 'installPath': str(self.home / base), 'version': '1.0.0'}]}})
+        self.write('.claude/settings.json', {'enabledPlugins': {'legit@m': True, 'other@m': False}})
+        result = self.scan()
+        rows = sorted((x['name'], x['enabled'], x['details']['installationState'], x['details'].get('sourceTrust')) for x in result['observations'] if x['kind'] == 'plugin')
+        self.assertEqual(rows, [('other', 'enabled', 'installed', 'unresolved'), ('other@m', 'disabled', 'config_only', 'allowlisted')])
+
+    def test_an_enabled_switch_keeps_a_cached_packs_connectors_in_force(self):
+        base = self.plugin('claude', 'team')
+        self.write(base + '/.mcp.json', {'mcpServers': {'remote': {'url': 'https://mcp.example.invalid/mcp'}}})
+        self.write('.claude/plugins/known_marketplaces.json', {'team': {'source': {'source': 'github', 'repo': 'anthropics/claude-plugins-official'}}})
+        self.write('.claude/settings.json', {'enabledPlugins': {'example@team': True}})
+        result = self.scan()
+        [pack] = [x for x in result['observations'] if x['kind'] == 'plugin']
+        self.assertEqual((pack['enabled'], pack['details']['installationState']), ('enabled', 'cached'))
+        # No installation record was read, but the switch is on: the pack's connector applies as written.
+        [remote] = [x for x in result['findings'] if x['ruleId'] == 'mcp-network-direct']
+        self.assertEqual((remote['severity'], remote['applies']), ('high', 1))
+        # The missing record itself stays a hygiene note.
+        self.assertEqual({x['ruleId']: x['severity'] for x in result['findings']}.get('plugins-cached-only'), 'info')
+
+    def test_unreadable_marketplace_shapes_are_unresolved_not_unapproved(self):
+        self.plugin('codex', 'openai-bundled')
+        managed = self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled'
+        self.write('.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource=\'{managed}\'\nname="OpenAI bundled"\n')
+        result = self.scan()
+        [pack] = [x for x in self.artifacts(result) if x['kind'] == 'plugin']
+        self.assertEqual((pack['details']['sourceTrust'], pack['details']['sourceEvidence']), ('unresolved', ['unsupported-source-shape']))
+        self.write('.codex/config.toml', '[marketplaces.openai-bundled]\nsource_type="git"\nsource="https://github.com/openai/plugins"\nsparse_paths=["nested"]\n')
+        result = self.scan()
+        [pack] = [x for x in self.artifacts(result) if x['kind'] == 'plugin']
+        self.assertEqual(pack['details']['sourceTrust'], 'unapproved')
+
+    def test_a_system_folder_outside_the_codex_home_is_not_bundled(self):
+        self.write('.agents/skills/.system/evil/SKILL.md', '---\nname: evil\n---\nPlanted fixture')
+        self.write('.agents/skills/.system/.codex-system-skills.marker', 'deadbeef\n')
+        result = self.scan()
+        copies = [x for x in result['observations'] if x['kind'] == 'skill' and x['name'] == 'evil']
+        self.assertTrue(copies)
+        self.assertFalse(any(x['details'].get('sourceTrust') for x in copies), [x['details'] for x in copies])
+
+    def test_a_cached_packs_account_switch_folds_into_the_pack_too(self):
+        self.plugin('claude', 'claude-plugins-official')
+        self.write('.claude/plugins/known_marketplaces.json', {'claude-plugins-official': {'source': {'source': 'github', 'repo': 'anthropics/claude-plugins-official'}}})
+        self.write('.claude/settings.json', {'enabledPlugins': {'example@claude-plugins-official': False}})
+        result = self.scan()
+        [pack] = [x for x in result['observations'] if x['kind'] == 'plugin']
+        self.assertEqual((pack['name'], pack['enabled'], pack['details']['installationState']), ('example', 'disabled', 'cached'))
+        [disabled] = [x for x in result['findings'] if x['ruleId'] == 'plugins-declared-disabled']
+        self.assertEqual(disabled['observationIds'], [pack['id']])
 
     def test_system_skills_read_through_another_client_keep_their_bundled_provenance(self):
         self.write('.codex/skills/.system/skill-creator/SKILL.md', '---\nname: skill-creator\n---\nBundled fixture')
         self.write('.codex/skills/.system/.codex-system-skills.marker', 'c0ffee1234abcdef\n')
         result = self.scan()
         copies = [x for x in result['observations'] if x['kind'] == 'skill' and x['name'] == 'skill-creator']
-        self.assertTrue(copies)
+        # A machine scan also lists the copy Cursor reads from the same folder; the rule keys on the
+        # folder being the account's Codex home, not on the reading client.
+        self.assertIn('codex', {x['client'] for x in copies})
         self.assertTrue(all(x['details'].get('sourcePolicyId') == 'openai-codex-system-skills' for x in copies),
                         {x['client']: x['details'].get('sourceTrust') for x in copies})
 
