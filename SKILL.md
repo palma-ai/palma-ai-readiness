@@ -94,6 +94,7 @@ error; never promise that protected accounts were inspected.
 Each run creates:
 
 - `report.html` — a self-contained Palma report with priorities, charts, and evidence.
+- `share.html` — the same report with locations reduced to standard AI configuration paths.
 - `snapshot.json` — sanitized observations, source results, and deterministic findings.
 - `summary.json` — counts and scope.
 

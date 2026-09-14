@@ -32,7 +32,12 @@ class CliTests(unittest.TestCase):
             result = self.invoke("run", "--home", home, "--output-dir", output, "--no-open")
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual({p.name for p in output.iterdir()},
-                             {"snapshot.json", "summary.json", "report.html"})
+                             {"snapshot.json", "summary.json", "report.html", "share.html"})
+            self.assertNotIn(td, (output / "share.html").read_text())
+            rebuilt_share = Path(td) / "share-rebuilt.html"
+            result = self.invoke("report", "--run-dir", output, "--share", "--output", rebuilt_share)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((output / "share.html").read_bytes(), rebuilt_share.read_bytes())
             snapshot = json.loads((output / "snapshot.json").read_text())
             self.assertEqual(snapshot["scope"]["type"], "copied-home")
             self.assertEqual(snapshot["schemaVersion"], "2.0")

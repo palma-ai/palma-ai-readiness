@@ -32,6 +32,7 @@ def parser():
         child.add_argument("--output", type=Path, required=name == "evaluate", help="New output file (existing files are never replaced)")
         if name == "report":
             render_options(child)
+            child.add_argument("--share", action="store_true", help="Render the shareable summary: locations without project or folder names")
     return root
 
 
@@ -97,12 +98,15 @@ def main(argv=None):
                 from .report import render_report
                 summary = summarize(snapshot)
                 html = render_report(snapshot, summary, booking_url=link)
+                shareable = render_report(snapshot, summary, booking_url=link, share=True)
                 output = output or Path.cwd() / ("readiness-run-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"))
                 output.mkdir(mode=0o700)
                 write_new(output / "snapshot.json", json_text(snapshot))
                 write_new(output / "summary.json", json_text(summary))
                 write_new(output / "report.html", html)
+                write_new(output / "share.html", shareable)
                 print(f"Local report: {(output / 'report.html').absolute()}")
+                print(f"Shareable summary (no project or folder names): {(output / 'share.html').absolute()}")
                 print(f"Coverage: {snapshot['status']}. {len(snapshot['findings'])} findings to review. Nothing was sent by the scanner.")
                 open_local(output / "report.html", args.open_report)
         else:
@@ -124,8 +128,8 @@ def main(argv=None):
                 print(f"Local evaluated evidence: {args.output.absolute()}")
             else:
                 from .report import render_report
-                output = args.output or (args.run_dir or args.report.parent) / "report-rebuilt.html"
-                write_new(output, render_report(snapshot, summarize(snapshot), booking_url=link))
+                output = args.output or (args.run_dir or args.report.parent) / ("share-rebuilt.html" if args.share else "report-rebuilt.html")
+                write_new(output, render_report(snapshot, summarize(snapshot), booking_url=link, share=args.share))
                 print(f"Local report: {output.absolute()}")
                 open_local(output, args.open_report)
         return 0

@@ -71,17 +71,17 @@ class PolicyTests(unittest.TestCase):
         [static] = self.rule(snapshot, "mcp-static-secret-auth")
         self.assertEqual((inline["severity"], self.names(snapshot, inline)), ("critical", {"context7"}))
         self.assertEqual((static["severity"], self.names(snapshot, static)), ("high", {"tracker"}))
-        self.assertIn("context7 keeps a potential credential in plain text in ~/.cursor/mcp.json", inline["summary"])
+        self.assertIn("\u201ccontext7\u201d keeps a potential credential in plain text in ~/.cursor/mcp.json", inline["summary"])
         self.assertIn("use it as you", inline["impact"])
         self.assertNotIn("Control who can invoke tools", inline["impact"])
-        self.assertIn("tracker signs in with a fixed secret", static["summary"])
+        self.assertIn("\u201ctracker\u201d signs in with a fixed secret", static["summary"])
         self.assertNotIn("PRIVATE_EXAMPLE_TOKEN_123456", json.dumps(snapshot))
 
     def test_computer_use_summary_names_the_connector_and_what_it_controls(self):
         self.put("Library/Application Support/Claude/claude_desktop_config.json", {"mcpServers": {"computer-use": {"command": "computer-use-server"}}})
         snapshot = self.scan()
         [finding] = self.rule(snapshot, "mcp-computer-use")
-        self.assertIn("computer-use can control the screen, keyboard and mouse as you", finding["summary"])
+        self.assertIn("\u201ccomputer-use\u201d can control the screen, keyboard and mouse as you", finding["summary"])
         self.assertIn("Library/Application Support/Claude/claude_desktop_config.json", finding["summary"])
         self.assertIn("keyboard and mouse", finding["impact"])
 

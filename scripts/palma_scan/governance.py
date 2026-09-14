@@ -227,8 +227,9 @@ def _evidence(item):
 
 
 def _names(items, limit=3):
+    # Quoted, so a name such as "browser" never reads as part of the sentence.
     names = sorted({item["name"] for item in items}, key=str.casefold)
-    listed = names[:limit] + ([f"{len(names) - limit} more"] if len(names) > limit else [])
+    listed = [f"\u201c{name}\u201d" for name in names[:limit]] + ([f"{len(names) - limit} more"] if len(names) > limit else [])
     return listed[0] if len(listed) == 1 else ", ".join(listed[:-1]) + " and " + listed[-1]
 
 

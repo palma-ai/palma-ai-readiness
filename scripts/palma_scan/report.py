@@ -219,15 +219,213 @@ def _brand_sprite(observations: list[dict]) -> str:
     return f'<svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false"><defs>{symbols}</defs></svg>' if symbols else ""
 
 
+_KIND_LABELS = {"client": "AI client", "mcp": "Connector", "skill": "Skill", "plugin": "Plugin",
+                "agent": "Agent", "setting": "Setting", "hook": "Hook"}
+_KIND_PLURALS = {"mcp": ("connector", "connectors"), "skill": ("skill", "skills"), "plugin": ("plugin", "plugins"),
+                 "agent": ("agent", "agents"), "hook": ("hook", "hooks"), "setting": ("setting", "settings")}
+_KIND_ORDER = ("mcp", "skill", "plugin", "agent", "hook", "setting")
+_EVIDENCE_VISIBLE = 20
+_EVIDENCE_LIMIT = 200
+_LOCATIONS_LIMIT = 100
+# Path segments that begin a standard AI configuration location. The shareable report keeps
+# locations from the first such segment on and drops the folders above it.
+_SHARE_MARKERS = frozenset({".claude", ".claude.json", ".mcp.json", ".cursor", ".vscode", ".gemini", ".codex",
+                            ".agents", ".github", ".opencode", "opencode.json", "opencode.jsonc", ".continue", ".kiro",
+                            ".windsurf", ".roo", ".cline", ".codeium", ".aider.conf.yml", ".copilot", ".openclaw",
+                            ".lmstudio", ".local", ".config", ".mozilla", "Library", "AppData", "Applications"})
+_FIXED_LOCATIONS = ("system:", "machine:", "installation:", "managed:", "managed-cache:", "session:", "user:",
+                    "override:", "collection:", "/Library/", "/Applications/", "/etc/", "/opt/", "/usr/",
+                    "C:/Program Files", "C:/ProgramData")
+
+
+def _share_location(value: object) -> str:
+    """A location for the shareable report: standard AI paths, never project or folder names."""
+    text = _text(value).replace("\\", "/")
+    if text.startswith(_FIXED_LOCATIONS):
+        return text
+    parts = text.split("/")
+    markers = [index for index, part in enumerate(parts) if part in _SHARE_MARKERS]
+    if parts[0] == "~" and markers and markers[0] == 1:
+        return text
+    if markers:
+        return "project/" + "/".join(parts[markers[-1]:])
+    return "location withheld"
+
+
+def _client_anchor(value: object) -> str:
+    return "inventory-" + hashlib.sha256(_text(value).casefold().encode("utf-8")).hexdigest()[:12]
+
+
+def _plural(count: int, singular: str, plural: str) -> str:
+    return f"{count:,} {singular if count == 1 else plural}"
+
+
+def _fact(label: str, tone: str = "") -> str:
+    return f'<span class="fact{" fact-" + tone if tone else ""}">{_e(label)}</span>'
+
+
+def _value_text(value: object) -> str:
+    """A typed setting value as plain text; summaries become short phrases, never JSON."""
+    if isinstance(value, dict):
+        phrases = []
+        for key, item in sorted(value.items()):
+            if item is True:
+                phrases.append(_label(key).lower())
+            elif isinstance(item, (int, float, str)) and not isinstance(item, bool):
+                phrases.append(f"{_label(key).lower()} {item}")
+        return ", ".join(phrases) or "summary recorded"
+    if isinstance(value, list):
+        return _plural(len(value), "entry", "entries")
+    return _text(value)
+
+
+def _setting_fact(key: object, value: object) -> str:
+    return f'<code class="fact fact-setting">{_e(key)} = {_e(_value_text(value))}</code>'
+
+
+def _count(value: object) -> int:
+    return value if type(value) is int and value > 0 else 0
+
+
+def _facts(item: dict) -> list[str]:
+    """Typed facts worth reading at a glance; the complete record stays in snapshot.json."""
+    details = item.get("details") if isinstance(item.get("details"), dict) else {}
+    kind, facts = item.get("kind"), []
+    add = lambda label, tone="": facts.append(_fact(label, tone))
+    if kind == "client":
+        versions = [value for value in details.get("versions", []) if isinstance(value, str)] if isinstance(details.get("versions"), list) else []
+        version = details.get("version")
+        if versions:
+            add("Versions " + ", ".join(versions))
+        elif isinstance(version, str) and version and version != "not-inspected":
+            add("Version " + version)
+        if details.get("installationState") == "installed" or details.get("activation") == "installed":
+            add("Installed")
+        if details.get("processObserved") is True or details.get("activation") == "running":
+            add("Running")
+        if _count(details.get("projectCount")):
+            add("Used in " + _plural(details["projectCount"], "project", "projects"))
+        modes = details.get("authModes") if isinstance(details.get("authModes"), list) else []
+        for mode in modes:
+            if isinstance(mode, str) and mode != "unknown":
+                add({"api_key": "Signs in with an API key", "vendor_login": "Vendor account sign-in",
+                     "cloud_provider": "Cloud provider sign-in", "enterprise_identity": "Enterprise identity"}.get(mode, _label(mode)))
+    elif kind == "mcp":
+        if details.get("governedBy") == "palma-gateway":
+            add("Through Palma gateway", "good")
+        if details.get("endpointScope") == "loopback":
+            add("Loopback endpoint")
+        elif details.get("execution") == "local" or details.get("transport") in {"stdio", "sdk"}:
+            add("Runs locally")
+        elif details.get("execution") == "remote":
+            add("Remote service")
+        else:
+            add("Transport not recognized")
+        if details.get("cleartextTransport") is True:
+            add("Unencrypted connection", "risk")
+        capability = details.get("capability") or (details.get("toolFamily") if details.get("toolFamily") in {"computer", "browser"} else None)
+        approval = details.get("autoApproval")
+        if capability in {"computer", "browser"}:
+            add("Controls screen, keyboard and mouse" if capability == "computer" else "Controls a web browser", "risk")
+            add("Acts as you" if details.get("accountAlias", "~") == "~" else "Acts system-wide")
+            add({"all": "No approval before tool use", "none": "Asks before tool use"}.get(approval, "Approval setting not recorded"), "risk" if approval == "all" else "")
+        elif approval == "all":
+            add("No approval before tool use", "risk")
+        if details.get("inlineCredentialPresent") is True or _count(details.get("literalCredentialCount")):
+            add("Credential stored in the file", "risk")
+        auth = {"bearer_header": "Fixed secret", "static_header": "Fixed secret", "oauth_declared": "OAuth sign-in",
+                "environment_reference": "Secret from environment"}.get(details.get("auth"))
+        if auth:
+            add(auth)
+        if details.get("unversionedPackage") is True:
+            add("Unpinned package version")
+        if details.get("configurationIssue"):
+            add("Unsupported configuration", "risk")
+    elif kind == "skill":
+        if details.get("provenance") == "version-controlled":
+            add("In version control")
+        elif details.get("context") == "package" or details.get("parentId"):
+            add("From a plugin")
+        elif details.get("origin") == "project" or details.get("context") == "project":
+            add("Project skill")
+        elif details.get("origin") == "user":
+            add("Your skills folder")
+        if _count(details.get("filesHashed")):
+            add(_plural(details["filesHashed"], "file", "files"))
+        if "digest" in details and not details.get("digest"):
+            add("Contents not fully read")
+    elif kind == "agent":
+        if _count(details.get("toolCount")):
+            add(_plural(details["toolCount"], "tool", "tools"))
+        if details.get("delegation") == "remote":
+            add("Delegates to a remote agent", "risk")
+    elif kind == "plugin":
+        if isinstance(details.get("version"), str) and details["version"]:
+            add("Version " + details["version"])
+        if details.get("installationState") == "cached":
+            add("Cached, not installed")
+        if details.get("origin") == "local":
+            add("Installed outside a marketplace", "risk")
+        if details.get("broadHostAccess") is True:
+            add("Access to all websites", "risk")
+    elif kind == "hook":
+        events = [str(event) for event in details.get("events", []) if isinstance(event, str)] if isinstance(details.get("events"), list) else []
+        if events:
+            add("Runs on " + ", ".join(events[:4]) + (f" and {len(events) - 4} more" if len(events) > 4 else ""))
+        counts = details.get("typeCounts") if isinstance(details.get("typeCounts"), dict) else {}
+        for handler, (singular, plural) in (("command", ("command handler", "command handlers")), ("http", ("web request handler", "web request handlers")),
+                                            ("prompt", ("prompt handler", "prompt handlers")), ("agent", ("agent handler", "agent handlers"))):
+            if _count(counts.get(handler)):
+                add(_plural(counts[handler], singular, plural))
+    elif kind == "setting":
+        key = details.get("key") or details.get("nativeKey")
+        if isinstance(key, str) and key and "value" in details:
+            facts.append(_setting_fact(key, details["value"]))
+    return facts
+
+
+def _state_chip(item: dict) -> str:
+    if item.get("kind") == "client":
+        return ""
+    state = _enum(item.get("enabled"), ("enabled", "disabled", "unknown"), "unknown")
+    details = item.get("details") if isinstance(item.get("details"), dict) else {}
+    label = _observed_state(details, state)
+    return f'<span class="state state-{state}">{_e(label)}</span>' if label else ""
+
+
+def _where(item: dict, share: bool, *, list_places: bool = True) -> str:
+    """The location, and every other place the same declaration appears.
+
+    The inventory lists the places; evidence rows only count them, so a declaration
+    copied into many folders is listed once per report.
+    """
+    details = item.get("details") if isinstance(item.get("details"), dict) else {}
+    location = item.get("location", "Location not recorded")
+    html = f'<code class="inventory-path">{_e(_share_location(location) if share else location)}</code>'
+    others = [entry for entry in details.get("locations", []) if isinstance(entry, str)] if isinstance(details.get("locations"), list) else []
+    total = details.get("locationCount") if _count(details.get("locationCount")) else len(others)
+    copies = _count(details.get("copyCount"))
+    if total > 1 and (share or not list_places):
+        html += f'<span class="location-count">Declared in {total:,} places</span>'
+    elif total > 1:
+        rows = "".join(f"<li><code>{_e(entry)}</code></li>" for entry in others[:_LOCATIONS_LIMIT])
+        if total > min(len(others), _LOCATIONS_LIMIT):
+            rows += f'<li class="muted">{total - min(len(others), _LOCATIONS_LIMIT):,} more in snapshot.json</li>'
+        html += f'<details class="locations"><summary>Declared in {total:,} places{_icon("chevron", "disclosure-icon")}</summary><ul>{rows}</ul></details>'
+    elif copies > 1:
+        html += f'<span class="location-count">Declared {copies:,} times in this file</span>'
+    return html
+
+
 def _client_overview(observations: list[dict]) -> str:
     clients = {}
     for item in observations:
         if item.get("kind") == "client":
             name, icon = _client_details(item.get("client", item.get("name", "Unknown client")))
-            clients.setdefault(name, icon)
+            clients.setdefault(name, (icon, item.get("client", item.get("name", "Unknown client"))))
     if not clients:
         return ""
-    items = "".join(f'<li><a href="#inventory-client">{_brand_icon(icon)}<span>{_e(name)}</span></a></li>' for name, icon in sorted(clients.items(), key=lambda pair: pair[0].casefold()))
+    items = "".join(f'<li><a href="#{_client_anchor(key)}">{_brand_icon(icon)}<span>{_e(name)}</span></a></li>' for name, (icon, key) in sorted(clients.items(), key=lambda pair: pair[0].casefold()))
     return f'<div class="client-overview" aria-label="AI clients observed in this snapshot"><span>Clients observed</span><ul>{items}</ul></div>'
 
 
@@ -336,7 +534,7 @@ def _access_overview(observations: list[dict]) -> str:
     mcps = [item for item in observations if item.get("kind") == "mcp"]
     if not mcps:
         return ""
-    reaches = (("local", "Local process"), ("loopback", "Loopback HTTP endpoint"),
+    reaches = (("local", "Local process"), ("loopback", "Loopback HTTP endpoint"), ("gateway", "Through Palma gateway"),
                ("remote", "Remote endpoint"), ("unknown", "Reach unknown"))
     counts = Counter()
     disabled = 0
@@ -350,6 +548,8 @@ def _access_overview(observations: list[dict]) -> str:
             reach = "local"
         elif details.get("endpointScope") == "loopback":
             reach = "loopback"
+        elif details.get("governedBy") == "palma-gateway":
+            reach = "gateway"
         elif details.get("execution") == "remote":
             reach = "remote"
         else:
@@ -361,7 +561,7 @@ def _access_overview(observations: list[dict]) -> str:
         width = round(220 * counts[reach] / maximum, 2)
         rows.append(f'<div class="access-chart-row" data-reach="{reach}"><span>{label}</span><svg viewBox="0 0 220 6" class="access-bar" aria-hidden="true"><rect width="220" height="6" rx="3" class="bar-track"/><rect width="{width}" height="6" rx="3" class="reach-{reach}"/></svg><strong>{counts[reach]}</strong></div>')
     disabled_note = f'<p class="access-state-note">{disabled} {"disabled entry is" if disabled == 1 else "disabled entries are"} excluded from these bars.</p>' if disabled else ""
-    return f'<section class="access-overview" aria-labelledby="access-title"><div><p class="eyebrow">Access footprint</p><div class="access-heading"><h2 id="access-title">Where MCP access can reach</h2><a href="#inventory-mcp">Inspect configurations{_icon("arrow")}</a></div><div class="access-chart" aria-label="MCP configurations by access reach, excluding disabled entries">{"".join(rows)}</div></div><div class="access-note"><span class="access-note-icon">{_icon("connector")}</span><h3>Configured access, in context</h3><p>These counts describe configuration, not running processes or live connections. Browser and computer-control capabilities appear in findings when the scan identifies a relevant pattern.</p>{disabled_note}</div></section>'
+    return f'<section class="access-overview" aria-labelledby="access-title"><div><p class="eyebrow">Access footprint</p><div class="access-heading"><h2 id="access-title">Where MCP access can reach</h2><a href="#inventory">Inspect configurations{_icon("arrow")}</a></div><div class="access-chart" aria-label="MCP configurations by access reach, excluding disabled entries">{"".join(rows)}</div></div><div class="access-note"><span class="access-note-icon">{_icon("connector")}</span><h3>Configured access, in context</h3><p>These counts describe configuration, not running processes or live connections. Browser and computer-control capabilities appear in findings when the scan identifies a relevant pattern.</p>{disabled_note}</div></section>'
 
 
 def _team_teaser(booking_link: str) -> str:
@@ -371,26 +571,59 @@ def _team_teaser(booking_link: str) -> str:
     return f'''<aside class="team-teaser" aria-labelledby="team-title"><div class="team-main"><div class="team-copy"><p class="eyebrow">The next perspective</p><h2 id="team-title">See the bigger picture<br>across your team.</h2><p>Bring individual scans into an aggregated Palma view to understand shared AI tools, repeated exposure, and governance priorities across people and devices.</p></div>{diagram}</div><div class="team-benefits"><div>{_icon("shared")}<h3>Find the common ground</h3><p>See which AI clients, skills, and connectors appear across your team.</p></div><div>{_icon("connector")}<h3>Spot recurring exposure</h3><p>Connect permission and configuration patterns that repeat across endpoints.</p></div><div>{_icon("arrow")}<h3>Decide where to start</h3><p>Compare access patterns and focus your next governance steps together.</p></div></div><div class="team-conversation">{invitation}<p class="offering-note">A separate Palma offering. This report does not create an aggregated view or send any results.</p></div></aside>'''
 
 
-def _evidence(finding: dict, source_anchors: dict[str, str], observations: dict[str, dict]) -> str:
+def _entry_facts(entry: dict) -> list[str]:
+    """Facts from a finding's evidence line when no observation describes it."""
+    value = entry.get("value")
+    facts = []
+    if isinstance(value, dict):
+        if _count(value.get("sizeBytes")):
+            facts.append(_fact(f"{value['sizeBytes']:,} bytes", "risk"))
+        for key, label in (("limitBytes", "read limit"), ("reviewThresholdBytes", "review threshold")):
+            if _count(value.get(key)):
+                facts.append(_fact(f"{label} {value[key]:,} bytes"))
+        for key in ("issueKind", "reason"):
+            if isinstance(value.get(key), str) and value[key]:
+                facts.append(_fact(_label(value[key])))
+        if "value" in value:
+            facts.insert(0, _setting_fact(entry.get("key", "setting"), value["value"]))
+    elif value is not None:
+        facts.append(_setting_fact(entry.get("key", "setting"), value))
+    return facts
+
+
+def _evidence_row(observation: dict | None, entry: dict | None, share: bool) -> str:
+    if observation:
+        facts = _facts(observation)
+        if entry and observation.get("kind") == "setting" and not any("fact-setting" in fact for fact in facts):
+            facts = _entry_facts(entry)[:1] + facts
+        identity = _observation_identity(observation)
+        client = _client_identity(observation["client"]) if observation.get("client") else ""
+        return f'<li class="evidence-row"><div class="evidence-identity">{identity}{client}</div><div class="fact-list">{_state_chip(observation)}{"".join(facts)}</div><div class="evidence-where">{_where(observation, share, list_places=False)}</div></li>'
+    location = entry.get("location", "Location not recorded")
+    return f'<li class="evidence-row"><div class="evidence-identity"><strong>{_e(_label(entry.get("key", "Evidence")))}</strong></div><div class="fact-list">{"".join(_entry_facts(entry))}</div><div class="evidence-where"><code class="inventory-path">{_e(_share_location(location) if share else location)}</code></div></li>'
+
+
+def _evidence(finding: dict, observations: dict[str, dict], share: bool) -> str:
     evidence = _records(finding.get("evidence"))
-    rows = []
-    for item in evidence:
-        source_id = _text(item.get("sourceId", ""))
-        location = _e(item.get("location", "Location not recorded"))
-        if source_id in source_anchors:
-            location = f'<a href="#{source_anchors[source_id]}" class="source-link">{location}</a>'
-        rows.append(f'<tr role="row"><td role="cell"><code>{location}</code></td><td role="cell"><code>{_e(item.get("key", "Observation"))}</code></td><td role="cell"><pre>{_e(item.get("value"))}</pre></td></tr>')
-    evidence_table = ('<div class="table-scroll"><table class="evidence-table" role="table"><caption class="sr-only">Sanitized evidence for this finding</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Source</th><th scope="col" role="columnheader">Setting / evidence</th><th scope="col" role="columnheader">Observed value</th></tr></thead><tbody role="rowgroup">' + "".join(rows) + '</tbody></table></div>') if rows else '<p class="muted">No evidence lines were recorded for this finding.</p>'
-    affected = []
-    for observation_id in finding.get("observationIds", []) if isinstance(finding.get("observationIds"), list) else []:
-        observation = observations.get(_text(observation_id))
-        if observation:
-            state = _enum(observation.get("enabled"), ("enabled", "disabled", "unknown"), "unknown")
-            details = observation.get("details") if isinstance(observation.get("details"), dict) else {}
-            state_label = _observed_state(details, state)
-            state_html = f'<span>{_e(state_label)}</span>' if state_label else ""
-            affected.append(f'<li><div>{_observation_identity(observation)}</div><span class="affected-context">{_client_identity(observation.get("client", "Client not recorded"))}{state_html}</span></li>')
-    affected_html = '<div class="affected"><h4>Related configurations</h4><ul>' + "".join(affected) + '</ul></div>' if affected else ""
+    identities = [_text(value) for value in finding.get("observationIds", [])] if isinstance(finding.get("observationIds"), list) else []
+    rows, used = [], set()
+    for index, identity in enumerate(identities):
+        observation = observations.get(identity)
+        if observation is None:
+            continue
+        entry = evidence[index] if index < len(evidence) and evidence[index].get("sourceId") == observation.get("sourceId") else None
+        if entry is None:
+            entry = next((item for position, item in enumerate(evidence) if position not in used and item.get("sourceId") == observation.get("sourceId")), None)
+        if entry is not None:
+            used.add(next(position for position, item in enumerate(evidence) if item is entry))
+        rows.append(_evidence_row(observation, entry, share))
+    rows.extend(_evidence_row(None, entry, share) for position, entry in enumerate(evidence) if position not in used)
+    shown = "".join(rows[:_EVIDENCE_VISIBLE])
+    rest = rows[_EVIDENCE_VISIBLE:_EVIDENCE_LIMIT]
+    more = f'<details class="evidence-more"><summary>Show all {len(rows):,}{_icon("chevron", "disclosure-icon")}</summary><ul class="evidence-list">{"".join(rest)}</ul></details>' if rest else ""
+    if len(rows) > _EVIDENCE_LIMIT:
+        more += f'<p class="muted evidence-omitted">{len(rows) - _EVIDENCE_LIMIT:,} more are listed in snapshot.json.</p>'
+    evidence_html = f'<ul class="evidence-list">{shown}</ul>{more}' if rows else '<p class="muted">No evidence lines were recorded for this finding.</p>'
     links = []
     for value in finding.get("references", []) if isinstance(finding.get("references"), list) else []:
         url = _safe_https(value)
@@ -407,16 +640,19 @@ def _evidence(finding: dict, source_anchors: dict[str, str], observations: dict[
         extent += f'<span>{distinct} distinct</span>'
     rating_reason = finding.get("ratingReason")
     rating = f'<div class="impact rating-reason"><h4>Priority rationale</h4><p>{_e(rating_reason)}</p></div>' if isinstance(rating_reason, str) and rating_reason else ""
-    return f'<details class="finding-evidence"><summary><span>Why it matters &amp; evidence</span><span class="evidence-count">{len(evidence)} {"line" if len(evidence) == 1 else "lines"}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="evidence-content"><div class="impact"><h4>Potential impact</h4><p>{_e(finding.get("impact", "Assess this configuration against your intended access boundaries."))}</p></div>{rating}<div class="evidence-meta">{extent}<span>{confidence.capitalize()} confidence in the match</span><span>{evidence_type.capitalize()} evidence</span><span>Rule <code>{_e(finding.get("ruleId", "Not recorded"))}</code></span></div>{evidence_table}{affected_html}{references}</div></details>'
+    count = _plural(len(rows), "item", "items")
+    return f'<details class="finding-evidence"><summary><span>Evidence</span><span class="evidence-count">{count}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="evidence-content">{evidence_html}{rating}<div class="evidence-meta">{extent}<span>{confidence.capitalize()} confidence in the match</span><span>{evidence_type.capitalize()} evidence</span><span>Rule <code>{_e(finding.get("ruleId", "Not recorded"))}</code></span></div>{references}</div></details>'
 
 
-def _findings_section(findings: list[tuple[str, dict]], counts: Counter, source_anchors: dict[str, str], observations: dict[str, dict]) -> str:
+def _findings_section(findings: list[tuple[str, dict]], counts: Counter, observations: dict[str, dict], share: bool) -> str:
     cards = []
     for anchor, finding in findings:
         severity = _enum(finding.get("severity"), _SEVERITIES, "info")
         client_labels = "".join(_client_identity(client) for client in _finding_clients(finding, observations))
         clients_html = f'<span class="finding-clients">{client_labels}</span>' if client_labels else ""
-        cards.append(f'<article class="finding" id="{anchor}" data-severity="{severity}" aria-labelledby="{anchor}-title"><div class="finding-topline">{_badge(severity)}<span>{_e(_label(finding.get("category", "Configuration")))}</span>{clients_html}</div><h3 id="{anchor}-title">{_e(finding.get("title", "Review this observation"))}</h3><p class="finding-summary">{_e(finding.get("summary", "Review the available evidence for this configuration."))}</p><div class="next-step">{_icon("arrow")}<div><h4>Next step</h4><p>{_e(finding.get("recommendation", "Review this configuration and confirm that its access is intentional."))}</p></div></div>{_evidence(finding, source_anchors, observations)}</article>')
+        impact = finding.get("impact")
+        impact_html = f'<div class="finding-impact"><h4>Why it matters</h4><p>{_e(impact)}</p></div>' if isinstance(impact, str) and impact else ""
+        cards.append(f'<article class="finding" id="{anchor}" data-severity="{severity}" aria-labelledby="{anchor}-title"><div class="finding-topline">{_badge(severity)}<span>{_e(_label(finding.get("category", "Configuration")))}</span>{clients_html}</div><h3 id="{anchor}-title">{_e(finding.get("title", "Review this observation"))}</h3><p class="finding-summary">{_e(finding.get("summary", "Review the available evidence for this configuration."))}</p>{impact_html}<div class="next-step">{_icon("arrow")}<div><h4>Next step</h4><p>{_e(finding.get("recommendation", "Review this configuration and confirm that its access is intentional."))}</p></div></div>{_evidence(finding, observations, share)}</article>')
     filters = '<button type="button" class="filter-button" data-filter="all" aria-pressed="true">All <span>' + str(len(findings)) + '</span></button>'
     for severity in _SEVERITIES:
         filters += f'<button type="button" class="filter-button" data-filter="{severity}" aria-pressed="false">{_SEVERITY_NAMES[severity]} <span>{counts[severity]}</span></button>'
@@ -425,39 +661,45 @@ def _findings_section(findings: list[tuple[str, dict]], counts: Counter, source_
     return f'<section class="report-section" id="findings" aria-labelledby="findings-title"><div class="section-heading"><div><p class="eyebrow">01 / Findings</p><h2 id="findings-title">Your findings</h2><p>The configuration, the potential impact, and what you can do next.</p></div><span class="section-count">{len(findings):02d}</span></div>{toolbar}<div id="findings-list">{"".join(cards) if cards else empty}</div><div id="no-results" class="empty-state" hidden><div><h3>No findings match this view</h3><p>Try another priority or a different search term.</p><button class="text-button" type="button" id="clear-filters">Clear filters</button></div></div><p class="section-note">Severity describes potential impact. Confidence describes the evidence match. Neither establishes that a capability was used or that a compromise occurred.</p></section>'
 
 
-def _inventory(observations: list[dict]) -> str:
-    groups = []
-    kind_icons = {"client": "app", "mcp": "connector", "skill": "book", "plugin": "folder",
-                  "agent": "shared", "hook": "arrow", "setting": "lock"}
-    kinds = list(_KINDS)
-    known = {kind for kind, _ in kinds}
-    unknown = [item for item in observations if item.get("kind") not in known]
-    if unknown:
-        kinds.append(("other", "Other observations"))
-    for kind, title in kinds:
-        items = unknown if kind == "other" else [item for item in observations if item.get("kind") == kind]
-        if not items:
-            continue
+def _inventory(observations: list[dict], findings: list[tuple[str, dict]], share: bool) -> str:
+    """Distinct tools and declarations grouped by client, collapsed until needed."""
+    linked = {}
+    for anchor, finding in findings:
+        for identity in finding.get("observationIds", []) if isinstance(finding.get("observationIds"), list) else []:
+            linked.setdefault(_text(identity), []).append((anchor, _enum(finding.get("severity"), _SEVERITIES, "info")))
+    groups_by_client = {}
+    for item in observations:
+        groups_by_client.setdefault(_text(item.get("client") or "unknown"), []).append(item)
+    groups, total = [], 0
+    for client in sorted(groups_by_client, key=lambda value: (_client_details(value)[0].casefold(), value)):
+        items = groups_by_client[client]
+        name, icon = _client_details(client)
+        client_rows = [item for item in items if item.get("kind") == "client"]
+        members = sorted((item for item in items if item.get("kind") != "client"), key=lambda record: (
+            _KIND_ORDER.index(record.get("kind")) if record.get("kind") in _KIND_ORDER else len(_KIND_ORDER),
+            _text(record.get("name", "")).casefold(), _text(record.get("location", "")), _text(record.get("id", ""))))
+        breakdown = " · ".join(_plural(sum(item.get("kind") == kind for item in members), *_KIND_PLURALS[kind]) for kind in _KIND_ORDER if any(item.get("kind") == kind for item in members))
+        # Older or partial snapshots can hold several rows for one client; show their facts once.
+        client_facts = "".join(dict.fromkeys(fact for row in client_rows for fact in _facts(row)))
+        related = {anchor for item in items for anchor, _ in linked.get(_text(item.get("id", "")), [])}
+        findings_note = f'<span class="inventory-findings">{_plural(len(related), "finding", "findings")}</span>' if related else ""
         rows = []
-        for item in sorted(items, key=lambda record: (_text(record.get("name", "")).casefold(), _text(record.get("client", "")).casefold(), _text(record.get("location", "")).casefold(), _text(record.get("id", "")))):
-            state = _enum(item.get("enabled"), ("enabled", "disabled", "unknown"), "unknown")
+        for item in members:
+            matches = linked.get(_text(item.get("id", "")), [])
+            finding_link = ""
+            if matches:
+                worst = min(matches, key=lambda pair: _SEVERITIES.index(pair[1]))
+                finding_link = f'<a class="fact fact-finding fact-{worst[1]}" href="#{worst[0]}">{_plural(len(matches), "finding", "findings")}</a>'
             details = item.get("details") if isinstance(item.get("details"), dict) else {}
-            metadata = "".join(f'<div><dt>{_e(_label(key))}</dt><dd><pre>{_e(value)}</pre></dd></div>' for key, value in sorted(details.items())
-                               if value is not None and value != "unknown" and value != "" and value != [] and value != {})
-            location = _e(item.get("location", "Location not recorded"))
-            source = f'<div><dt>Location</dt><dd><code>{location}</code></dd></div>'
-            metadata_html = f'<details class="inventory-metadata"><summary><code class="inventory-path" title="{location}">{location}</code><span class="inventory-detail-label">Details</span>{_icon("chevron", "disclosure-icon")}</summary><dl class="metadata-list">{source}{metadata}</dl></details>'
-            state_label = _observed_state(details, state)
-            state_html = f'<span class="state state-{state}">{_e(state_label)}</span>' if state_label else ""
-            rows.append(f'<tr class="inventory-row" role="row"><th scope="row" role="rowheader"><span class="inventory-item-name">{_observation_identity(item)}</span>{state_html}</th><td role="cell">{_client_identity(item.get("client", "Not recorded"))}{_observation_context(details)}</td><td role="cell">{metadata_html}</td></tr>')
-        clients = len({_text(item.get("client", "")) for item in items if item.get("client")})
-        category_note = (f'{clients} {"client" if clients == 1 else "clients"}' if kind != "client" and clients
-                         else "Installations and configurations")
-        groups.append(f'<details class="inventory-group" id="inventory-{kind}"><summary><span class="inventory-group-icon">{_icon(kind_icons.get(kind, "info"))}</span><span class="inventory-kind"><strong>{title}</strong><span>{category_note}</span></span><span class="inventory-count" data-total="{len(items)}">{len(items)}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="table-scroll"><table class="inventory-table" role="table"><caption class="sr-only">{title} observed in this snapshot</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Name</th><th scope="col" role="columnheader">Client &amp; context</th><th scope="col" role="columnheader">Location &amp; evidence</th></tr></thead><tbody role="rowgroup">{"".join(rows)}</tbody></table></div></details>')
-    toolbar = f'<div class="inventory-toolbar js-only"><label class="search-field">{_icon("search")}<span class="sr-only">Search inventory by name, client, or location</span><input id="inventory-search" type="search" placeholder="Find a skill, connector, client, or location" autocomplete="off" spellcheck="false"></label><p id="inventory-search-status" role="status" aria-live="polite">{len(observations)} items</p><button class="text-button" type="button" id="clear-inventory-search" hidden>Clear search</button></div>' if observations else ""
+            kind_label = _KIND_LABELS.get(_text(item.get("kind")), "Observation")
+            rows.append(f'<li class="inventory-row"><div class="inventory-item-name">{_observation_identity(item)}<span class="inventory-kind-label">{_e(kind_label)}</span></div><div class="fact-list">{_state_chip(item)}{"".join(_facts(item))}{finding_link}</div><div class="inventory-where">{_observation_context(details)}{_where(item, share)}</div></li>')
+        total += len(rows)
+        body = f'<ul class="inventory-rows">{"".join(rows)}</ul>' if rows else '<p class="inventory-empty">No connectors, skills, plugins, agents, hooks or settings were recorded for this client.</p>'
+        groups.append(f'<details class="inventory-group" id="{_client_anchor(client)}"><summary><span class="inventory-group-icon">{_brand_icon(icon)}</span><span class="inventory-kind"><strong>{_e(name)}</strong><span>{breakdown or "Installation and configuration"}</span></span><span class="fact-list inventory-client-facts">{client_facts}{findings_note}</span><span class="inventory-count" data-total="{len(rows)}">{len(rows)}</span>{_icon("chevron", "disclosure-icon")}</summary>{body}</details>')
+    toolbar = f'<div class="inventory-toolbar js-only"><label class="search-field">{_icon("search")}<span class="sr-only">Search inventory by name, client, or location</span><input id="inventory-search" type="search" placeholder="Find a skill, connector, client, or location" autocomplete="off" spellcheck="false"></label><p id="inventory-search-status" role="status" aria-live="polite">{total} items</p><button class="text-button" type="button" id="clear-inventory-search" hidden>Clear search</button></div>' if observations else ""
     empty = '<div class="empty-state"><p>No inventory observations were recorded.</p></div>'
     no_matches = '<div class="empty-state" id="inventory-no-results" hidden><p>No inventory matches this search. Try a tool name, client, or location.</p></div>'
-    return f'<section class="report-section" id="inventory" aria-labelledby="inventory-title"><div class="section-heading"><div><p class="eyebrow">02 / Inventory</p><h2 id="inventory-title">What’s in your AI environment</h2><p>Find your tools by name, see where they live, and open the evidence when you need it.</p></div><span class="section-count">{len(observations):02d}</span></div>{toolbar}<div class="inventory-list">{"".join(groups) if groups else empty}</div>{no_matches}</section>'
+    return f'<section class="report-section" id="inventory" aria-labelledby="inventory-title"><div class="section-heading"><div><p class="eyebrow">02 / Inventory</p><h2 id="inventory-title">What’s in your AI environment</h2><p>Each tool and declaration appears once, grouped by the client that uses it. Open a client to see what it declares and where.</p></div><span class="section-count">{total:02d}</span></div>{toolbar}<div class="inventory-list">{"".join(groups) if groups else empty}</div>{no_matches}</section>'
 
 
 def _discovery_summary(snapshot: dict) -> str:
@@ -474,30 +716,69 @@ def _discovery_summary(snapshot: dict) -> str:
     return '<dl class="discovery-summary" aria-label="Machine discovery coverage">' + "".join(values) + '</dl>'
 
 
-def _coverage(sources: list[dict], source_anchors: dict[str, str], snapshot: dict) -> str:
-    counts = Counter(_enum(item.get("status"), _SOURCE_STATES, "unknown") for item in sources)
-    total = len(sources)
-    segments = []
-    offset = 0.0
-    for state in _SOURCE_STATES:
-        width = round(1000 * counts[state] / total, 3) if total else 0
-        segments.append(f'<rect class="coverage-{state}" x="{offset}" y="0" width="{width}" height="12"/>')
-        offset += width
-    chart = '<svg class="coverage-chart" viewBox="0 0 1000 12" preserveAspectRatio="none" aria-hidden="true"><rect class="bar-track" width="1000" height="12"/>' + "".join(segments) + '</svg>'
-    legend = "".join(f'<div class="coverage-stat"><span class="coverage-dot coverage-{state}" aria-hidden="true"></span><strong>{counts[state]}</strong><span>{_SOURCE_NAMES[state]}</span></div>' for state in _SOURCE_STATES if state != "unknown" or counts[state])
-    rows = []
-    for index, source in enumerate(sources):
-        state = _enum(source.get("status"), _SOURCE_STATES, "unknown")
-        anchor = _anchor("source", index, source.get("id", ""))
-        reasons = source.get("reasons")
-        reasons = [reason for reason in reasons if isinstance(reason, str) and reason] if isinstance(reasons, list) else []
-        if source.get("reason"):
-            reasons.append(source["reason"])
-        reasons = list(dict.fromkeys(_text(reason) for reason in reasons)) or ["No additional detail"]
-        reason_html = "".join('<span class="source-reason">' + _e(_label(reason) if re.fullmatch(r"[a-z]+(?:_[a-z]+)+", reason) else reason) + '</span>' for reason in reasons)
-        rows.append(f'<tr id="{anchor}" role="row"><th scope="row" role="rowheader"><span>{_e(source.get("client", "Unknown client"))}</span><code class="inventory-location">{_e(source.get("location", "Location not recorded"))}</code></th><td role="cell">{_e(_label(source.get("scope", "Unknown")))}</td><td role="cell"><span class="source-status source-{state}">{_SOURCE_NAMES[state]}</span>{reason_html}</td></tr>')
-    table = f'<details class="sources-disclosure"><summary><span>Inspect all sources</span><span>{total} sources</span>{_icon("chevron", "disclosure-icon")}</summary><div class="table-scroll"><table class="sources-table" role="table"><caption class="sr-only">Source collection status and locations</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Source</th><th scope="col" role="columnheader">Scope</th><th scope="col" role="columnheader">Collection result</th></tr></thead><tbody role="rowgroup">{"".join(rows)}</tbody></table></div></details>' if sources else '<p class="muted">No source records were included.</p>'
-    return f'<section class="report-section" id="coverage" aria-labelledby="coverage-title"><div class="section-heading"><div><p class="eyebrow">03 / Coverage</p><h2 id="coverage-title">Collection coverage</h2><p>A record of what was inspected.</p></div></div>{_discovery_summary(snapshot)}<div class="coverage-panel"><div class="coverage-title"><strong>{counts["collected"]}<span> / {total}</span></strong><p>sources collected<span>Configuration, installation, and system inventory sources</span></p></div>{chart}<div class="coverage-legend">{legend}</div>{table}</div></section>'
+# Causes of incomplete coverage, in reading order, with what the person can do about each.
+_CAUSES = (
+    ("denied", "Permission denied", "Grant read access to these locations, or run the scan from an account that can read them."),
+    ("interpret", "Could not be interpreted", "These files are malformed or use an unsupported format. Fix or remove them, then scan again."),
+    ("limit", "Over a size or scan limit", "Very large files and folders are skipped so the scan stays bounded."),
+    ("links", "Links not followed", "Symbolic links and junctions are never followed, so their targets were not read."),
+    ("scope", "Outside the scan scope", "These locations are outside the scanned account and folders."),
+    ("failed", "Could not be processed", "An unexpected problem stopped these sources; everything else was still collected."),
+    ("other", "Other problems", "Each source lists the recorded reason."),
+)
+
+
+def _reasons(source: dict) -> list[str]:
+    reasons = source.get("reasons")
+    reasons = [reason for reason in reasons if isinstance(reason, str) and reason] if isinstance(reasons, list) else []
+    if isinstance(source.get("reason"), str) and source["reason"]:
+        reasons.append(source["reason"])
+    return list(dict.fromkeys(reasons))
+
+
+def _cause(source: dict) -> str:
+    text = " ".join(_reasons(source)).lower()
+    if "permission" in text:
+        return "denied"
+    if any(word in text for word in ("adapter_error", "interpreted safely", "stopped unexpectedly")):
+        return "failed"
+    if any(word in text for word in ("size_limit", "manifest_limit", "count_limit", "time_limit", "budget")):
+        return "limit"
+    if any(word in text for word in ("symlink", "symbolic link", "reparse")):
+        return "links"
+    if any(word in text for word in ("outside_scope", "outside selected scope", "not in selected scope")):
+        return "scope"
+    if any(word in text for word in ("parse", "invalid", "unsupported", "unknown_schema", "shape", "malformed", "duplicate", "could not be interpreted")):
+        return "interpret"
+    return "other"
+
+
+def _coverage(sources: list[dict], snapshot: dict, share: bool) -> str:
+    """How much was read, and every source that was not, grouped by cause."""
+    coverage = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
+    inspected = coverage.get("sourcesInspected")
+    inspected = inspected if type(inspected) is int and inspected >= 0 else sum(item.get("status") == "collected" for item in sources)
+    problems = [item for item in sources if item.get("status") in {"error", "skipped"}]
+    if not sources and not inspected:
+        panel = '<p class="muted">No source records were included.</p>'
+    else:
+        causes = []
+        for key, label, advice in _CAUSES:
+            group = [item for item in problems if _cause(item) == key]
+            if not group:
+                continue
+            rows = ""
+            if not share:
+                for source in group[:500]:
+                    reasons = "".join('<span class="source-reason">' + _e(_label(reason) if re.fullmatch(r"[a-z]+(?:_[a-z]+)+", reason) else reason) + '</span>' for reason in _reasons(source))
+                    rows += f'<li><span class="coverage-client">{_e(_client_details(source.get("client", "unknown"))[0])}</span><code class="inventory-path">{_e(source.get("location", "Location not recorded"))}</code>{reasons}</li>'
+                if len(group) > 500:
+                    rows += f'<li class="muted">{len(group) - 500:,} more are listed in snapshot.json.</li>'
+            causes.append(f'<details class="coverage-cause"><summary><strong>{len(group):,}</strong><span>{label}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="coverage-cause-body"><p>{advice}</p>{"<ul>" + rows + "</ul>" if rows else ""}</div></details>')
+        status = (f'<p class="coverage-summary">{_plural(len(problems), "source", "sources")} could not be fully read. Each is listed below by cause; everything else was collected.</p>'
+                  if problems else '<p class="coverage-summary">Every inspected source was read.</p>')
+        panel = f'<div class="coverage-title"><strong>{inspected:,}</strong><p>sources inspected<span>Configuration files, AI folders, installations and system inventories that were read.</span></p></div>{status}<div class="coverage-causes">{"".join(causes)}</div>'
+    return f'<section class="report-section" id="coverage" aria-labelledby="coverage-title"><div class="section-heading"><div><p class="eyebrow">03 / Coverage</p><h2 id="coverage-title">Collection coverage</h2><p>A record of what was inspected.</p></div></div>{_discovery_summary(snapshot)}<div class="coverage-panel">{panel}</div></section>'
 
 
 _JS = r"""
@@ -630,7 +911,7 @@ _JS = r"""
 """
 
 
-def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = None) -> str:
+def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = None, share: bool = False) -> str:
     """Return a complete offline HTML report without reading files or using a network.
 
     ``snapshot`` must contain sanitized collection results. The renderer escapes all
@@ -638,6 +919,8 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     a hash-based Content Security Policy. It does not evaluate configuration values.
     The optional booking link is navigation initiated by the reader, never a request
     made by report generation or loading. Identical inputs produce identical bytes.
+    ``share`` renders the shareable summary: locations keep only their standard AI
+    configuration part, and coverage lists counts instead of source locations.
     """
     sources = _records(snapshot.get("sources"))
     observations = _records(snapshot.get("observations"))
@@ -645,9 +928,6 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     findings_data = sorted(findings_data, key=lambda item: (_SEVERITIES.index(_enum(item.get("severity"), _SEVERITIES, "info")), _text(item.get("title", "")).casefold(), _text(item.get("id", ""))))
     findings = [(_anchor("finding", index, item.get("id", "")), item) for index, item in enumerate(findings_data)]
     severity_counts = Counter(_enum(item.get("severity"), _SEVERITIES, "info") for item in findings_data)
-    source_anchors = {}
-    for index, source in enumerate(sources):
-        source_anchors.setdefault(_text(source.get("id", "")), _anchor("source", index, source.get("id", "")))
     observation_map = {_text(item.get("id", "")): item for item in observations}
     kind_counts = Counter(_text(item.get("kind", "other")) for item in observations)
     coverage_record = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
@@ -671,13 +951,14 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
         scope_name += f' · {workspace_count} {"project" if workspace_count == 1 else "projects"}'
     declared = snapshot.get("mode") == "declared"
     banner = ""
+    if share:
+        banner = '<div class="scope-banner" role="note">' + _icon("lock") + '<strong>Shareable summary: file locations keep only their standard AI configuration path, without project or folder names. Tool, connector and skill names are included.</strong></div>'
     if isinstance(scope.get("label"), str) and scope["label"].strip():
-        banner = '<div class="scope-banner" role="note">' + _icon("info") + '<strong>' + _e(scope["label"]) + '</strong></div>'
+        banner += '<div class="scope-banner" role="note">' + _icon("info") + '<strong>' + _e(scope["label"]) + '</strong></div>'
     if declared:
         banner += '<div class="mode-banner" role="note">' + _icon("info") + '<div><strong>Declared inventory — endpoint not scanned</strong>This report reflects what an AI agent declared about its session. Configuration and local files have not been independently verified.</div></div>'
     client_count = len({_client_details(item.get("client", ""))[0].casefold() for item in observations if item.get("kind") == "client"})
-    metrics_data = [(str(client_count), "AI clients observed", "#inventory-client", "app"), (str(kind_counts["mcp"]), "MCP configurations", "#inventory-mcp", "connector"), (str(kind_counts["skill"] + kind_counts["plugin"]), "Skills & plugins", "#inventory", "book"), (str(collected), "Sources inspected", "#coverage", "folder")]
-    metrics_data = [(number, label, "#inventory" if target in {"#inventory-client", "#inventory-mcp"} and not kind_counts[target.removeprefix("#inventory-")] else target, icon) for number, label, target, icon in metrics_data]
+    metrics_data = [(str(client_count), "AI clients observed", "#inventory", "app"), (str(kind_counts["mcp"]), "MCP configurations", "#inventory", "connector"), (str(kind_counts["skill"] + kind_counts["plugin"]), "Skills & plugins", "#inventory", "book"), (f"{collected:,}", "Sources inspected", "#coverage", "folder")]
     metrics = "".join(f'<a class="metric" href="{target}"><span class="metric-icon">{_icon(icon)}</span><span class="metric-number">{number}</span><span class="metric-label">{label}{_icon("arrow")}</span></a>' for number, label, target, icon in metrics_data)
     collector = snapshot.get("collector") if isinstance(snapshot.get("collector"), dict) else {}
     booking = _safe_https(booking_url)
@@ -685,8 +966,9 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     script_hash = base64.b64encode(hashlib.sha256(_JS.encode("utf-8")).digest()).decode("ascii")
     style_hash = base64.b64encode(hashlib.sha256(_CSS.encode("utf-8")).digest()).decode("ascii")
     policy = f"default-src 'none'; script-src 'sha256-{script_hash}'; style-src 'sha256-{style_hash}'; img-src data:; font-src data:; connect-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'none'"
-    return f'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{_e(policy)}"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light"><title>Palma · Personal AI access scan</title><style>{_CSS}</style></head>
+    title = "Palma · Shareable AI access summary" if share else "Palma · Personal AI access scan"
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{_e(policy)}"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light"><title>{title}</title><style>{_CSS}</style></head>
 <body><a class="skip-link" href="#main">Skip to report</a>{_brand_sprite(observations)}<header class="site-header"><div class="shell header-inner"><a class="brand" href="#main" aria-label="Palma, back to report overview"><img src="data:image/png;base64,{_LOGO}" width="122" height="30" alt="palma.ai"><span class="brand-label">Personal AI<br>access scan</span></a><nav class="main-nav" aria-label="Report sections"><a href="#main">Overview</a><a class="regulation-nav" href="#eu-ai-regulation">EU AI Act</a><a href="#findings">Findings</a><a href="#inventory">Inventory</a><a href="#coverage">Coverage</a><button class="print-button js-only" type="button" id="print-report" aria-label="Print report">{_icon("print")}<span>Print report</span></button></nav></div></header>
 <main class="shell" id="main"><div class="report-title"><div><p class="eyebrow">Your personal AI access report</p><h1>Your AI access, <span class="title-accent">in focus.</span></h1><p class="report-subtitle">Your AI tools, the access they have, and what needs attention.<br> Start with the priorities. Follow the evidence.</p></div><div class="report-meta"><span class="meta-label">Scan details</span><span>{_e(_date(snapshot.get("completedAt")))}</span><span>{_e(scope_name)}</span></div></div>{banner}
 {_overview(findings, severity_counts, observation_map)}
@@ -694,8 +976,8 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
 <div class="metric-strip" aria-label="Inventory and coverage summary">{metrics}</div><p class="metric-context">Explore the names, clients, and configuration locations behind each count.</p>
 {_client_overview(observations)}
 {_access_overview(observations)}
-{_findings_section(findings, severity_counts, source_anchors, observation_map)}
-{_inventory(observations)}
-{_coverage(sources, source_anchors, snapshot)}
+{_findings_section(findings, severity_counts, observation_map, share)}
+{_inventory(observations, findings, share)}
+{_coverage(sources, snapshot, share)}
 {_team_teaser(booking_link)}
-<footer class="report-footer"><div><div class="footer-brand">palma<span>.ai</span></div><p class="footer-privacy">Built for a clearer view of your AI access.</p></div><div class="footer-right"><p>{_e(collector.get("name", "Palma scan"))} · {_e(collector.get("version", "version not recorded"))}</p><p>Rules {_e(collector.get("rulesVersion", "not recorded"))} · Schema {_e(snapshot.get("schemaVersion", "not recorded"))}</p></div></footer>{_artwork_credits()}<div class="local-note local-note-end">{_icon("lock")}<div><strong>Local by design.</strong> <span>This report makes no network requests. You control any sharing.</span></div></div></main><script>{_JS}</script></body></html>'''
+<footer class="report-footer"><div><div class="footer-brand">palma<span>.ai</span></div><p class="footer-privacy">Built for a clearer view of your AI access.</p></div><div class="footer-right"><p>{_e(collector.get("name", "Palma scan"))} · {_e(collector.get("version", "version not recorded"))}</p><p>Rules {_e(collector.get("rulesVersion", "not recorded"))} · Schema {_e(snapshot.get("schemaVersion", "not recorded"))}</p></div></footer>{_artwork_credits()}<div class="local-note local-note-end">{_icon("lock")}<div><strong>Local by design.</strong> <span>This report makes no network requests. You control any sharing.</span></div></div></main><script>{_JS}</script></body></html>"""

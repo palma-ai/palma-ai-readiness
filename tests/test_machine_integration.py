@@ -64,7 +64,7 @@ class MachineIntegrationTests(unittest.TestCase):
         self.assertIn("Your account on this computer · macOS · 19 projects", report)
         self.assertIn("12,500", report)
         self.assertIn("Installed</span>", report)
-        self.assertIn("Process observed</span>", report)
+        self.assertIn("Running</span>", report)
         self.assertIn("Version 1.2.3", report)
         self.assertIn("A profile could not be read.", report)
         self.assertNotIn("This scan has collection gaps", report)

@@ -46,9 +46,10 @@ operating-system context. Keep the folder intact so the assistant has all matchi
 
 ## Your report
 
-Each run saves `report.html`, `snapshot.json` (sanitized evidence and findings), and
-`summary.json` (counts and scope). Review priorities first, explore access charts, then
-open evidence and inventory details. Search actual skill, plugin, agent, and connector
+Each run saves `report.html`, `share.html` (a summary without project or folder names, for
+sharing), `snapshot.json` (sanitized evidence and findings), and `summary.json` (counts and
+scope). Review priorities first, explore access charts, then open evidence and inventory
+details. Search actual skill, plugin, agent, and connector
 names and their local configuration paths. All priorities remain visible, with Critical
 and High first. Client and connector icons are embedded.
 The report uses Palma's light visual style, with Onest typography, linked metric cards,

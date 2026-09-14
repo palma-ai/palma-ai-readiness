@@ -70,21 +70,27 @@ internal labels such as “indicator”. Keep the research date in the reference
    A compact client strip can show the recognized icons of observed clients and link to
    their inventory. Keep the charts focused on the same underlying evidence counts.
 4. **Findings.** Sort by severity, then consistently by category/title/ID. Each finding
-   shows its priority text, title, concise condition, and action. Expand for why it matters,
-   safe evidence, source references, confidence, and official guidance links. A severity
-   filter and search can reduce the visible list; show result counts and a clear reset.
-   Show all priorities by default; never hide Low or informational findings automatically.
-5. **Inventory.** Put clients and declarations below the actions. Group MCP services,
-   skills, plugins, agents, hooks, and settings. Use actual names and recognizable local
-   paths. Never substitute numbered names such as “Skill 164” or hashed directory labels.
-   Keep rows compact, with client/context and a short location; expand technical evidence
-   on demand. Add local search for names, clients, and locations. Show meaningful installed,
-   cached, disabled, or process-observed states where recorded. Omit unknown state totals,
-   zero enabled/disabled counts, and generic “Present” labels that add no useful information.
-6. **Coverage.** Show collected, missing, skipped, and error counts. Expand the source list
-   for reasons. Missing files are distinct from files that exist but could not be read.
-   Keep this section factual and compact. Put actual collection failures beside their
-   source records, retaining every recorded reason when one source has multiple failures.
+   shows its priority text, title, concise condition, why it matters, and action. Evidence
+   expands to one row per declaration: its name, client, typed facts (for example transport,
+   sign-in, credential presence, what a computer or browser connector controls, whether it
+   acts as the user and whether approval is required) and its location. Never print raw
+   records or JSON. Show the first 20 rows and put the rest behind "Show all"; the snapshot
+   keeps every record. A severity filter and search can reduce the visible list; show result
+   counts and a clear reset. Show all priorities by default; never hide Low or informational
+   findings automatically.
+5. **Inventory.** Put it after the findings. Each tool or declaration appears once: group
+   rows by client, collapsed by default, with the client's versions, running state and
+   project count in the group summary. Each row shows the actual name, its kind, a status
+   chip (configured, cached, disabled, installed or running), typed facts, a link to its
+   findings, and its location; merged copies list every place they are declared. Never
+   substitute numbered names such as “Skill 164” or hashed directory labels. Add local
+   search for names, clients, and locations. Omit unknown state totals, zero enabled/disabled
+   counts, and generic “Present” labels that add no useful information.
+6. **Coverage.** Show how many sources were inspected, and group every source that could
+   not be fully read by cause (permission denied, could not be interpreted, over a size or
+   scan limit, links not followed, outside the scan scope, could not be processed), each with
+   what the person can do and every recorded reason. Candidate paths that do not exist are
+   the normal case and are not listed. Keep this section factual and compact.
    Do not add a “Keep this in perspective” section or print a generic
    limitations checklist at the end, including when rebuilding an older snapshot. Do not
    add “This scan has collection gaps” or similar generic messaging above the findings.
@@ -146,6 +152,14 @@ attribute values; never concatenate raw snapshot JSON into executable scripts or
 Use `textContent` for dynamic text. External documentation/calendar links must use safe
 HTTPS destinations and explicit clicks; reject `javascript:`, credentials, and malformed
 URLs. Do not append report data to links.
+
+## Shareable summary
+
+Each run also writes `share.html` from the same snapshot; `report --share` rebuilds one. It
+keeps findings, counts and client, connector, skill and plugin names, but every location
+keeps only its standard AI configuration part (`~/.claude.json`, `project/.mcp.json`):
+project, folder and volume names are removed, and coverage shows counts by cause without
+source locations. It is the only version to publish or send to someone else.
 
 ## Empty and partial evidence
 

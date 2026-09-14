@@ -6,10 +6,10 @@ in the release. There is no package installation or backend setup.
 
 | Command | Input | Output |
 | --- | --- | --- |
-| `run` | Local discovery for the signed-in account | New directory with evidence, summary, and HTML |
+| `run` | Local discovery for the signed-in account | New directory with evidence, summary, local report and shareable summary |
 | `collect --output FILE` | Same discovery as run | New snapshot with evidence and evaluated findings |
 | `summary --report FILE` | Saved snapshot | Counts and scope on stdout, or `--output FILE` |
-| `report --report FILE --output FILE` | Saved snapshot | New self-contained HTML report |
+| `report --report FILE --output FILE` | Saved snapshot | New self-contained HTML report; `--share` renders the shareable summary |
 | `evaluate --report FILE --output FILE` | Saved endpoint snapshot | New snapshot evaluated with the bundled rules |
 
 `summary`, `report`, and `evaluate` also accept `--run-dir DIR` instead of `--report`.
@@ -45,6 +45,10 @@ For web requests, follow the native run workflow in SKILL.md.
 
 `--open` opens the generated **local** report. Shell launchers supply it by default;
 `--no-open` keeps it closed. Direct Python commands require `--open` to launch it.
+
+`share.html` and `report --share` render the shareable summary: the same findings and names,
+with locations reduced to their standard AI configuration path and no project, folder or
+volume names.
 
 `--booking-url https://...` includes an optional calendar link. No destination is built in.
 Rendering neither fetches it nor appends inventory. Use the same options for identical HTML.
