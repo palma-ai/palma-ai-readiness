@@ -63,7 +63,7 @@ def changed_release_file():
 changed = changed_release_file()
 if changed:
     print(f"Palma: {changed!r} does not match this release, so nothing was scanned. "
-          "Download the skill again from palma.ai and verify its checksum.", file=sys.stderr)
+          "Download the skill again from https://github.com/palma-ai/palma-ai-readiness/releases/latest and verify its checksum.", file=sys.stderr)
     raise SystemExit(2)
 
 # -I -S excludes ambient module paths. Add only the directory of this trusted script.

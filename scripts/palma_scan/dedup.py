@@ -40,7 +40,7 @@ def _key(item, malformed):
     if not content and (item["kind"] in _CONTENT_REQUIRED or item["kind"] == "skill" or credential):
         return ("unique", item["id"])
     # A copy in a malformed file stays separate, so it cannot stand in for a well-formed one.
-    return json.dumps([item["kind"], item["client"], item["name"], item["enabled"], details, content, item["sourceId"] in malformed],
+    return json.dumps([item["kind"], item["client"], item["name"], item["enabled"], details, content, item.get("_marketplaceIdentity"), item["sourceId"] in malformed],
                       sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
 
 
@@ -85,6 +85,7 @@ def collapse_declarations(observations, malformed=frozenset()):
         result.append(canonical)
     for item in result:
         item.pop("_content", None)
+        item.pop("_marketplaceIdentity", None)
         parent = item.get("details", {}).get("parentId")
         if parent in replaced:
             item["details"]["parentId"] = replaced[parent]

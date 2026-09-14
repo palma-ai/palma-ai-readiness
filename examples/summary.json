@@ -14,38 +14,15 @@
     "skipped": 0
   },
   "findings": {
-    "critical": 10,
-    "high": 1,
+    "critical": 7,
+    "high": 5,
     "info": 6,
     "low": 6,
-    "medium": 1
+    "medium": 0
   },
   "limitationCount": 2,
   "mode": "endpoint",
   "priorities": [
-    {
-      "clients": [
-        "cursor",
-        "vscode"
-      ],
-      "declarations": 5,
-      "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
-      "ruleId": "mcp-network-direct",
-      "severity": "critical",
-      "title": "Remote connectors used outside Palma's governance"
-    },
-    {
-      "clients": [
-        "claude-desktop",
-        "codex",
-        "cursor"
-      ],
-      "declarations": 3,
-      "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
-      "ruleId": "mcp-local-unaudited",
-      "severity": "critical",
-      "title": "Connectors running locally without monitoring or governance"
-    },
     {
       "clients": null,
       "declarations": 2,
@@ -53,6 +30,16 @@
       "ruleId": "PALMA-CAPABILITY-002",
       "severity": "critical",
       "title": "Review browser session reuse and sensitive actions"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 2,
+      "recommendation": "Audit the source, installed instructions, scripts, dependencies and requested access before use. Disable unused packs or obtain them from an approved source.",
+      "ruleId": "artifacts-unapproved-marketplace",
+      "severity": "critical",
+      "title": "Audit skills and plugins from unapproved marketplaces before use"
     },
     {
       "clients": [
@@ -64,17 +51,6 @@
       "ruleId": "browser-use-enabled",
       "severity": "critical",
       "title": "Browser use turned on: acts as the signed-in user without governance"
-    },
-    {
-      "clients": [
-        "claude-code",
-        "shared"
-      ],
-      "declarations": 2,
-      "recommendation": "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team.",
-      "ruleId": "skills-local-unreviewed",
-      "severity": "critical",
-      "title": "Local unaudited skills installed"
     },
     {
       "clients": [
@@ -98,16 +74,6 @@
     },
     {
       "clients": [
-        "claude-code"
-      ],
-      "declarations": 1,
-      "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
-      "ruleId": "hooks-declared",
-      "severity": "critical",
-      "title": "Scripts run automatically on agent events"
-    },
-    {
-      "clients": [
         "codex"
       ],
       "declarations": 1,
@@ -128,6 +94,29 @@
     },
     {
       "clients": [
+        "cursor",
+        "vscode"
+      ],
+      "declarations": 5,
+      "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
+      "ruleId": "mcp-network-direct",
+      "severity": "high",
+      "title": "Remote connectors used outside Palma's governance"
+    },
+    {
+      "clients": [
+        "claude-desktop",
+        "codex",
+        "cursor"
+      ],
+      "declarations": 3,
+      "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
+      "ruleId": "mcp-local-unaudited",
+      "severity": "high",
+      "title": "Connectors running locally without monitoring or governance"
+    },
+    {
+      "clients": [
         "claude-code",
         "codex"
       ],
@@ -139,13 +128,24 @@
     },
     {
       "clients": [
-        "claude-code"
+        "claude-code",
+        "shared"
       ],
       "declarations": 2,
-      "recommendation": "Inventory them now; governed conversion registers the ones that stay.",
-      "ruleId": "plugins-unknown-origin",
-      "severity": "medium",
-      "title": "Packs of unknown origin"
+      "recommendation": "Review the named skill instructions, scripts, dependencies, and update source. Retain the version approved for sensitive use; remove unused copies.",
+      "ruleId": "skills-local-unreviewed",
+      "severity": "high",
+      "title": "Local unaudited skills installed"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 1,
+      "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
+      "ruleId": "hooks-declared",
+      "severity": "high",
+      "title": "Scripts run automatically on agent events"
     },
     {
       "clients": null,

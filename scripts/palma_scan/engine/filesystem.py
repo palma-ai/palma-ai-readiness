@@ -89,6 +89,9 @@ class AccountBoundary:
 def open_unredirected(path, flags, boundary):
     """Check each ancestor again through its opened descriptor before proceeding."""
     boundary.check_path(path)
+    # os.read uses the descriptor's CRT mode on Windows. Text mode changes CRLF
+    # bytes and treats Ctrl-Z as EOF, corrupting metadata and component digests.
+    flags |= getattr(os, "O_BINARY", 0)
 
     def checked_open(*args, **kwargs):
         fd = os.open(*args, **kwargs)

@@ -220,7 +220,7 @@ class CollectorAdversarialTests(unittest.TestCase):
         declarations = [item for item in snapshot["observations"] if item["kind"] != "client"]
         self.assertTrue(declarations)
         self.assertTrue(all(item["details"].get("context") == "cached" for item in declarations))
-        self.assertTrue(any(item["ruleId"] == "hooks-declared" and item["severity"] == "critical" for item in snapshot["findings"]))
+        self.assertTrue(any(item["ruleId"] == "hooks-declared" and item["severity"] == "high" for item in snapshot["findings"]))
         self.assertTrue(any(item["category"] == "credentials" and item["severity"] == "critical" for item in snapshot["findings"]))
         for finding in snapshot["findings"]:
             if finding["ruleId"] in {"hooks-declared", "mcp-network-direct"}:
@@ -338,7 +338,7 @@ class CollectorAdversarialTests(unittest.TestCase):
         self.assertTrue(credentials)
         self.assertTrue(all(item["severity"] == "critical" for item in credentials))
         local = next(item for item in snapshot["findings"] if item["ruleId"] == "mcp-local-unaudited")
-        self.assertEqual(local["severity"], "critical")
+        self.assertEqual(local["severity"], "high")
         self.assertIn("disabled", json.dumps(local["evidence"]))
         self.assertNotIn("PRIVATE_DISABLED_CANARY", json.dumps(snapshot))
 

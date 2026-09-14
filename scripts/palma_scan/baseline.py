@@ -25,7 +25,7 @@ from .engine.paths import installation_candidates, bounded_environment
 from .engine.parsing import validate_tree, ParseError
 from .engine.filesystem import SafeFiles, Budget, ReadGap
 from .engine.adapters.configs import collect_config, collect_cached_settings
-from .dedup import collapse_declarations
+from .dedup import collapse_declarations, content_digest
 from .engine.git_provenance import version_controlled as _version_controlled
 
 
@@ -206,6 +206,8 @@ def _merge(collector, collection, alias, workspaces):
     """Translate complete sanitized evidence and actionable local item labels."""
     from .collector import _id, SETTING_TYPES
     builder = collection.builder
+    from .marketplaces import annotate, TRUST_FIELDS
+    annotate(collection)
     collector.redactor = builder.redactor
     artifact_index = _artifact_index(builder)
     extra = _extra()
@@ -338,7 +340,13 @@ def _merge(collector, collection, alias, workspaces):
             elif kind in {'skill', 'agent', 'plugin'}:
                 # Configured plugin declarations already have exact enabled flags.
                 if kind == 'plugin' and old.get('installationState') == 'config_only' and any(o['kind'] == 'plugin' and o['sourceId'] == source['id'] for o in collector.observations):
+                    for existing in collector.observations:
+                        if existing['kind'] == 'plugin' and existing['sourceId'] == source['id'] and existing['name'] == collector.display_text(old.get('name', '')):
+                            existing['details'].update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
+                            if 'marketplaceId' in old:
+                                existing['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
                     continue
+                details.update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
                 details.update(activation={'config_only': 'configured', 'cached': 'cached', 'installed': 'installed'}.get(old.get('installationState'), 'present'), auditStatus='not-assessed', origin=old.get('origin', 'unknown'))
                 if type(source.get('sizeBytes')) is int:
                     details['manifestSizeBytes'] = source['sizeBytes']
@@ -368,6 +376,9 @@ def _merge(collector, collection, alias, workspaces):
                 continue
             item = collector.observe(source, kind, name, details, enabled, discriminator='engine:' + old['id'])
             item['id'] = 'obs-' + _id('engine', alias, old['id'])
+            if 'marketplaceId' in old:
+                # Keep redacted labels from merging distinct source identities.
+                item['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
             if kind == 'agent' or (kind == 'plugin' and old.get('installationState') in {'cached', 'installed'}):
                 item['_content'] = builder.content.get(old['sourceId'])
 

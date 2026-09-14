@@ -70,7 +70,7 @@ class MachineIntegrationTests(unittest.TestCase):
         self.assertNotIn("This scan has collection gaps", report)
         self.assertNotIn("Keep this in perspective", report)
         self.assertNotIn("Legacy generic prose", report)
-        self.assertIn('metric-number">1</span><span class="metric-label">AI clients observed', report)
+        self.assertIn('<strong>1</strong><span>AI clients</span>', report)
 
     def test_large_inventory_is_not_rejected_by_previous_record_count_cap(self):
         data = fixture()

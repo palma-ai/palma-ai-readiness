@@ -36,7 +36,7 @@ class ReviewInventoryTests(unittest.TestCase):
         skills = self.skills(snapshot)
         self.assertEqual({item["name"] for item in skills}, {"docs", "assets", "images"})
         finding = next(item for item in evaluate(snapshot) if item["ruleId"] == "skills-local-unreviewed")
-        self.assertEqual(finding["severity"], "critical")
+        self.assertEqual(finding["severity"], "high")
         self.assertTrue({item["id"] for item in skills}.issubset(finding["observationIds"]))
 
     def test_resource_named_namespaces_and_nested_skills_are_collected(self):

@@ -48,11 +48,17 @@ def _status(observations: list[dict], declared: bool) -> tuple[str, str]:
     return "not-assessed", "Not assessed · no AI evidence"
 
 
-def _tile(slug: str, title: str, article: str, body: str, count: int = 0) -> str:
+def _tile(slug: str, title: str, article: str, body: str, state: str, count: int = 0) -> str:
     icon = f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{_ICONS[slug]}</svg>'
-    value = (f'<span class="regulation-count" data-count="{count}">{count}<span>{"finding" if count == 1 else "findings"} to review</span></span>'
-             if count else '<span class="regulation-unknown">Not assessed<span>Needs use-case context</span></span>')
-    return f'''<details class="regulation-tile" id="regulation-{slug}"><summary>
+    if count:
+        value = f'<span class="regulation-count" data-count="{count}">{count}<span>{"finding" if count == 1 else "findings"} to review</span></span>'
+        value += ('<span class="regulation-review-label">Review required</span>' if state == "review-required"
+                  else '<span class="regulation-review-label">Use-case controls not assessed</span>')
+    elif state == "missing-evidence":
+        value = '<span class="regulation-unknown">Coverage not evidenced<span>Owner verification required</span></span>'
+    else:
+        value = '<span class="regulation-unknown">Not assessed<span>Needs use-case context</span></span>'
+    return f'''<details class="regulation-tile" id="regulation-{slug}" data-review-state="{state}"><summary>
 <span class="regulation-tile-top"><span class="regulation-tile-icon">{icon}</span>{_CHEVRON}</span>
 <span class="regulation-tile-title">{title}</span><span class="regulation-article">{article}</span>{value}
 </summary><div class="regulation-tile-body">{body}</div></details>'''
@@ -60,6 +66,8 @@ def _tile(slug: str, title: str, article: str, body: str, count: int = 0) -> str
 
 def render_regulation_section(findings: list[tuple[str, dict]], observations: list[dict], declared: bool) -> str:
     status, label = _status(observations, declared)
+    local_evidence = bool(observations) and not declared
+    unmatched_state = "missing-evidence" if local_evidence else "not-assessed"
     tiles = []
     for slug, title, articles, sources, guidance, rule_ids in _CONTROL_TOPICS:
         matched = [(anchor, item) for anchor, item in findings
@@ -70,19 +78,25 @@ def render_regulation_section(findings: list[tuple[str, dict]], observations: li
             f'{escape(str(item.get("title", "Review finding")))}</a></li>'
             for anchor, item in matched)
         evidence = (f'<p class="regulation-evidence-label">{count} existing {"finding" if count == 1 else "findings"}</p><ul>{links}</ul>'
-                    if links else '<p>No mapped findings. The control remains unassessed.</p>')
+                    if links else '<p>No mapped findings. This scan does not establish coverage of these controls.</p>')
+        if local_evidence:
+            evidence += ('<p><strong>Next step:</strong> Verify the responsible owner and the supervision, intervention and stop controls. Record how they cover this use case.</p>'
+                         if slug == "oversight" else
+                         '<p><strong>Next step:</strong> Verify the responsible owner and evidence for isolation, credentials, connected tools and monitoring. Record how these controls cover this use case.</p>')
         # Each label names exactly the article its link opens.
         articles_html = " · ".join(_reference(label, _DESK + path) for label, path in sources)
         body = f'<p>{guidance}</p>{evidence}<p>{articles_html}</p>'
-        tiles.append(_tile(slug, title, articles, body, count))
+        tiles.append(_tile(slug, title, articles, body, "review-required" if count and local_evidence else unmatched_state, count))
     tiles.append(_tile("transparency", "Transparency", "Article 50",
         '<p>Check whether people interact with your AI or see its generated content. Notices, marking and disclosure duties depend on the use and your role.</p>'
         '<p><strong>Next step:</strong> Review customer-facing AI, deepfakes and public-interest text, including relevant exceptions. Published outputs are not inspected by this scan.</p>'
-        f'<p>{_reference("Read Article 50", _DESK + "ai-act/article-50")}</p>'))
+        '<p>Confirm the owner and evidence for the relevant notices and disclosures. This scan does not establish their coverage.</p>'
+        f'<p>{_reference("Read Article 50", _DESK + "ai-act/article-50")}</p>', unmatched_state))
     tiles.append(_tile("classification", "Risk classification", "Articles 5 & 6",
         '<p>Prohibited-practice and high-risk rules depend on how a system is used and what it does. Some prohibitions also cover a practice’s effect or reasonably foreseeable outcomes. Tool names and local permissions cannot establish a legal risk class.</p>'
         '<p><strong>Next step:</strong> Document the purpose, affected people and your role. Check prohibited practices, qualifying regulated products and Annex III uses, including exceptions.</p>'
-        f'<p>{_reference("Prohibited practices", _DESK + "ai-act/article-5")} · {_reference("High-risk criteria", _DESK + "ai-act/article-6")}</p>'))
+        '<p>Confirm the owner and evidence for the use-case classification. This scan does not establish that a classification review exists.</p>'
+        f'<p>{_reference("Prohibited practices", _DESK + "ai-act/article-5")} · {_reference("High-risk criteria", _DESK + "ai-act/article-6")}</p>', unmatched_state))
     return f'''<section class="regulation-panel" id="eu-ai-regulation" aria-labelledby="regulation-title">
 <div class="regulation-heading" id="regulation-indicator" data-status="{status}"><div class="regulation-identity"><span class="regulation-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></span><div><h2 id="regulation-title">EU AI Act</h2><p>Four areas for your AI review</p></div></div><span class="regulation-status">{label}</span></div>
 <div class="regulation-tiles">{''.join(tiles)}</div>

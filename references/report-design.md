@@ -19,6 +19,8 @@ Minimum useful fields for each finding:
 
 - Title, severity, category, confidence, and evidence type.
 - One short statement of the observed condition.
+- Keep file paths in Evidence rather than the finding summary. Names can identify the
+  affected connector; source locations remain available when the evidence is opened.
 - Why it matters for this person, with applicability limits.
 - A concrete recommended action; never silently edit settings.
 - References to source IDs and observation IDs, plus safe source location, exact supported
@@ -38,101 +40,74 @@ Reuse the renderer's embedded SVG symbols and retain the shipped third-party not
 
 ## Reading order
 
-Build one flowing page with these levels of detail. Keep a compact anchored navigation
-for Overview, Findings, Inventory, and Coverage. Prefer native links and `<details>` so
-all information remains usable without JavaScript.
+Use a compact anchored navigation and native `<details>` elements. The initial page
+shows the scope and visual overview; client connections, findings, inventory, EU AI Act
+readiness, coverage, artwork credits, and individual findings start collapsed.
 
-Place a compact **EU AI Act** panel immediately after **Review first**, before the
-inventory metrics. Highlight **EU AI Act** in the navigation. Four native disclosure
-tiles show human oversight and technical-safeguard finding counts, plus transparency
-and risk classification as unassessed. Clicking a tile reveals its review guidance
-and original finding links in place. Use one official EU AI Act guidance link in the footer; omit the
-background explainer and timeline from the report. Do not repeat a separate regulation section farther down the page.
-Follow [eu-ai-regulation.md](eu-ai-regulation.md) for status semantics, the explicit
-finding crosswalk and offline contract. Counts are local review inputs; never show a
-regulatory score or certification seal. Use **EU AI Act** as the public title, without
-internal labels such as “indicator”. Keep the research date in the reference.
+1. **Identity and scope.** Use the bundled official Palma wordmark, scan date and
+   machine, copied-home or declared scope. Clearly label synthetic and declared reports.
+2. **Visual overview.** Lead with up to three finding callouts, above the charts. Use
+   prominent red boxes for Critical and orange boxes for High, with text labels; preserve
+   the stored priorities. Show exact priority counts as labeled horizontal bars; clicking a
+   bar opens filtered findings. A client-to-component map shows observed AI client families,
+   distinct MCP and skill names, their configuration counts, and plugin records. A stacked
+   strip separates local, remote, unknown and disabled MCP configurations. These are
+   declarations, not live connections or a readiness score. Informational findings stay
+   out of the review headline and the three compact leading finding links. Keep the
+   coverage status linked and visible, including when there are no review findings.
+3. **Client connections.** Expand to see each client's MCP names, skill names, plugin
+   records and local/remote/unknown/disabled configuration counts with client icons.
+4. **Findings.** Sort by severity, then title and ID. Each collapsed finding has a title,
+   priority and client labels. Opening it reveals a concise condition without file paths,
+   **Why it matters**, an action and evidence. Computer-use impacts explain that actions
+   may go unnoticed without supervision; they do not claim all actions are invisible.
+   Evidence contains safe names, typed facts and configuration locations. Show the first
+   20 records, with the remainder in a further disclosure. Search and filters have clear
+   reset controls. All priorities remain available; do not imply an allowlisted source
+   proves that an installed artifact was audited or unchanged.
+5. **Inventory.** One row per exact declared MCP or skill name, with client badges and
+   declaration counts. Expand variants to compare access, versions, credentials and locations.
+   Matching names do not establish identical behavior. Group browser extension records
+   with their counts and permission sets. Client facts and unknown clients remain visible.
+6. **EU AI Act readiness.** Four collapsed review areas use the evidence semantics in
+   [eu-ai-regulation.md](eu-ai-regulation.md). Mapped findings require review; missing local
+   evidence requires owner verification. A local scan cannot prove that an organizational
+   control is absent or classify the legal use case. Keep the official guidance link.
+7. **Coverage.** Record inspected source counts and group unreadable or skipped sources by
+   cause. Preserve actual permission failures. Safe fixed diagnostic categories and native
+   numeric codes are available only in the local report, alongside each source. Never show
+   raw exception messages. The shareable report includes counts rather than source locations.
 
-1. **Palma identity and scope.** Show the Palma wordmark/logo, “AI access scan,” scan date,
-   and compact scope metadata. A machine scan shows OS, profiles, and discovered projects.
-   Identify machine vs copied-home vs declared scope without a generic warning banner.
-   A declared report has a prominent “Session inventory — endpoint not scanned” banner.
-2. **Review first.** Start with a clear sentence about the highest supported priority and
-   show at most three leading actions. Critical and High precede other priorities.
-   Use up to three numbered white cards with the condition and recommended action visible;
-   defer the full evidence until requested. A compact priority ring and labeled bars
-   show the exact finding distribution, including a neutral empty ring for zero findings.
-3. **At a glance.** Use a few compact metrics for AI clients, MCP declarations, extensions,
-   and review findings. A severity distribution shows the actual counts, with labels and
-   a textual equivalent. Use a second simple bar/ring for local vs remote vs unknown MCP
-   declarations. Include disabled items separately or explicitly label the denominator.
-   Do not manufacture a “readiness score,” risk percentage, or comparison baseline.
-   A compact client strip can show the recognized icons of observed clients and link to
-   their inventory. Keep the charts focused on the same underlying evidence counts.
-4. **Findings.** Sort by severity, then consistently by category/title/ID. Each finding
-   shows its priority text, title, concise condition, why it matters, and action. Evidence
-   expands to one row per declaration: its name, client, typed facts (for example transport,
-   sign-in, credential presence, what a computer or browser connector controls, whether it
-   acts as the user and whether approval is required) and its location. Never print raw
-   records or JSON. Show the first 20 rows and put the rest behind "Show all"; the snapshot
-   keeps every record. A severity filter and search can reduce the visible list; show result
-   counts and a clear reset. Show all priorities by default; never hide Low or informational
-   findings automatically.
-5. **Inventory.** Put it after the findings. Each tool or declaration appears once: group
-   rows by client, collapsed by default, with the client's versions, running state and
-   project count in the group summary. Each row shows the actual name, its kind, a status
-   chip (configured, cached, disabled, installed or running), typed facts, a link to its
-   findings, and its location; merged copies list every place they are declared. Never
-   substitute numbered names such as “Skill 164” or hashed directory labels. Add local
-   search for names, clients, and locations. Omit unknown state totals, zero enabled/disabled
-   counts, and generic “Present” labels that add no useful information.
-6. **Coverage.** Show how many sources were inspected, and group every source that could
-   not be fully read by cause (permission denied, could not be interpreted, over a size or
-   scan limit, links not followed, outside the scan scope, could not be processed), each with
-   what the person can do and every recorded reason. Candidate paths that do not exist are
-   the normal case and are not listed. Keep this section factual and compact.
-   Do not add a “Keep this in perspective” section or print a generic
-   limitations checklist at the end, including when rebuilding an older snapshot. Do not
-   add “This scan has collection gaps” or similar generic messaging above the findings.
-7. **Palma next step.** One generous, visually distinct panel: “Interested in a team view? Palma can help
-   build an aggregated view of AI exposure across your organization.” Explain that it is
-   a separate offering and this local scan has no shared-report connection. If a calendar
-   URL was supplied, add a single “Talk to Palma” link. Otherwise omit the button.
+8. **The bigger picture.** Show a visible Palma panel below coverage with the
+   endpoint-to-team diagram, benefits and a **Talk to Palma** button linking to
+   `https://calendar.app.google/qVE3L8fGgmQWv3Hx7`. Label the diagram as illustrative and
+   the team view as a separate offering; do not invent team metrics or imply an upload.
+   This invitation remains visible while the detailed scan sections stay collapsed.
+   A supported explicit booking override replaces the default destination.
 
-End with the privacy note: **Local by design. This report makes no network requests.
-You control any sharing.** Keep it after the team-view invitation, not beside the headline.
-The invitation can use a distinct Palma teal surface and an explicitly illustrative
-endpoint-to-team diagram. State the value: shared tools, repeated exposure, and priorities
-across devices. Do not invent team metrics or imply aggregation already occurred.
+End with: **Local by design. This report makes no network requests. You control any sharing.**
 
 ## Visual specification
 
-Use the existing renderer's embedded logo where available. Never fetch the logo while
-viewing a report. If unavailable, a simple text “palma” wordmark is sufficient; do not
-invent certification badges or imitate a verified security seal.
+Use `assets/palma-logo.svg`, sourced from the official
+[Palma wordmark](https://palma.ai/brand/wordmark-teal.svg), embedded in the HTML by
+`report_brand.py`. The mark is also bundled for skill metadata. Never fetch artwork at
+report viewing time or accept images supplied by snapshot data.
 
 | Element | Guidance |
 | --- | --- |
-| Brand | `palma-brand-motion` 1.0.1: Palma teal `#00a9c7`, deeper teal `#007a93` for readable links/actions, signature gradient `#43A1D0` → `#33C0D0` |
-| Base | Pale-cyan page ground (`#eef7fa` → `#f6fbfc` → `#e9f4f8`) with a soft cyan radial bloom, white cards, ink `#0f172a`, slate secondary text |
-| Typography | Embedded Onest variable font, system sans-serif fallback; 700 headings, 600 labels, readable 15–16px body; code in system monospace |
-| Layout | Centered content up to 1180px wide, 24–40px desktop gutters, generous section gaps, four linked metric cards in a row (two on mobile) |
-| Surfaces | White cards, `#e2e8f0` borders, 16px card / 22px section corners; shadow `0 10px 15px -3px rgba(15,23,42,.06), 0 4px 6px -2px rgba(15,23,42,.03)` |
-| Priority | Critical/High get distinct text and warm accents; Medium amber; Low/Info muted blue/slate. Never rely on color alone |
-| Charts | Simple horizontal bars or rings with exact count labels and a legend; accessible description; no chart library needed |
-| Detail | Pale-cyan next-step panels, quiet evidence disclosures, category icons on inventory cards; long paths/keys wrap, never overflow |
-| Mobile | Single column at narrow widths, 16px gutters, wrapping controls and tables/cards that remain readable at 360px |
-| Print | Remove sticky navigation and filter controls, expand findings/evidence, retain scope/coverage and source references |
+| Brand | Official Palma blue `#43A1D0`, cyan `#33C0D0`, deeper teal links `#007a93` |
+| Base | Pale cyan ground, white surfaces, ink `#0f172a`, slate secondary text |
+| Typography | Embedded Onest variable font, system sans-serif fallback, readable body text |
+| Layout | Centered content up to 1180px; two overview panels on desktop, one on mobile |
+| Priority | Distinct text and warm accents for Critical/High; muted Low/Info; never color alone |
+| Charts | Exact labeled SVG bars, native anchor links, no inferred risk percentages |
+| Detail | Collapsed section and finding summaries; long paths and names wrap |
+| Mobile | Single column, wrapping controls, no horizontal page overflow |
+| Print | Expand details, restore filtered items and counts, then restore screen state |
 
-Avoid full-width red banners for ordinary capabilities, decorative gauges, excessive
-small badges, repeated paragraphs, animated counters, large hero artwork, and marketing
-above scan results. The report should make the first useful action obvious in seconds.
-The priority ring represents a distribution of actual findings, not a score or progress
-toward safety. Use native SVG/CSS for the charts and the illustrative team diagram.
-Palma is a light brand: avoid navy/neon surfaces. Match the light card and list patterns
-on the public [Palma site](https://palma.ai/), without live-app screenshots or sample
-marketing statistics. Use the brand's `cubic-bezier(.16,1,.3,1)` easing for brief hover
-and disclosure transitions; keep charts static and honor reduced motion.
+Keep charts static, honor reduced motion, and avoid decorative gauges, certification
+seals, animated counters, oversized marketing panels, or a fabricated readiness score.
 
 ## Interaction and offline contract
 
@@ -158,7 +133,8 @@ URLs. Do not append report data to links.
 Each run also writes `share.html` from the same snapshot; `report --share` rebuilds one. It
 keeps findings, counts and client, connector, skill and plugin names. Every location keeps
 only its AI configuration folder and file name (`~/.claude.json`, `project/.cursor/mcp.json`,
-`~/Library/…/claude_desktop_config.json`), inside finding summaries too; a location without
+`~/Library/…/claude_desktop_config.json`); locations retained in older saved text receive
+the same protection. A location without
 such a folder is withheld. Names and setting values that are paths or web addresses are
 withheld, finding anchors are numbered rather than derived from local paths, and coverage
 shows counts by cause without source locations. It is the only version to publish or send

@@ -51,19 +51,19 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(credential["severity"], "critical")
         self.assertNotIn("PRIVATE_TOKEN", json.dumps(findings))
         self.assertIn("potential credential", credential["summary"])
-        self.assertTrue(any(finding["ruleId"] == "mcp-local-unaudited" and finding["severity"] == "critical" for finding in findings))
+        self.assertTrue(any(finding["ruleId"] == "mcp-local-unaudited" and finding["severity"] == "high" for finding in findings))
 
-    def test_remote_mcp_governance_is_critical_without_claiming_missing_auth(self):
+    def test_remote_mcp_governance_is_high_without_claiming_missing_auth(self):
         _, findings = self.scan({".cursor/mcp.json": {"mcpServers": {"remote": {"url": "https://example.test/mcp"}}}})
         self.assertTrue(any(finding["category"] == "mcp" for finding in findings))
-        self.assertTrue(any(finding["ruleId"] == "mcp-network-direct" and finding["severity"] == "critical" for finding in findings))
+        self.assertTrue(any(finding["ruleId"] == "mcp-network-direct" and finding["severity"] == "high" for finding in findings))
         self.assertFalse(any("unauthenticated" in finding["title"].lower() for finding in findings))
 
-    def test_unaudited_local_skills_are_grouped_and_critical(self):
+    def test_local_skills_are_grouped_at_high_review_priority(self):
         _, findings = self.scan({".agents/skills/one/SKILL.md": "body", ".agents/skills/two/SKILL.md": "body"})
         inventory = [finding for finding in findings if finding["category"] == "extensions"]
         self.assertEqual(len(inventory), 1)
-        self.assertEqual(inventory[0]["severity"], "critical")
+        self.assertEqual(inventory[0]["severity"], "high")
         self.assertEqual(inventory[0]["evidenceType"], "inventory")
         self.assertEqual(len(inventory[0]["observationIds"]), 2)
 

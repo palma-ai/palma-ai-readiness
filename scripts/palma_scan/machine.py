@@ -169,6 +169,42 @@ def _validate_metadata(result):
             queue.extend((item, depth + 1) for item in value)
 
 
+class OSInventoryError(ValueError):
+    """A fixed command failed; raw command output never becomes report evidence."""
+    def __init__(self, reason, exit_status=None):
+        super().__init__("OS inventory unavailable")
+        self.reason, self.exit_status = reason, exit_status
+
+
+_READ_GAP_REASONS = frozenset({"outside_scope", "symlink", "permission_denied", "io_error",
+                               "not_found", "parse_error", "unknown_schema", "size_limit",
+                               "count_limit", "time_limit"})
+
+
+def _error_diagnostic(error, stage):
+    """Keep bounded native codes and fixed categories, never exception text or paths."""
+    kind = "unsupported-value"
+    if isinstance(error, OSInventoryError):
+        kind = error.reason
+    elif isinstance(error, subprocess.TimeoutExpired):
+        kind = "timeout"
+    elif isinstance(error, PermissionError):
+        kind = "permission-denied"
+    elif isinstance(error, OSError):
+        kind = "os-error"
+    elif isinstance(error, ReadGap) and isinstance(error.reason, str) and error.reason in _READ_GAP_REASONS:
+        kind = "read-gap"
+    item = {"stage": stage, "kind": kind}
+    if kind == "read-gap":
+        item["reason"] = error.reason
+    for name, value in (("errno", getattr(error, "errno", None)),
+                        ("windowsError", getattr(error, "winerror", None)),
+                        ("exitStatus", getattr(error, "exit_status", None))):
+        if type(value) is int and -(2 ** 31) <= value < 2 ** 32:
+            item[name] = value
+    return item
+
+
 def _system_command(command):
     """Allow only exact read-only OS inventory commands, never user PATH."""
     command = tuple(map(str, command))
@@ -189,8 +225,10 @@ def _system_command(command):
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             cwd=str(Path(first).anchor), env=env, shell=False,
                             timeout=15, check=False)
-    if result.returncode or len(result.stdout) > MAX_OS_OUTPUT_BYTES:
-        raise ValueError("OS inventory unavailable or oversized")
+    if result.returncode:
+        raise OSInventoryError("command-exit", result.returncode)
+    if len(result.stdout) > MAX_OS_OUTPUT_BYTES:
+        raise OSInventoryError("output-limit")
     return result.stdout.decode("utf-8", "replace")
 
 
@@ -398,10 +436,22 @@ class _Discovery:
         source.update(status=status, reason=reason)
         self.gaps.add(source["location"] + ": " + reason)
 
-    def error(self, source, error, path=None):
-        denied = isinstance(error, PermissionError) or getattr(error, "errno", None) in {1, 13}
+    def diagnostic(self, source, error, stage):
+        diagnostic = _error_diagnostic(error, stage)
+        errors = source.setdefault("metadata", {}).setdefault("errorDiagnostics", [])
+        if diagnostic not in errors and len(errors) < 16:
+            errors.append(diagnostic)
+
+    def error(self, source, error, path=None, *, stage="metadata-read"):
+        read_reason = _error_diagnostic(error, stage).get("reason")
+        excluded = read_reason in {"symlink", "outside_scope"}
+        status = "skipped" if excluded else "error"
+        denied = (isinstance(error, PermissionError) or getattr(error, "errno", None) in {1, 13}
+                  or read_reason == "permission_denied")
         if denied:
             self.counts["permissionErrors"] += 1
+        if read_reason == "symlink":
+            self.counts["symlinksSkipped"] += 1
         if path is not None:
             # Preserve which discovery area failed, without exporting private
             # account/project/file names from filesystem exceptions.
@@ -413,10 +463,17 @@ class _Discovery:
             identity = "src-" + _id(source["id"], label)
             area = next((item for item in self.sources if item["id"] == identity), None)
             if area is None:
-                area = {"id": identity, "client": "machine", "scope": "machine", "location": source["location"] + "/" + label, "status": "error"}
+                area = {"id": identity, "client": "machine", "scope": "machine", "location": source["location"] + "/" + label, "status": status}
                 self.sources.append(area)
             source = area
-        self.gap(source, "Permission denied for this discovery area." if denied else "This discovery area could not be read safely.", "error")
+        self.diagnostic(source, error, stage)
+        if read_reason == "symlink":
+            reason = "A symbolic link or reparse point was not followed."
+        elif read_reason == "outside_scope":
+            reason = "Outside selected scope; this discovery area was not opened."
+        else:
+            reason = "Permission denied for this discovery area." if denied else "This discovery area could not be read safely."
+        self.gap(source, reason, status)
 
     def indicator(self, source, client, activation, discovery, *, extra=None, kind="client"):
         details = {"activation": activation, "discovery": discovery, "interpretation": "OS process-name observation; executable identity and session access not verified" if activation == "running" else "installation metadata indicator; runtime state not verified"}
@@ -439,25 +496,29 @@ class _Discovery:
         return self._account_boundary
 
     def children(self, path, source):
+        stage = "boundary-check"
         try:
             boundary = self.boundary
             boundary.check_path(path)
             if any(path == blocked or blocked in path.parents for blocked in self.layout.get("blockedMounts", set())):
                 return []
+            stage = "directory-metadata"
             info = path.lstat()
             if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-                self.counts["symlinksSkipped"] += 1
-                return []
+                raise ReadGap("symlink")
             # List the folder that was checked, through a handle opened without following a
             # final link and compared by identity, so a folder swapped in between is never listed.
             listed = path
             if os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW"):
+                stage = "directory-open"
                 listed = _open_unredirected(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, boundary)
                 opened = os.fstat(listed)
                 if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
                     os.close(listed)
+                    stage = "directory-identity"
                     raise ValueError("directory changed while opening")
             try:
+                stage = "directory-listing"
                 with os.scandir(listed) as entries:
                     result = []
                     for item in entries:
@@ -470,12 +531,13 @@ class _Discovery:
                 if listed is not path:
                     os.close(listed)
             return sorted(result)
-        except ReadGap:
+        except ReadGap as error:
+            self.error(source, error, path, stage=stage)
             return []
         except FileNotFoundError:
             return []
         except (OSError, ValueError) as error:
-            self.error(source, error, path)
+            self.error(source, error, path, stage=stage)
             return []
 
     def other_person(self, info):
@@ -519,8 +581,7 @@ class _Discovery:
         try:
             info = current.lstat()
             if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-                self.counts["symlinksSkipped"] += 1
-                return []
+                raise ReadGap("symlink")
             if not stat.S_ISDIR(info.st_mode):
                 return []
             self.counts["profilesDiscovered"] += 1
@@ -539,7 +600,7 @@ class _Discovery:
         except FileNotFoundError:
             return []
         except (OSError, ReadGap) as error:
-            self.error(source, error, current)
+            self.error(source, error, current, stage="profile-access")
             return []
         self.counts["profilesAccessible"] += 1
         return [{"root": current, "alias": "~"}]
@@ -651,9 +712,9 @@ class _Discovery:
                         elif stat.S_ISLNK(child_info.st_mode) or getattr(child_info, "st_file_attributes", 0) & 0x400:
                             self.counts["symlinksSkipped"] += 1
                     except OSError as error:
-                        self.error(source, error, child)
+                        self.error(source, error, child, stage="entry-metadata")
             except OSError as error:
-                self.error(source, error, directory)
+                self.error(source, error, directory, stage="directory-metadata")
         self.counts["projectsDiscovered"] = len(projects)
         return sorted(projects, key=str)
 
@@ -661,14 +722,20 @@ class _Discovery:
         """Names of AI apps this account is running; other accounts' processes are not listed."""
         source = self.source("running-process-names")
         os_name = self.layout["os"]
+        stage = "process-command"
         try:
             if os_name not in {"windows", "macos", "linux"}:
                 raise ValueError("unsupported OS")
             if os_name == "windows":
-                command = [_windows_system_directory() / "tasklist.exe", "/FO", "CSV", "/NH", "/FI", "USERNAME eq " + _windows_user()]
+                stage = "system-directory"
+                executable = _windows_system_directory() / "tasklist.exe"
+                stage = "account-filter"
+                command = [executable, "/FO", "CSV", "/NH", "/FI", "USERNAME eq " + _windows_user()]
             else:
                 command = ["/bin/ps", *(["-x"] if os_name == "macos" else []), "-U", str(os.getuid()), "-o", "comm="]
+            stage = "process-inventory"
             text = _system_command(command)
+            stage = "process-output"
             names = [row[0] for row in csv.reader(io.StringIO(text)) if row] if os_name == "windows" else text.splitlines()
             found = set()
             for raw in names:
@@ -679,7 +746,8 @@ class _Discovery:
                     found.add(EXECUTABLES[name])
             for client in sorted(found):
                 self.indicator(source, client, "running", "operating-system-process-name")
-        except (OSError, KeyError, ValueError, subprocess.SubprocessError):
+        except (OSError, KeyError, ValueError, subprocess.SubprocessError) as error:
+            self.diagnostic(source, error, stage)
             self.gap(source, "The fixed operating-system process inventory could not be read; running AI processes remain unverified.", "error")
 
     def services(self, profiles):

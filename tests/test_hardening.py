@@ -265,8 +265,12 @@ class CostTests(Home):
             (self.home / "code/app/.git" / name).mkdir()
         self.put("code/app/.gitignore", "".join(f"generated-{index}/\n" for index in range(1_001)))
         self.put("code/app/.claude/skills/kept/SKILL.md", "---\nname: kept\n---\nSteps.")
-        findings = [item for item in self.scan([self.home / "code/app"])["findings"] if item["ruleId"] == "skills-local-unreviewed"]
-        self.assertEqual([item["severity"] for item in findings], ["critical"])
+        snapshot = self.scan([self.home / "code/app"])
+        findings = [item for item in snapshot["findings"] if item["ruleId"] == "skills-local-unreviewed"]
+        self.assertEqual([item["severity"] for item in findings], ["high"])
+        skills = [item for item in snapshot["observations"] if item["kind"] == "skill"]
+        self.assertEqual(len(skills), 1)
+        self.assertNotEqual(skills[0]["details"].get("provenance"), "version-controlled")
 
     def test_collection_stops_at_its_overall_time_limit(self):
         self.put(".claude/settings.json", {})

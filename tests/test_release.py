@@ -1,5 +1,6 @@
 """The public download contains a small reproducible source-only skill."""
 import hashlib
+import json
 from pathlib import Path
 import re
 import shutil
@@ -12,8 +13,11 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build(target, root=ROOT):
-    return subprocess.run([sys.executable, "-I", "-S", str(root / "scripts/build_release.py"), "--output", str(target)],
+def build(target, root=ROOT, source_commit=None):
+    command = [sys.executable, "-I", "-S", str(root / "scripts/build_release.py"), "--output", str(target)]
+    if source_commit is not None:
+        command += ["--source-commit", source_commit]
+    return subprocess.run(command,
                           capture_output=True, text=True)
 
 
@@ -41,10 +45,13 @@ class ReleaseTests(unittest.TestCase):
                                  "scripts/palma_scan/_vendor/json5/lib.py",
                                  "scripts/palma_scan/_vendor/yaml/loader.py",
                                  "scripts/palma_scan/_vendor/NOTICE.md",
-                                 "references/report-design.md", "THIRD_PARTY_NOTICES.md"):
+                                 "references/report-design.md", "THIRD_PARTY_NOTICES.md", "BUILD-INFO.json",
+                                 "assets/palma-logo.svg", "assets/palma-mark.svg",
+                                 "scripts/palma_scan/report_overview.py", "scripts/palma_scan/report_brand.py", "scripts/palma_scan/marketplaces.py",
+                                 "scripts/palma_scan/marketplaces.json", "references/trusted-marketplaces.md"):
                     self.assertIn("palma-ai-readiness/"+required, names)
                 self.assertFalse(any(part in name for name in names for part in
-                                     ("collector/", "__pycache__", "docs/", "tests/", "examples/", "upload", "enrollment", "build_release")))
+                                     ("collector/", "__pycache__", "docs/", "tests/", "examples/", "upload", "enrollment", "build_release", "publish_release", ".github/")))
                 readme = release.read("palma-ai-readiness/README.md").decode("utf-8")
                 self.assertNotIn("## Development checks", readme)
                 self.assertNotIn("## Publish the skill", readme)
@@ -103,7 +110,7 @@ class ReleaseTests(unittest.TestCase):
             for name in ("SKILL.md", "README.md", "THIRD_PARTY_NOTICES.md"):
                 (source/name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT/name, source/name)
-            for name in ("agents", "references", "scripts"):
+            for name in ("agents", "assets", "references", "scripts"):
                 shutil.copytree(ROOT/name, source/name, ignore=shutil.ignore_patterns("__pycache__"))
             self.assertEqual(build(Path(td)/"clean.zip", source).returncode, 0)
             loader = source/"scripts/palma_scan/_vendor/yaml/loader.py"
@@ -123,6 +130,41 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(b"\nRELEASE = True\n", entry)
         self.assertNotIn(b"\nRELEASE = False\n", entry)
         self.assertEqual(launcher.count(b"\n"), launcher.count(b"\r\n"))
+
+    def test_source_commit_is_deterministic_and_covered_by_the_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            first, again, different = [Path(td)/name for name in ("first.zip", "again.zip", "different.zip")]
+            for target, commit in ((first, "a" * 40), (again, "a" * 40), (different, "b" * 40)):
+                result = build(target, source_commit=commit)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(first.read_bytes(), again.read_bytes())
+            self.assertNotEqual(first.read_bytes(), different.read_bytes())
+            with zipfile.ZipFile(first) as release:
+                info = release.read("palma-ai-readiness/BUILD-INFO.json")
+                self.assertEqual(json.loads(info), {"formatVersion": 1, "sourceCommit": "a" * 40})
+                self.assertIn(hashlib.sha256(info).hexdigest() + "  BUILD-INFO.json\n",
+                              release.read("palma-ai-readiness/MANIFEST.sha256").decode("ascii"))
+                release.extractall(Path(td)/"extracted")
+            release_root = Path(td)/"extracted/palma-ai-readiness"
+            (release_root/"BUILD-INFO.json").write_text("{}")
+            refused = subprocess.run([sys.executable, "-I", "-S", str(release_root/"scripts/palma-scan.py"), "--version"],
+                                     capture_output=True, text=True)
+            self.assertEqual(refused.returncode, 2)
+            self.assertIn("BUILD-INFO.json", refused.stderr)
+
+    def test_invalid_source_commits_and_unsafe_checksum_filenames_are_refused(self):
+        with tempfile.TemporaryDirectory() as td:
+            for commit in ("main", "a" * 39, "A" * 40, "a" * 40 + "\n", "$(id)"):
+                with self.subTest(commit=commit):
+                    target = Path(td)/"release.zip"
+                    result = build(target, source_commit=commit)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertFalse(target.exists())
+            for name in ("with spaces.zip", "newline\n.zip", "no-extension", ".hidden.zip"):
+                with self.subTest(name=name):
+                    target = Path(td)/name
+                    self.assertEqual(build(target).returncode, 2)
+                    self.assertFalse(target.exists())
 
     def test_windows_launcher_needs_no_powershell_policy_change(self):
         commands = [line for line in (ROOT/"scripts/run.cmd").read_text().splitlines() if not line.startswith("rem ")]

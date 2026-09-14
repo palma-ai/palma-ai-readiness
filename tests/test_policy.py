@@ -77,7 +77,7 @@ class PolicyTests(unittest.TestCase):
         [static] = self.rule(snapshot, "mcp-static-secret-auth")
         self.assertEqual((inline["severity"], self.names(snapshot, inline)), ("critical", {"context7"}))
         self.assertEqual((static["severity"], self.names(snapshot, static)), ("high", {"tracker"}))
-        self.assertIn("\u201ccontext7\u201d keeps a potential credential in plain text in ~/.cursor/mcp.json", inline["summary"])
+        self.assertIn("\u201ccontext7\u201d keeps a potential credential in plain text", inline["summary"])
         self.assertIn("use it as you", inline["impact"])
         self.assertNotIn("Control who can invoke tools", inline["impact"])
         self.assertIn("\u201ctracker\u201d signs in with a fixed secret", static["summary"])
@@ -130,19 +130,20 @@ class PolicyTests(unittest.TestCase):
         self.put("code/empty-marker/.claude/skills/marker/SKILL.md", "---\nname: marker\n---\nSteps.")
         snapshot = self.scan([self.home / "code" / name for name in ("kept", "ignored", "reincluded", "empty-marker")])
         findings = {item["severity"]: item for item in self.rule(snapshot, "skills-local-unreviewed")}
-        self.assertEqual(self.names(snapshot, findings["high"]), {"kept"})
-        self.assertEqual(self.names(snapshot, findings["critical"]), {"ignored", "reincluded", "marker"})
-        self.assertIn("not excluded by its .gitignore", findings["high"]["summary"])
+        self.assertEqual(self.names(snapshot, findings["high"]), {"kept", "ignored", "reincluded", "marker"})
+        versioned = {item["name"] for item in snapshot["observations"] if item["details"].get("provenance") == "version-controlled"}
+        self.assertEqual(versioned, {"kept"})
+        self.assertNotIn("critical", findings)
 
     def test_computer_use_summary_names_the_connector_and_what_it_controls(self):
         self.put("Library/Application Support/Claude/claude_desktop_config.json", {"mcpServers": {"computer-use": {"command": "computer-use-server"}}})
         snapshot = self.scan()
         [finding] = self.rule(snapshot, "mcp-computer-use")
         self.assertIn("\u201ccomputer-use\u201d can control the screen, keyboard and mouse as you", finding["summary"])
-        self.assertIn("Library/Application Support/Claude/claude_desktop_config.json", finding["summary"])
+        self.assertEqual(finding["evidence"][0]["location"], "~/Library/Application Support/Claude/claude_desktop_config.json")
         self.assertIn("keyboard and mouse", finding["impact"])
 
-    def test_version_controlled_project_skills_are_high_and_other_local_skills_stay_critical(self):
+    def test_local_skills_are_high_and_repository_provenance_remains_explicit(self):
         self.repository("code/tracked")
         self.put("code/tracked/.claude/skills/release/SKILL.md", "---\nname: release\n---\nSteps.")
         self.put("code/worktree/.git", "gitdir: ../tracked/.git/worktrees/worktree\n")
@@ -155,11 +156,11 @@ class PolicyTests(unittest.TestCase):
         self.put(".git/HEAD", "ref: refs/heads/main\n")  # A dotfiles repository in the home does not count.
         snapshot = self.scan([self.home / "code/tracked", self.home / "code/worktree", self.home / "code/untracked"])
         findings = {item["severity"]: item for item in self.rule(snapshot, "skills-local-unreviewed")}
-        self.assertEqual(set(findings), {"critical", "high"})
-        self.assertEqual(self.names(snapshot, findings["high"]), {"release", "deploy"})
-        self.assertEqual(self.names(snapshot, findings["critical"]), {"scratch", "downloaded"})
-        self.assertEqual(findings["high"]["title"], "Project skills in version control need a review record")
-        self.assertIn("reviewed like code", findings["high"]["ratingReason"])
+        self.assertEqual(set(findings), {"high"})
+        self.assertEqual(self.names(snapshot, findings["high"]), {"release", "deploy", "scratch", "downloaded"})
+        versioned = {item["name"] for item in snapshot["observations"] if item["details"].get("provenance") == "version-controlled"}
+        self.assertEqual(versioned, {"release", "deploy"})
+        self.assertIn("not malicious code or a missing prior audit", findings["high"]["ratingReason"])
 
 
 if __name__ == "__main__":

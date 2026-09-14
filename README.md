@@ -1,3 +1,5 @@
+<a href="https://palma.ai"><img src="assets/palma-logo.svg" alt="Palma AI" width="220"></a>
+
 # Palma AI access scan
 
 See the AI tools on your computer, the access they have, and what needs attention. Palma
@@ -6,11 +8,21 @@ It supports Windows, macOS, and Linux, with no account, enrollment, or backend c
 
 ## Run on your computer
 
-Download the skill from palma.ai and check it before extracting: the archive's SHA-256
-must match the `.sha256` file published beside it (`shasum -a 256 -c palma-ai-readiness.zip.sha256`
-on macOS, `sha256sum -c` on Linux, `Get-FileHash -Algorithm SHA256` in Windows PowerShell). Extract the **complete skill
-folder**. Python **3.11+** is required; parsers are bundled, so there are no packages to
-install or build tools to configure.
+Get the [latest Palma skill release](https://github.com/palma-ai/palma-ai-readiness/releases/latest).
+Download **palma-ai-readiness.zip** and **palma-ai-readiness.zip.sha256** from that same
+release. No GitHub account, Git installation, repository clone, or package installation is
+needed. Python **3.11+** is required; the parsers are bundled.
+
+The [download, verify and extract commands](references/commands.md#download-and-extract)
+resolve the latest release once so both files come from the same version. Verify the
+SHA-256 checksum before extracting, then keep the complete skill folder intact.
+The latest release is the newest successfully validated `main` build; each release records
+its source commit in `BUILD-INFO.json` and checks its files against `MANIFEST.sha256`.
+
+On Windows, extract to a short folder in your own profile, such as
+`%USERPROFILE%\palma-scan`, rather than a deeply nested agent scratch directory.
+Use a new extraction folder for each release. See the
+[verify, extract and run commands](references/commands.md#download-and-extract).
 
 **macOS / Linux**
 
@@ -58,10 +70,14 @@ scope). These files describe your computer's AI access, including which files ho
 credentials: keep them private, share only `share.html`, and delete the folder when you are
 done. Review priorities first, explore access charts, then open evidence and inventory
 details. Search actual skill, plugin, agent, and connector
-names and their local configuration paths. All priorities remain visible, with Critical
+names and their local configuration paths. MCP servers and skills appear once per
+declared name, with client badges and declaration counts. Expand a row to compare
+its configurations or skill contents; matching names do not imply identical versions
+or access. Browser extension records are grouped with their permission sets.
+All priorities remain visible, with Critical
 and High first. Client and connector icons are embedded.
-The report uses Palma's light visual style, with Onest typography, linked metric cards,
-priority and access charts, and expandable evidence. Its font and artwork are embedded;
+The report uses Palma's light visual style, with Onest typography, a client-to-component map,
+prominent Critical/High callouts, clickable priority bars, and expandable evidence. Detailed sections start collapsed. Its font and artwork are embedded;
 the report works offline and makes no network requests.
 
 The **EU AI Act overview** highlights when an AI use-case review is needed.
@@ -83,9 +99,11 @@ execute discovered code or change your configuration. You control any sharing.
 
 Interested in the picture across your team? Palma's separate aggregated view can connect
 recurring tools, exposure patterns, and priorities across participating devices. This skill
-has no upload or aggregation function. An optional `--booking-url <https-url>` adds a
-link to a palma.ai page when one is supplied.
+has no upload or aggregation function. The report ends with a team-view diagram and a
+[Talk to Palma](https://calendar.app.google/qVE3L8fGgmQWv3Hx7) booking button.
+`--booking-url <https-url>` can replace it with a palma.ai page. The link opens only when
+clicked; no scan data is added to it.
 
-See [commands](references/commands.md), [rules and coverage](references/risk-rules.md),
+Learn more about [Palma](https://palma.ai). See [commands](references/commands.md), [rules and coverage](references/risk-rules.md),
 [report design and manual fallback](references/report-design.md), and
 [third-party notices](THIRD_PARTY_NOTICES.md).
