@@ -1,4 +1,5 @@
 """Build a referentially complete report with bounded source/observation slots."""
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 
@@ -11,6 +12,8 @@ NAMES = {"claude-code": "Claude Code", "claude-desktop": "Claude Desktop", "code
          "windsurf": "Windsurf", "cline": "Cline", "roo-code": "Roo Code", "unknown": "Unknown"}
 VARIANTS = {"claude-code": "cli", "claude-desktop": "desktop", "gemini-cli": "cli",
             "vscode": "ide", "windsurf": "ide", "roo-code": "extension"}
+# Fields of an existing client that a later document can change.
+CLIENT_STATE = ("variant", "version", "installationState", "authModes", "authEvidence")
 
 
 def iso_time(timestamp=None):
@@ -90,26 +93,56 @@ class ReportBuilder:
         self.documents[source["id"]] = data
 
     def checkpoint(self):
-        """Registry state before one candidate runs; see `rollback`."""
-        return set(self.sources), set(self.observations), len(self.mcp_documents)
+        """Registry state before one unit of collection runs; see `rollback`.
+
+        Entries are appended, and removed only by the unit that added them, so registry
+        sizes mark what existed before. An existing client can still be changed by a later
+        document (sign-in modes, variant, installation), so those fields are saved too.
+        """
+        clients = {context: {key: list(client[key]) if isinstance(client[key], list) else client[key] for key in CLIENT_STATE}
+                   for context, client in self.clients.items()}
+        evidence = {context: set(values) for context, values in self.variant_evidence.items()}
+        return len(self.sources), len(self.observations), len(self.mcp_documents), clients, evidence
 
     def rollback(self, checkpoint):
-        """Discard every source, document and observation registered since `checkpoint`.
+        """Discard everything registered or changed since `checkpoint`.
 
-        An adapter that fails part-way leaves nothing behind: no probe-only source
-        naming an unrelated application, and no partial evidence that looks complete.
+        An adapter that fails part-way leaves nothing behind: no probe-only source naming
+        an unrelated application, no partial evidence that looks complete, and no sign-in
+        claim from a document whose evidence was withdrawn.
         """
-        sources, observations, mcp_documents = checkpoint
-        for identity in [identity for identity in self.sources if identity not in sources]:
+        sources, observations, mcp_documents, clients, evidence = checkpoint
+        for identity in list(self.sources)[sources:]:
             del self.sources[identity]
             self.documents.pop(identity, None)
             self.candidates.pop(identity, None)
             self.component_parents.pop(identity, None)
             self.content.pop(identity, None)
-        for identity in [identity for identity in self.observations if identity not in observations]:
+        for identity in list(self.observations)[observations:]:
             del self.observations[identity]
         self.clients = {context: client for context, client in self.clients.items() if client["id"] in self.observations}
+        for context, state in clients.items():
+            if context in self.clients:
+                self.clients[context].update(state)
+        self.variant_evidence = evidence
         del self.mcp_documents[mcp_documents:]
+
+    @contextmanager
+    def isolated(self, candidate):
+        """Collect one unit completely or not at all.
+
+        An unanticipated shape or adapter defect discards what the unit registered and
+        records a gap on `candidate`, so its siblings stay collectable. The exception text
+        is not recorded; it can echo contents. Collection limits (ReadGap) propagate.
+        """
+        checkpoint = self.checkpoint()
+        try:
+            yield
+        except ReadGap:
+            raise
+        except Exception:
+            self.rollback(checkpoint)
+            self.gap(candidate, "adapter_error", "invalid")
 
     def gap(self, candidate, reason, status="skipped"):
         identity = fingerprint(self.namespace, "gap", candidate.family, str(candidate.path), reason)

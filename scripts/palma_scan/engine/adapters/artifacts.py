@@ -41,7 +41,9 @@ def scan_skills(builder, candidate, parent_id=None, depth=0, allow_plugin=True):
         child = candidate.child(path, "skills", "directory")
         try:
             if stat.S_ISDIR(builder.files.info(path).st_mode):
-                scan_skills(builder, child, parent_id, depth + 1, allow_plugin=allow_plugin)
+                # One malformed skill must not discard its siblings.
+                with builder.isolated(child):
+                    scan_skills(builder, child, parent_id, depth + 1, allow_plugin=allow_plugin)
         except ReadGap as error:
             builder.gap(child, error.reason, error.status)
 
@@ -99,7 +101,8 @@ def scan_agents(builder, candidate, parent_id=None):
     if children is None:
         return
     for path in children:
-        collect_agent(builder, candidate, path, parent_id)
+        with builder.isolated(candidate):
+            collect_agent(builder, candidate, path, parent_id)
 
 
 def collect_agent(builder, candidate, path, parent_id=None):

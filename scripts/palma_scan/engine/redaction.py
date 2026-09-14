@@ -234,57 +234,88 @@ GENERIC_ACCOUNT_NAMES = frozenset({
 MIN_ACCOUNT_NAME_LENGTH = 3
 # Keys that hold opaque identifiers, never paths or names.
 _IDENTIFIER_KEYS = frozenset({"id", "sourceId", "parentId", "contextId", "profileId", "observationIds"})
+# Keys whose strings are locations or messages. The account name is removed only from
+# these and from absolute paths: client ids, setting keys and values are fixed
+# vocabulary that a login name such as "vscode" or "sandbox" must not rewrite.
+_TEXT_KEYS = frozenset({"location", "locations", "declaration", "configuredLocations", "reason", "reasons", "limitations"})
+_ABSOLUTE_PATH = re.compile(r"~?[\\/]|[A-Za-z]:[\\/]")
+# The snapshot validator's field limit; an alias or token can be longer than what it replaces.
+MAX_SCRUBBED_LENGTH = 10_000
+
+
+def _distinctive(name):
+    return (isinstance(name, str) and len(name) >= MIN_ACCOUNT_NAME_LENGTH
+            and name.casefold() not in GENERIC_ACCOUNT_NAMES and not name.isdigit())
+
+
+def _alternation(words):
+    return "(?:" + "|".join(map(re.escape, sorted(words, key=len, reverse=True))) + ")"
+
+
+def _lookup(table, text):
+    """The replacement for a case-insensitive match; Unicode case mapping can change length."""
+    value = table.get(text.lower())
+    if value is None:
+        value = next(item for key, item in table.items() if re.fullmatch(re.escape(key), text, re.IGNORECASE))
+    return value
 
 
 class IdentityScrubber:
-    """Remove account home directories and account names from exported text.
+    """Remove account home directories and the account name from exported text.
 
     ``accounts`` is a list of ``{"root": path, "alias": "~" | "user-N", "names": [...]}``.
     A home path becomes its alias wherever it appears, not only as a prefix: caches,
-    temporary folders and session state often embed one, sometimes with separators
-    rewritten (``/tmp/x/-Users-name-project``). Account names are replaced only as
-    whole tokens, and only when distinctive enough not to corrupt ordinary text.
+    temporary folders and session state often embed one. An account name is replaced
+    as a whole token, also in the dash-separated form tools use to encode a folder
+    (``/tmp/x/-Users-first-last-project``), but only in locations, messages and absolute
+    paths, and only when distinctive enough not to corrupt ordinary text.
     """
 
     def __init__(self, accounts):
-        paths, names = [], []
+        self.aliases, self.tokens, homes = {}, {}, {}
         for account in accounts:
             alias = account["alias"]
-            root = str(account["root"]).rstrip("/\\")
+            root = str(account.get("root") or "").rstrip("/\\")
             variants = {root, root.replace("\\", "/")}
             if root.startswith("/Users/"):
                 variants.add("/System/Volumes/Data" + root)  # macOS firmlinked form
             for variant in variants:
-                if len(variant) > 1:
-                    pattern = re.compile(re.escape(variant) + r"(?![A-Za-z0-9._-])", re.IGNORECASE)
-                    paths.append((len(variant), pattern, alias))
+                split = max(variant.rfind("/"), variant.rfind("\\")) + 1
+                if 0 < split < len(variant):
+                    self.aliases.setdefault(variant.lower(), alias)
+                    homes.setdefault(variant[:split].lower(), set()).add(variant[split:].lower())
             token = "[account]" if alias == "~" else "[" + alias + "]"
             for name in account.get("names", ()):
-                if (isinstance(name, str) and len(name) >= MIN_ACCOUNT_NAME_LENGTH
-                        and name.casefold() not in GENERIC_ACCOUNT_NAMES and not name.isdigit()):
-                    pattern = re.compile(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", re.IGNORECASE)
-                    names.append((len(name), pattern, token))
-        # The most specific (longest) match wins when homes or names overlap.
-        self.paths = [(pattern, alias) for _, pattern, alias in sorted(paths, key=lambda item: -item[0])]
-        self.names = [(pattern, token) for _, pattern, token in sorted(names, key=lambda item: -item[0])]
+                if _distinctive(name):
+                    for form in {name, re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")}:
+                        if _distinctive(form):
+                            self.tokens.setdefault(form.lower(), token)
+        # One pattern per folder that holds homes, not one pass per account; a longer folder
+        # comes first, so a home inside another home keeps its own alias.
+        self.paths = [(parent, re.compile(re.escape(parent) + _alternation(names) + r"(?![A-Za-z0-9._-])", re.IGNORECASE))
+                      for parent, names in sorted(homes.items(), key=lambda item: -len(item[0]))]
+        self.names = (re.compile(r"(?<![A-Za-z0-9])" + _alternation(self.tokens) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+                      if self.tokens else None)
 
-    def text(self, value):
+    def text(self, value, names=True):
         if not isinstance(value, str):
             return value
-        for pattern, alias in self.paths:
-            value = pattern.sub(lambda _: alias, value)
-        for pattern, token in self.names:
-            value = pattern.sub(lambda _: token, value)
-        return value
+        original, lowered = len(value), value.lower()
+        for parent, pattern in self.paths:
+            if parent in lowered:
+                value = pattern.sub(lambda match: _lookup(self.aliases, match.group(0)), value)
+        if names and self.names:
+            value = self.names.sub(lambda match: _lookup(self.tokens, match.group(0)), value)
+        return value[:MAX_SCRUBBED_LENGTH] if len(value) > max(original, MAX_SCRUBBED_LENGTH) else value
 
     def scrub(self, value, key=None):
         """Return ``value`` with every nested string scrubbed; identifiers are kept."""
         if key in _IDENTIFIER_KEYS:
             return value
         if isinstance(value, str):
-            return self.text(value)
+            return self.text(value, names=key in _TEXT_KEYS or bool(_ABSOLUTE_PATH.match(value)))
         if isinstance(value, list):
-            return [self.scrub(item) for item in value]
+            return [self.scrub(item, key) for item in value]
         if isinstance(value, dict):
             return {name: self.scrub(item, name) for name, item in value.items()}
         return value

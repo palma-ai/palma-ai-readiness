@@ -31,7 +31,8 @@ def scan_plugins(builder, candidate, depth=0):
         child = candidate.child(path, "plugins", "directory")
         try:
             if stat.S_ISDIR(builder.files.info(path).st_mode):
-                scan_plugins(builder, child, depth + 1)
+                with builder.isolated(child):
+                    scan_plugins(builder, child, depth + 1)
         except ReadGap as error:
             builder.gap(child, error.reason, error.status)
 

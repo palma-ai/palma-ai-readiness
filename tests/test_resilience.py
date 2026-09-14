@@ -11,8 +11,10 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from palma_scan import cli, collector, machine
+from palma_scan import baseline, cli, collector, machine
 from palma_scan.collector import collect
+from palma_scan.engine import observations
+from palma_scan.engine.adapters import configs
 from palma_scan.engine.parsing import ParseError, parse_document
 from palma_scan.model import validate
 from palma_scan.rules import evaluate
@@ -102,9 +104,28 @@ class CollectionBoundaryTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_EXCEPTION_TEXT", json.dumps(snapshot))
 
     @unittest.skipIf(os.name == "nt", "POSIX fixture modes")
+    def test_one_failing_app_bundle_does_not_discard_the_other_apps(self):
+        base = self.home / "Applications/Codex.app/Contents"
+        self.write("Applications/Codex.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.openai.codex", "CFBundleShortVersionString": "26.901.1", "CFBundleExecutable": "Main"}))
+        self.write("Applications/Codex.app/Contents/MacOS/Main", b"binary")
+        (base / "MacOS/Main").chmod(0o755)
+        self.write("Applications/Zzz PRIVATE.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.example.z"}))
+        original = observations.ReportBuilder.probe_document
+
+        def probe_document(builder, candidate):
+            if "Zzz PRIVATE" in str(candidate.path):
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")
+            return original(builder, candidate)
+
+        with patch.object(observations.ReportBuilder, "probe_document", probe_document):
+            snapshot = self.scan()
+        installed = [item for item in snapshot["observations"] if item["kind"] == "client" and item["details"].get("activation") == "installed"]
+        self.assertEqual([item["client"] for item in installed], ["codex"])
+        self.assertNotIn("PRIVATE", json.dumps(snapshot))
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture modes")
     def test_failed_bundle_probe_leaves_no_trace_of_an_unrelated_application(self):
         self.write("Applications/PRIVATE_UNRELATED.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.example.unrelated"}))
-        from palma_scan.engine import observations
         original = observations.ReportBuilder.file_metadata
 
         def file_metadata(builder, candidate, source, info):
@@ -127,6 +148,81 @@ class CollectionBoundaryTests(unittest.TestCase):
         self.assertFalse([item for item in snapshot["observations"] if item["location"] == "~/.cursor/mcp.json"])
         self.assertNotIn("PRIVATE_TOKEN_VALUE_1234", json.dumps(snapshot))
 
+    def test_one_failing_skill_does_not_discard_its_siblings(self):
+        self.write(".claude/skills/alpha/SKILL.md", "---\nname: alpha\n---\nbody\n")
+        self.write(".claude/skills/beta/SKILL.md", "---\nname: beta\n---\nbody\n")
+        from palma_scan.engine.adapters import artifacts
+        original = artifacts.collect_skill
+
+        def collect_skill(builder, directory, manifest, parent_id):
+            if directory.path.name == "beta":
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")
+            return original(builder, directory, manifest, parent_id)
+
+        with patch.object(artifacts, "collect_skill", collect_skill):
+            snapshot = self.scan()
+        self.assertEqual([item["name"] for item in snapshot["observations"] if item["kind"] == "skill"], ["alpha"])
+        self.assertTrue([source for source in snapshot["sources"] if source.get("reason") == "adapter_error"])
+
+    def test_a_withdrawn_candidate_neither_keeps_nor_removes_its_clients_row(self):
+        self.write(".cursor/cli-config.json", {"permissions": {"allow": ["Shell(ls)"]}})
+        self.write(".cursor/mcp.json", {"mcpServers": {"local": {"command": "node"}}})
+        with patch.object(configs, "collect_mcps", side_effect=RuntimeError("PRIVATE_EXCEPTION_TEXT")):
+            snapshot = self.scan()
+        self.assertEqual([item["client"] for item in snapshot["observations"] if item["kind"] == "client"], ["cursor"])
+
+    def test_a_withdrawn_document_leaves_no_sign_in_claim_on_an_existing_client(self):
+        self.write(".claude/settings.json", {"sandbox": {"enabled": True}})
+        self.write(".claude.json", {"oauthAccount": {"emailAddress": "PRIVATE_EMAIL"}, "autoUpdates": True})
+        original = configs.configured_plugins
+
+        def configured_plugins(builder, candidate, source, data):
+            if candidate.path.name == ".claude.json":
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")  # after sign-in modes were recorded
+            return original(builder, candidate, source, data)
+
+        with patch.object(configs, "configured_plugins", configured_plugins):
+            snapshot = self.scan()
+        client = next(item for item in snapshot["observations"] if item["kind"] == "client" and item["client"] == "claude-code")
+        self.assertNotIn("vendor_login", client["details"]["authModes"])
+        self.assertEqual({source["status"] for source in snapshot["sources"] if source["location"].startswith("~/.claude.json")}, {"error"})
+
+    def test_one_failing_project_entry_keeps_the_rest_of_the_file(self):
+        (self.home / "proj").mkdir()
+        self.write(".claude.json", {"mcpServers": {"user-remote": {"type": "http", "url": "https://mcp.example.test/mcp"}},
+                                    "bypassPermissionsModeAccepted": True,
+                                    "projects": {str(self.home / "proj"): {"mcpServers": {"proj-local": {"command": "node"}}}}})
+        original = collector._Collector.mcps
+
+        def mcps(instance, source, entries, parent_disabled=False, context="base", map_key="mcpServers"):
+            if context == "project":
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, source, entries, parent_disabled, context, map_key)
+
+        with patch.object(collector._Collector, "mcps", mcps):
+            snapshot = self.scan()
+        state = next(source for source in snapshot["sources"] if source["location"] == "~/.claude.json")
+        self.assertEqual(state["status"], "error")
+        rows = {(item["kind"], item["name"]) for item in snapshot["observations"] if item["sourceId"] == state["id"]}
+        self.assertNotIn(("mcp", "proj-local"), rows)
+        for kept in (("mcp", "user-remote"), ("client", "claude-code"), ("setting", "bypassPermissionsModeAccepted")):
+            self.assertIn(kept, rows)
+
+    def test_in_memory_policy_that_fails_part_way_leaves_no_rows(self):
+        policy = {"data": {"permissions": {"defaultMode": "bypassPermissions"}}, "client": "claude-code",
+                  "location": "system:claude-code/managed-preferences", "format": "json", "context": "managed"}
+        original = baseline.collect_config
+
+        def collect_config(*args):
+            original(*args)
+            raise TypeError("PRIVATE_EXCEPTION_TEXT")
+
+        with patch.object(baseline, "collect_config", collect_config):
+            snapshot = baseline.collect_scopes([], system_sources=[policy], workspaces=[])
+        managed = [source for source in snapshot["sources"] if source["location"].startswith("system:claude-code/managed-preferences")]
+        self.assertEqual({source["status"] for source in managed}, {"error"})
+        self.assertFalse([item for item in snapshot["observations"] if item["location"].startswith("system:claude-code/managed-preferences")])
+
     def test_a_source_that_fails_in_the_first_pass_is_not_retranslated_later(self):
         self.write("Library/Application Support/Code/User/profiles/work/mcp.json", {"servers": {"source-control": {"type": "http", "url": "https://api.githubcopilot.com/mcp/"}}})
         original = collector._Collector.process_data
@@ -138,7 +234,8 @@ class CollectionBoundaryTests(unittest.TestCase):
 
         with patch.object(collector._Collector, "process_data", process_data):
             snapshot = self.scan()
-        self.assertFalse([item for item in snapshot["observations"] if item["client"] == "vscode" and item["kind"] == "mcp"])
+        # Neither its declarations nor fallback rows from the later passes are exported.
+        self.assertFalse([item for item in snapshot["observations"] if item["client"] == "vscode"])
         self.assertTrue([source for source in snapshot["sources"] if source["client"] == "vscode" and source["status"] == "error"])
 
     def test_a_withdrawn_parent_leaves_no_dangling_links(self):

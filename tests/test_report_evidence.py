@@ -79,6 +79,15 @@ class EvidenceTests(unittest.TestCase):
         data["findings"] = [finding("f1", "sandbox-disabled", "high", ["o1"], [{"sourceId": "s1", "location": "~/.codex/config.toml", "key": "sandbox_mode", "value": "danger-full-access"}])]
         self.assertIn('<code class="fact fact-setting">sandbox_mode = danger-full-access</code>', render_report(data, {}))
 
+    def test_coverage_says_which_folders_were_not_searched_only_when_some_were_skipped(self):
+        data = base()
+        data["scope"]["discovery"] = {"localVolumes": 1, "projectsDiscovered": 2, "directoriesVisited": 90, "excludedDirectories": 3}
+        coverage = render_report(data, {}).split('id="coverage"', 1)[1]
+        self.assertIn("not searched for projects", coverage)
+        self.assertIn("<code>--workspace</code>", coverage)
+        data["scope"]["discovery"]["excludedDirectories"] = 0
+        self.assertNotIn("not searched for projects", render_report(data, {}))
+
     def test_merged_copies_list_every_declared_location(self):
         data = base()
         data["sources"] = [{"id": "s1", "client": "claude-code", "scope": "workspace", "location": "~/code/mono/.mcp.json", "status": "collected"}]

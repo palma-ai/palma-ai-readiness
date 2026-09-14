@@ -22,8 +22,11 @@ re-evaluation. Neither performs a fresh endpoint scan.
 The scan covers the account that runs it on the machine visible to the native launching
 process: its profile, AI project markers on local volumes, supported application and editor
 installations, configuration layers, managed policy, profiles/state, extension components,
-browser integrations, and known AI runtime/service metadata. Other accounts' home folders,
-OS temporary folders and the scanner's own folder are not traversed.
+browser integrations, the AI apps it is running, and known AI runtime/service metadata.
+Folders that belong to other accounts (their homes wherever they are, and on macOS and
+Linux any folder another person's account owns), backups, OS temporary folders and the
+scanner's own folder are not traversed. The report's coverage section says when any were
+skipped; scan such a project with `--workspace`.
 
 - `--workspace DIR` supplements automatic discovery with another project (repeatable).
 - `--output-dir DIR` chooses a new run directory. It does not change scan scope.
@@ -36,8 +39,8 @@ from general traversal; supported AI cache/state locations have dedicated adapte
 Symlinks and Windows reparse points are handled conservatively. Specific skipped/denied
 sources and discovery limits are recorded.
 
-The launching account's OS permissions apply. Other accounts' home folders are never
-opened, even when readable. WSL is a separate operating-system context.
+The launching account's OS permissions apply. Folders that belong to other accounts are
+never opened, even when readable. WSL is a separate operating-system context.
 A hosted chat, container, or remote shell does not automatically see the physical host.
 For web requests, follow the native run workflow in SKILL.md.
 

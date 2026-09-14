@@ -23,8 +23,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\palma-ai-readiness\
 
 The scan covers your account: AI clients, connectors, skills and settings in your profile,
 managed AI policy, installed AI apps, editor profiles, extension components, supported runtime
-and browser integration metadata, and AI projects on local drives. Other accounts' home
-folders are never opened. You do not need to choose a directory. Large machines can take
+and browser integration metadata, and AI projects on local drives. Folders that belong to
+other accounts are never opened. You do not need to choose a directory. Large machines can take
 several minutes. Specific unreadable sources are recorded in coverage.
 
 The report opens in your browser. Use `--no-open` to keep it closed, `--workspace <path>`

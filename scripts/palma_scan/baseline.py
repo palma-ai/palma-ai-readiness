@@ -198,21 +198,23 @@ def _source_location(collector, candidate, old, home, alias):
 
 
 @contextmanager
-def _atomic_source(collector, source, failed):
-    """Translate one source's evidence completely or not at all.
+def _atomic_source(collector, source, failed=None):
+    """Translate one unit of a source's evidence completely or not at all.
 
     Extraction runs over untrusted local documents. An unanticipated shape or an
-    extractor defect must neither end the scan nor leave half-annotated records,
-    such as profile settings missing their applicability. A failed source is added
-    to ``failed``: later passes skip it and its remaining rows are withdrawn when
-    the merge ends. The exception text is withheld because it can echo contents.
+    extractor defect must neither end the scan nor leave half-annotated records, such
+    as profile settings missing their applicability: the unit's rows are withdrawn and
+    the source reports the failure. A source whose document translation failed is added
+    to ``failed``, so later passes do not add fallback rows its typed evidence would
+    have replaced. The exception text is withheld because it can echo contents.
     """
     start = len(collector.observations)
     try:
         yield start
     except Exception:
         del collector.observations[start:]
-        failed.add(source['id'])
+        if failed is not None:
+            failed.add(source['id'])
         collector.gap(source, 'evidence in this source could not be interpreted safely', 'error')
 
 
@@ -298,7 +300,8 @@ def _merge(collector, collection, alias, workspaces):
         source = sources.get(old_source['id'])
         if not source or source['id'] in failed:
             continue
-        with _atomic_source(collector, source, failed) as start:
+        # One context's declarations failing withdraws only those rows.
+        with _atomic_source(collector, source) as start:
             normalized = {}
             for name, entry in entries.items():
                 if isinstance(entry, dict) and candidate.family == 'cline' and isinstance(entry.get('transport'), dict):
@@ -319,7 +322,7 @@ def _merge(collector, collection, alias, workspaces):
         source = sources.get(old.get('sourceId'))
         if not source or source['id'] in failed:
             continue
-        with _atomic_source(collector, source, failed):
+        with _atomic_source(collector, source):
             kind = old['kind']
             candidate = builder.candidates.get(old['sourceId'])
             context = source['context']
@@ -382,10 +385,23 @@ def _merge(collector, collection, alias, workspaces):
             item['id'] = 'obs-' + _id('engine', alias, old['id'])
             if kind == 'agent' or (kind == 'plugin' and old.get('installationState') in {'cached', 'installed'}):
                 item['_content'] = builder.content.get(old['sourceId'])
-    if failed:
-        # A source that failed in any pass contributes no rows at all.
-        collector.observations[:] = [item for item in collector.observations if item['sourceId'] not in failed]
 
+
+def _collect_in_memory(builder, candidate, data, normalize=None):
+    """Collect one in-memory document completely or not at all."""
+    source = builder.source(candidate)
+    checkpoint = builder.checkpoint()
+    try:
+        validate_tree(data)
+        if not isinstance(data, dict):
+            raise ParseError('root must be an object')
+        builder.adopt_document(source, data)
+        collect_config(builder, candidate, source, normalize(candidate.family, data) if normalize else data, lambda _: False)
+    except Exception:
+        # An unanticipated shape or adapter defect leaves no partial evidence behind.
+        builder.rollback(checkpoint)
+        builder.documents.pop(source['id'], None)
+        source.update(status='invalid', reason='parse_error')
 
 
 def _add_editor_state(collection, alias):
@@ -410,12 +426,7 @@ def _add_editor_state(collection, alias):
             source['sizeBytes'] = record['sizeBytes']
         data = record.get('data')
         if isinstance(data, dict) and data:
-            try:
-                validate_tree(data)
-                collection.builder.adopt_document(source, data)
-                collect_config(collection.builder, candidate, source, data, lambda _: False)
-            except (ValueError, TypeError, RecursionError):
-                source.update(status='invalid', reason='parse_error')
+            _collect_in_memory(collection.builder, candidate, data)
     collection.builder.finish()
 
 def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type='machine', discovery_gaps=None, include_installations=False):
@@ -439,7 +450,9 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
     machine = include_installations
     platform = HOST_OS.get(sys.platform, 'linux')
     owned = set()
-    anchor = selected[0][0] if selected else roots[0] if roots else Path(__file__).absolute().parent
+    # Without a selected profile nothing is attributed to a home: the anchor holds no
+    # candidate files and no project can contain it, so project files keep their own paths.
+    anchor = selected[0][0] if selected else Path(Path(__file__).absolute().anchor) / '.palma-scan-discovery' / 'no-profile'
     processing = selected or [(anchor, '~')]
     for root, alias in processing:
         assigned = [p for p in roots if p.is_relative_to(root) and not any(p.is_relative_to(other) for other, _ in selected if other != root and other.is_relative_to(root))]
@@ -449,7 +462,7 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         for workspace in assigned:
             owned.add(workspace)
             candidates += _known_candidates(workspace, 'workspace-' + str(roots.index(workspace) + 1), True)
-        if machine:
+        if machine and selected:
             env = dict(os.environ) if alias == '~' else {}
             env, rejected = bounded_environment(env, platform, root)
             for key in rejected:
@@ -496,16 +509,7 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         collection = _LocalCollection(options, ('local', 'system'), candidates)
         collection.run()
         for candidate, data in memory:
-            source = collection.builder.source(candidate)
-            try:
-                validate_tree(data)
-                if not isinstance(data, dict):
-                    raise ParseError('root must be an object')
-                collection.builder.adopt_document(source, data)
-                normalized = _extra().normalize_extra_data(candidate.family, data)
-                collect_config(collection.builder, candidate, source, normalized, lambda _: False)
-            except (ValueError, TypeError, RecursionError):
-                source.update(status='invalid', reason='parse_error')
+            _collect_in_memory(collection.builder, candidate, data, _extra().normalize_extra_data)
         collection.builder.finish()
         _merge(collector, collection, 'system', roots)
     # Shared graph edges and repeated candidates resolve to one deterministic row.

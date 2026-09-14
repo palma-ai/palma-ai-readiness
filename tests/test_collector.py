@@ -1,5 +1,6 @@
 """Exercise the scanner against synthetic files; never inspect the real home."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -366,6 +367,19 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(item["location"], str(path))
         self.assertEqual(result["sources"][0]["scope"], "system")
         self.assertEqual(result["sources"][0]["location"], str(path))
+
+    def test_without_a_profile_project_files_are_not_labelled_as_the_home(self):
+        project = self.base / "opt/team-app"
+        path = self.put(".claude/settings.json", {"permissions": {"defaultMode": "bypassPermissions"}}, project)
+        # No home was opened, so no account environment or installation is attributed to one.
+        with patch.dict(os.environ, {"CODEX_HOME": str(self.base / "codex-home")}), \
+             patch("palma_scan.baseline.installed_client_candidates", return_value=[]), \
+             patch("palma_scan.baseline.installation_candidates", return_value=[]):
+            result = collect_scopes([], workspaces=[project], include_installations=True)
+        locations = {source["location"] for source in result["sources"]}
+        self.assertIn(path.as_posix(), locations)
+        self.assertFalse([location for location in locations if location.startswith("~")])
+        self.assertEqual(result["scope"]["profileCount"], 0)
 
     def test_machine_scope_can_scan_more_than_16_discovered_workspaces(self):
         roots = []

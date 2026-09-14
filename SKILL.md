@@ -14,9 +14,9 @@ upload command. Organization metadata and reporting credentials are not scanner 
 
 Run the complete release on the computer the user wants assessed. The scan covers the
 **signed-in account**: its AI clients, connectors, skills and settings, system and managed
-AI policy, installed AI apps, running AI app names, and AI projects on local drives.
-Other accounts' home folders are never opened. Do not narrow the scan to the working
-directory or one project; `--workspace` only adds a project to automatic discovery.
+AI policy, installed AI apps, the AI apps it is running, and AI projects on local drives.
+Folders that belong to other accounts are never opened. Do not narrow the scan to the
+working directory or one project; `--workspace` only adds a project to automatic discovery.
 
 Before running, tell the user in one sentence what will be read, for example: “I'll scan
 your account on this computer for AI tools, connectors and access settings, including AI

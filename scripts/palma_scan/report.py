@@ -713,7 +713,10 @@ def _discovery_summary(snapshot: dict) -> str:
         number = discovery.get(key)
         if isinstance(number, int) and not isinstance(number, bool) and number >= 0:
             values.append(f'<div><dt>{label}</dt><dd>{number:,}</dd></div>')
-    return '<dl class="discovery-summary" aria-label="Machine discovery coverage">' + "".join(values) + '</dl>'
+    excluded = discovery.get("excludedDirectories")
+    note = ('<p class="muted discovery-note">Folders that belong to other accounts, temporary folders and this scanner’s own folder were not searched for projects. To include a project there, scan it with <code>--workspace</code>.</p>'
+            if type(excluded) is int and excluded > 0 else "")
+    return '<dl class="discovery-summary" aria-label="Machine discovery coverage">' + "".join(values) + '</dl>' + note
 
 
 # Causes of incomplete coverage, in reading order, with what the person can do about each.
