@@ -22,5 +22,9 @@
     "yaml/scanner.py": "60433788b652690c17710460da5d91e0c753d3318fd85f5e1e42862a71f25906",
     "yaml/serializer.py": "0a1b85826854d35863e31808f0668abfabdf33606e8f06bd8bb7761401e3edc0",
     "yaml/tokens.py": "953408cd2570f0c83dc2fe39f7e4e388e41eeb05738aa69196a5f6ffcf6ba79e"
+  },
+  "vendoredSha256": {
+    "json5/__init__.py": "deeb1ce323514f6a033cb1421a93ae64e6c9e1e3c30ea17c8621dd525e60243c",
+    "json5/lib.py": "3a66708e0abf7250e04fe61f9d7e161ff88f8901aa52d5105fa99798bba0902c"
   }
 }

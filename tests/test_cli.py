@@ -1,5 +1,6 @@
 """Behavioral acceptance checks for the standalone local command surface."""
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -50,6 +51,22 @@ class CliTests(unittest.TestCase):
             second = self.invoke("run", "--home", home, "--output-dir", output)
             self.assertEqual(second.returncode, 2)
             self.assertEqual(first, (output / "report.html").read_bytes())
+
+    @unittest.skipIf(os.name == "nt", "HOME selects the home folder on POSIX")
+    def test_results_go_to_the_home_folder_not_the_working_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            home, project = Path(td)/"home", Path(td)/"project"
+            home.mkdir()
+            project.mkdir()
+            copied = Path(td)/"copied-home"
+            copied.mkdir()
+            result = subprocess.run([sys.executable, "-I", "-S", str(ENTRY), "run", "--copied-home", str(copied), "--no-open"],
+                                    capture_output=True, text=True, cwd=project, env={**os.environ, "HOME": str(home)})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(list(project.iterdir()), [])
+            runs = [path.name for path in home.iterdir()]
+            self.assertEqual(len(runs), 1)
+            self.assertTrue(runs[0].startswith("readiness-run-"))
 
     def test_rejects_unsupported_snapshot_and_unsafe_booking_link(self):
         with tempfile.TemporaryDirectory() as td:

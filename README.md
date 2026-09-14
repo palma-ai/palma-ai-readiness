@@ -6,8 +6,11 @@ It supports Windows, macOS, and Linux, with no account, enrollment, or backend c
 
 ## Run on your computer
 
-Download and extract the **complete skill folder**. Python **3.11+** is required; parsers
-are bundled, so there are no packages to install or build tools to configure.
+Download the skill from palma.ai and check it before extracting: the archive's SHA-256
+must match the `.sha256` file published beside it (`shasum -a 256` on macOS, `sha256sum` on
+Linux, `Get-FileHash -Algorithm SHA256` in Windows PowerShell). Extract the **complete skill
+folder**. Python **3.11+** is required; parsers are bundled, so there are no packages to
+install or build tools to configure.
 
 **macOS / Linux**
 
@@ -15,10 +18,10 @@ are bundled, so there are no packages to install or build tools to configure.
 bash "/path/to/palma-ai-readiness/scripts/run.sh"
 ```
 
-**Windows PowerShell**
+**Windows**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\palma-ai-readiness\scripts\run.ps1"
+py -3 -I -S "C:\path\palma-ai-readiness\scripts\palma-scan.py" run --open
 ```
 
 The scan covers your account: AI clients, connectors, skills and settings in your profile,
@@ -29,9 +32,10 @@ several minutes. Specific unreadable sources are recorded in coverage.
 
 The report opens in your browser. Use `--no-open` to keep it closed, `--workspace <path>`
 to supplement automatic project discovery, or `--output-dir <new-directory>` to choose
-where results are saved. Otherwise they go in a new `readiness-run-<timestamp>` directory.
-The `run.command` and `run.cmd` double-click launchers save results beside the skill.
-`PALMA_PYTHON` can select an installed compatible Python executable.
+where results are saved. Otherwise they go in a new `readiness-run-<timestamp>` folder in
+your home folder. You can also double-click `scripts/run.command` on macOS or
+`scripts\run.cmd` on Windows. `PALMA_PYTHON` can select an installed compatible Python
+executable. The scanner refuses to start if a file in the folder differs from its release.
 
 ## Starting from a website or web chat
 

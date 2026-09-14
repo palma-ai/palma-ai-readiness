@@ -20,7 +20,7 @@ def parser():
         child.add_argument("--home", dest="copied_home", type=Path, help=argparse.SUPPRESS)
         child.add_argument("--workspace", action="append", default=[], type=Path, help="Include an additional project beyond automatic machine discovery (repeatable)")
         if name == "run":
-            child.add_argument("--output-dir", type=Path, help="New directory for snapshot.json, summary.json and report.html")
+            child.add_argument("--output-dir", type=Path, help="New directory for the results (default: a new readiness-run folder in your home folder)")
             render_options(child)
         else:
             child.add_argument("--output", required=True, type=Path, help="New snapshot JSON file")
@@ -99,7 +99,8 @@ def main(argv=None):
                 summary = summarize(snapshot)
                 html = render_report(snapshot, summary, booking_url=link)
                 shareable = render_report(snapshot, summary, booking_url=link, share=True)
-                output = output or Path.cwd() / ("readiness-run-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"))
+                # Not the working directory: results must not land inside a project or skill folder.
+                output = output or Path.home() / ("readiness-run-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"))
                 output.mkdir(mode=0o700)
                 write_new(output / "snapshot.json", json_text(snapshot))
                 write_new(output / "summary.json", json_text(summary))

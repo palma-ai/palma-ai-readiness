@@ -1,8 +1,10 @@
 # Local commands
 
-Use `python3 -I -S <skill>/scripts/palma-scan.py` with Python 3.11+, or use `run.sh` /
-`run.ps1` to find a compatible installed interpreter. JSON5 and YAML parsers are included
-in the release. There is no package installation or backend setup.
+Use `python3 -I -S <skill>/scripts/palma-scan.py` with Python 3.11+ (`py -3 -I -S` on
+Windows), or `run.sh` to find a compatible installed interpreter. JSON5 and YAML parsers are
+included in the release. There is no package installation or backend setup. In a release
+folder, the entrypoint first checks every file against `MANIFEST.sha256` and exits with
+code 2 if one differs or an extra Python file is present.
 
 | Command | Input | Output |
 | --- | --- | --- |
@@ -29,7 +31,8 @@ scanner's own folder are not traversed. The report's coverage section says when 
 skipped; scan such a project with `--workspace`.
 
 - `--workspace DIR` supplements automatic discovery with another project (repeatable).
-- `--output-dir DIR` chooses a new run directory. It does not change scan scope.
+- `--output-dir DIR` chooses a new run directory; by default `run` creates a new
+  `readiness-run-<timestamp>` folder in the home folder. It does not change scan scope.
 - `--copied-home DIR` explicitly inspects an offline home copy **instead of this machine**.
   This option is for supplied evidence copies, not a shortcut for a machine scan.
 

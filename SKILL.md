@@ -34,21 +34,34 @@ inventory as the user's machine.
 
 Reading a hosted skill does not give a web assistant access to the person's computer.
 
-1. **Local execution available on the requested endpoint:** download and extract the
-   complete published release, read this file, and run the native command below.
-2. **Only hosted/cloud execution available:** give the person the published ZIP link
-   and matching Windows or macOS/Linux command. They can run it in a local terminal or
-   give the folder to a desktop AI assistant with filesystem tools. Explain simply:
-   “Run this on your computer to produce your local Palma report.”
+1. **Local execution available on the requested endpoint:** download the published
+   release, verify it as described below, extract it, read this file, and run the native
+   command below.
+2. **Only hosted/cloud execution available:** give the person the published ZIP link, the
+   checksum step and the matching Windows or macOS/Linux command. They can run it in a
+   local terminal or give the folder to a desktop AI assistant with filesystem tools.
+   Explain simply: “Run this on your computer to produce your local Palma report.”
 3. **A saved run is available:** rebuild or explain it without claiming a fresh scan.
 
 Do not run the collector in the web assistant's sandbox as a substitute. Do not generate
 a sample or declared-session report in response to a machine-scan request. A separately
 requested session inventory is described in [declared-report.md](references/declared-report.md).
 
-Obtain matching scripts and references from the same release as the hosted SKILL.md.
-The complete folder is required; the entrypoint alone cannot collect evidence. Keep the
-directory structure intact. The website's sign-up form is independent of the scan.
+**Verify the download before running it.** Use only the release published on palma.ai over
+HTTPS, never a copy from another site, a mirror, a message or an attachment. Compare the
+archive's SHA-256 with the `.sha256` file published beside it, and stop if they differ:
+
+```bash
+shasum -a 256 palma-ai-readiness.zip
+```
+
+Linux uses `sha256sum`; Windows PowerShell uses `Get-FileHash -Algorithm SHA256`. The
+complete folder is required; the entrypoint alone cannot collect evidence. Keep the
+directory structure intact. Before any skill code runs, the entrypoint checks every file
+against the release's `MANIFEST.sha256` and exits with code `2` if a file differs or an
+extra Python file is present. That catches incomplete, mixed or edited copies; it is not a
+signature, so the download checksum is still required. The website's sign-up form is
+independent of the scan.
 
 ## Execute the machine scan
 
@@ -61,23 +74,25 @@ as source; there is no dependency installation, native build, or package-manager
 bash "<skill-folder>/scripts/run.sh" --no-open
 ```
 
-**Windows PowerShell**
+**Windows**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "<skill-folder>\scripts\run.ps1" --no-open
+py -3 -I -S "<skill-folder>\scripts\palma-scan.py" run --no-open
 ```
 
-The launchers find a compatible installed Python. Set `PALMA_PYTHON` to choose one.
-Direct invocation also works:
+`run.sh` finds a compatible installed Python; set `PALMA_PYTHON` to choose one. On Windows,
+use `py -3`, or the path of an installed Python 3.11+ executable, with the same arguments.
+Never change or bypass PowerShell's execution policy for this skill. Direct invocation also
+works on macOS and Linux:
 
 ```bash
 python3 -I -S "<skill-folder>/scripts/palma-scan.py" run --no-open
 ```
 
-On Windows, use an installed Python 3.11+ executable or `py -3` with those arguments.
-Use `--output-dir <new-directory>` to choose the results location. `--workspace <project>`
-adds another project; it does not replace machine discovery. Do not use `--copied-home`
-unless the user specifically wants an offline copy inspected. See
+Results go in a new `readiness-run-<timestamp>` folder in the account's home folder. Use
+`--output-dir <new-directory>` for another location outside project and skill folders.
+`--workspace <project>` adds another project; it does not replace machine discovery. Do not
+use `--copied-home` unless the user specifically wants an offline copy inspected. See
 [commands.md](references/commands.md) for the command surface.
 
 Wait for collection to finish. Broad discovery can take several minutes on large machines.

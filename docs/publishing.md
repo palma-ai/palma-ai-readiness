@@ -14,17 +14,21 @@ The archive includes only the user instructions, runtime scripts, evidence/repor
 references, agent metadata, and artwork notices. It excludes this `docs/` directory,
 tests, sample reports, development scripts, caches, and platform binaries. Pinned pure-Python
 JSON5/YAML parser sources and their licenses are bundled with the runtime.
-Repeated builds of the same source produce identical bytes and a SHA-256 companion.
+Repeated builds of the same source produce identical bytes and a `.sha256` companion. The
+archive contains `MANIFEST.sha256`, which the entrypoint checks before running any skill
+code. The build stops if a bundled parser file differs from its reviewed SHA-256 in
+`scripts/palma_scan/_vendor/sources.json`; update that file only after reviewing a parser change.
 
-Host the archive and its extracted files together at the chosen Palma website path.
-Serve the extracted release folder, not the entire source repository. An agent needs
-the matching runtime scripts and references; `SKILL.md` alone cannot perform a scan.
-Publish the checksum through the trusted website alongside the download.
+Host the archive, its `.sha256` file and the extracted folder together at one palma.ai HTTPS
+path; SKILL.md tells assistants to use only that origin and to stop when the checksum
+differs. Serve the extracted release folder, not the entire source repository. An agent
+needs the matching runtime scripts and references; `SKILL.md` alone cannot perform a scan.
+The manifest check catches incomplete or edited copies but is not a signature.
 
 The website owns the marketing form and consent record. They are not scanner inputs.
 Replace the bracketed URL in this suggested website prompt before publication:
 
-> I want a Palma AI access scan of my account on this computer. Read the skill at [hosted SKILL.md URL] and obtain its matching complete release. Run the native scan and show me the local report with its priorities and actions. If this chat only has cloud execution, give me the download and native run command for my computer instead.
+> I want a Palma AI access scan of my account on this computer. Read the skill at [hosted SKILL.md URL], download its matching complete release from the same palma.ai page, and verify the archive against its published SHA-256 before extracting it. Run the native scan and show me the local report with its priorities and actions. If this chat only has cloud execution, give me the download, checksum step and native run command for my computer instead.
 
 The team-view invitation is included at the end of each report. When the calendar URL
 is available, `--booking-url https://...` adds an ordinary optional booking link. No
