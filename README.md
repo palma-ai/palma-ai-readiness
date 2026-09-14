@@ -155,5 +155,9 @@ can replace it with a palma.ai page. The link opens only when clicked and carrie
 
 [CONTRIBUTING.md](https://github.com/palma-ai/palma-ai-readiness/blob/main/CONTRIBUTING.md) covers development checks and releases;
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists bundled artwork, fonts and parsers.
-The Palma name and marks belong to Palma; product marks in the report identify the tools
-found and imply no endorsement.
+
+## License
+
+[Apache License 2.0](LICENSE); see [NOTICE](NOTICE). The Palma name, wordmark and brand mark
+are trademarks of Palma AI and are not covered by the license. Product marks in the report
+identify the tools found and imply no endorsement.

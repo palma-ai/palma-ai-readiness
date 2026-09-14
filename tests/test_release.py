@@ -32,7 +32,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(a.read_bytes(), b.read_bytes())
             with zipfile.ZipFile(a) as release:
                 names = release.namelist()
-                for required in ("SKILL.md", "SECURITY.md", "scripts/palma-scan.py", "scripts/palma_scan/collector.py",
+                for required in ("SKILL.md", "LICENSE", "NOTICE", "SECURITY.md", "scripts/palma-scan.py", "scripts/palma_scan/collector.py",
                                  "scripts/palma_scan/rules.py", "scripts/palma_scan/report.py",
                                  "scripts/palma_scan/report_theme.py", "scripts/palma_scan/report_font.py",
                                  "scripts/palma_scan/report_regulation.py", "references/eu-ai-regulation.md",
@@ -107,7 +107,7 @@ class ReleaseTests(unittest.TestCase):
     def test_release_build_stops_when_a_bundled_parser_differs_from_its_reviewed_hash(self):
         with tempfile.TemporaryDirectory() as td:
             source = Path(td)/"source"
-            for name in ("SKILL.md", "README.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md"):
+            for name in ("SKILL.md", "README.md", "LICENSE", "NOTICE", "SECURITY.md", "THIRD_PARTY_NOTICES.md"):
                 (source/name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT/name, source/name)
             for name in ("agents", "assets", "references", "scripts"):

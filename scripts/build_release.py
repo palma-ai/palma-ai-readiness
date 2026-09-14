@@ -16,7 +16,7 @@ def main():
     if args.source_commit is not None and not re.fullmatch(r"[0-9a-f]{40}", args.source_commit):
         parser.error("--source-commit must be a full lowercase 40-character commit SHA")
     root = Path(__file__).resolve().parents[1]
-    files = ["SKILL.md", "README.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md", "agents/openai.yaml",
+    files = ["SKILL.md", "README.md", "LICENSE", "NOTICE", "SECURITY.md", "THIRD_PARTY_NOTICES.md", "agents/openai.yaml",
              "assets/palma-logo.svg", "assets/palma-mark.svg",
              "references/commands.md", "references/trusted-marketplaces.md", "references/declared-report.md",
              "references/report-design.md", "references/risk-rules.md", "references/eu-ai-regulation.md",
