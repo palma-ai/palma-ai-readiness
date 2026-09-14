@@ -71,6 +71,100 @@ def snapshot():
 
 
 class ReportTests(unittest.TestCase):
+    def test_regulation_follows_review_first_with_four_native_review_tiles(self):
+        output = render_report(snapshot(), {})
+        self.assertLess(output.index('id="overview"'), output.index('id="eu-ai-regulation"'))
+        self.assertLess(output.index('id="eu-ai-regulation"'), output.index('class="metric-strip"'))
+        document = Document(output)
+        tiles = [attrs for tag, attrs in document.tags if tag == "details" and attrs.get("class") == "regulation-tile"]
+        self.assertEqual([item["id"] for item in tiles], ["regulation-oversight", "regulation-safeguards", "regulation-transparency", "regulation-classification"])
+        self.assertTrue(all("open" not in item for item in tiles), "Details must not crowd the opening summary")
+
+    def test_regulation_tiles_count_review_inputs_without_scoring_unknowns(self):
+        data = snapshot()
+        data["findings"][0]["ruleId"] = "approval-prompts-disabled"
+        data["findings"][1]["ruleId"] = "sandbox-disabled"
+        document = Document(render_report(data, {"compliance": 100, "findings": 999}))
+        counts = [attrs.get("data-count") for _, attrs in document.tags if attrs.get("class") == "regulation-count"]
+        self.assertEqual(counts, ["1", "1"])
+        self.assertNotIn("999", " ".join(document.text))
+        data["findings"] = []
+        document = Document(render_report(data, {}))
+        self.assertFalse(any(attrs.get("class") == "regulation-count" for _, attrs in document.tags), "No findings must not look like a passed legal control")
+
+    def test_regulation_indicator_cannot_infer_legal_status_from_priorities(self):
+        for severity in ("critical", "high", "low", "info"):
+            data = snapshot()
+            data["findings"][1]["severity"] = severity
+            output = render_report(data, {})
+            document = Document(output)
+            indicator = next((attrs for _, attrs in document.tags if attrs.get("id") == "regulation-indicator"), {})
+            self.assertEqual(indicator.get("data-status"), "review-needed")
+            self.assertIn("Compliance not assessed", " ".join(document.text))
+        data["findings"] = []
+        self.assertIn('data-status="review-needed"', render_report(data, {}))
+
+    def test_empty_and_declared_regulation_status_remains_unassessed(self):
+        for mode, observations, expected in (
+            ("endpoint", [], "not-assessed"),
+            ("declared", snapshot()["observations"], "declared-only"),
+            ("declared", [], "declared-only"),
+        ):
+            data = snapshot()
+            data.update(mode=mode, observations=observations, findings=[])
+            output = render_report(data, {})
+            document = Document(output)
+            indicator = next((attrs for _, attrs in document.tags if attrs.get("id") == "regulation-indicator"), {})
+            self.assertEqual(indicator.get("data-status"), expected)
+            self.assertIn("Compliance not assessed", " ".join(document.text))
+
+    def test_regulation_links_only_existing_allowlisted_findings(self):
+        data = snapshot()
+        data["findings"][1]["ruleId"] = "sandbox-disabled"
+        # A title or category must never turn an unrelated finding into a legal mapping.
+        data["findings"][0].update(title="EU AI Act human oversight", category="security")
+        document = Document(render_report(data, {}))
+        links = [attrs for tag, attrs in document.tags if tag == "a" and attrs.get("class") == "regulation-finding-link"]
+        self.assertEqual(len(links), 1)
+        finding = next(attrs for tag, attrs in document.tags if tag == "article" and attrs.get("data-severity") == "high")
+        self.assertEqual(links[0]["href"], "#" + finding["id"])
+        self.assertIn("1 existing finding", " ".join(document.text))
+
+    def test_regulation_keeps_inactive_evidence_and_low_priority_oversight(self):
+        data = snapshot()
+        data["observations"] = [data["observations"][2]]
+        data["findings"] = [data["findings"][1]]
+        data["findings"][0].update(ruleId="approval-prompts-disabled", severity="low", observationIds=["o-disabled"])
+        output = render_report(data, {})
+        self.assertIn('data-status="review-needed"', output)
+        document = Document(output)
+        self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
+        self.assertIn("Disabled in configuration", " ".join(document.text))
+
+    def test_regulation_article_links_open_exactly_the_articles_they_name(self):
+        output = render_report(snapshot(), {})
+        links = re.findall(r'<a class="regulation-source" href="([^"]+)"[^>]*>([^<]+)<', output)
+        expected = {"Read Article 14": "article-14", "Read Article 26": "article-26", "Read Article 15": "article-15",
+                    "Read Article 50": "article-50", "Prohibited practices": "article-5", "High-risk criteria": "article-6"}
+        for label, slug in expected.items():
+            with self.subTest(label):
+                self.assertIn((f"https://ai-act-service-desk.ec.europa.eu/en/ai-act/{slug}", label), links)
+        for href, label in links:
+            number = re.fullmatch(r"Read Article (\d+)", label)
+            if number:
+                self.assertTrue(href.endswith("/article-" + number.group(1)), (label, href))
+        oversight = output.split('id="regulation-oversight"', 1)[1].split("</details>", 1)[0]
+        self.assertIn("ai-act/article-14", oversight)
+        self.assertIn("ai-act/article-26", oversight)
+
+    def test_regulation_link_escapes_untrusted_finding_title(self):
+        data = snapshot()
+        data["findings"][1].update(ruleId="sandbox-disabled", title='<img src="https://invalid.test" onerror="alert(1)">')
+        document = Document(render_report(data, {}))
+        self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
+        self.assertEqual(sum(tag == "img" for tag, _ in document.tags), 1)
+        self.assertFalse(any(key.startswith("on") for _, attrs in document.tags for key in attrs))
+
     def test_deterministic_and_does_not_mutate_inputs(self):
         data = snapshot()
         before = copy.deepcopy(data)
@@ -84,7 +178,8 @@ class ReportTests(unittest.TestCase):
         self.assertIn("1 item to review first.", output)
         self.assertIn('Showing 2 of 2 findings', output)
         self.assertNotIn("9000", output)
-        self.assertIn('<strong>1<span> / 4</span></strong>', output)
+        self.assertIn('<strong>1</strong><p>sources inspected', output)
+        self.assertIn("2 sources could not be fully read", output)
 
     def test_findings_sorted_by_priority_and_internal_anchors_resolve(self):
         document = Document(render_report(snapshot(), {}))
@@ -182,19 +277,26 @@ class ReportTests(unittest.TestCase):
     def test_booking_link_optional_and_only_safe_https(self):
         baseline = render_report(snapshot(), {})
         self.assertNotIn('class="booking-link"', baseline)
-        for unsafe in ("javascript:alert(1)", "data:text/html,bad", "http://example.com", "//example.com", "https://user:secret@example.com", "https://example.com\n/path", "https://example.com\\@evil.invalid", "https://example.com:99999", "https://example.com:bad"):
+        for unsafe in ("javascript:alert(1)", "data:text/html,bad", "http://palma.ai", "//palma.ai", "https://user:secret@palma.ai", "https://palma.ai\n/path", "https://palma.ai\\@evil.invalid", "https://palma.ai:99999", "https://palma.ai:bad", "https://calendar.example.com/palma"):
             with self.subTest(url=unsafe):
                 self.assertNotIn('class="booking-link"', render_report(snapshot(), {}, booking_url=unsafe))
-        safe = render_report(snapshot(), {}, booking_url="https://calendar.example.com/palma?view=team&source=report")
-        self.assertIn('href="https://calendar.example.com/palma?view=team&amp;source=report"', safe)
+        safe = render_report(snapshot(), {}, booking_url="https://palma.ai/team?view=team&source=report")
+        self.assertIn('href="https://palma.ai/team?view=team&amp;source=report"', safe)
         self.assertIn('rel="noreferrer noopener" target="_blank">Talk to Palma', safe)
 
     def test_unsafe_reference_links_are_not_rendered(self):
         data = snapshot()
-        data["findings"][1]["references"] = ["javascript:alert(1)", "https://user:secret@example.com", "https://example.com/docs?a=1&b=2"]
+        data["findings"][1]["references"] = ["javascript:alert(1)", "https://user:secret@example.com", "https://example.com/docs?a=1&b=2",
+                                             "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"]
         document = Document(render_report(data, {}))
-        external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") != "artwork-reference" and not attrs["href"].startswith("#")]
-        self.assertEqual(external, ["https://example.com/docs?a=1&b=2"])
+        external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") not in {"artwork-reference", "regulation-source"} and not attrs["href"].startswith("#")]
+        # Only documentation the bundled rules cite is linked.
+        self.assertEqual(external, ["https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"])
+        for tag, attrs in document.tags:
+            if tag == "a" and attrs.get("class") == "regulation-source":
+                self.assertTrue(attrs["href"].startswith(("https://ai-act-service-desk.ec.europa.eu/en/", "https://digital-strategy.ec.europa.eu/en/")))
+                self.assertNotIn("?", attrs["href"])
+                self.assertEqual(attrs["rel"], "noreferrer noopener")
 
     def test_disabled_inventory_is_kept_without_claiming_execution(self):
         output = render_report(snapshot(), {})
@@ -209,29 +311,33 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("Observed state", inventory)
         self.assertNotIn("Disabled connector</h3>", output)
 
-    def test_named_inventory_is_compact_searchable_and_keeps_locations(self):
+    def test_named_inventory_is_grouped_by_client_collapsed_and_keeps_locations(self):
         data = snapshot()
         data["observations"] = [
             {"id": "skill-1", "kind": "skill", "client": "codex", "name": "skill-creator", "enabled": "unknown", "location": "~/.codex/skills/skill-creator/SKILL.md", "details": {"origin": "user", "activation": "present", "auditState": "unknown"}},
             {"id": "skill-2", "kind": "skill", "client": "claude-code", "name": "imagegen", "enabled": "unknown", "location": "~/projects/demo/.claude/skills/imagegen/SKILL.md", "details": {"origin": "project", "activation": "present"}},
+            {"id": "skill-3", "kind": "skill", "client": "claude-code", "name": "helper", "enabled": "unknown", "location": "~/projects/demo/.claude/skills/helper/SKILL.md", "details": {"origin": "project"}},
         ]
+        data["findings"][0]["observationIds"] = ["skill-2"]
         output = render_report(data, {})
         inventory = output.split('id="inventory"', 1)[1].split('id="coverage"', 1)[0]
-        self.assertIn('<strong>skill-creator</strong>', inventory)
-        self.assertIn('<strong>imagegen</strong>', inventory)
-        self.assertLess(inventory.index('<strong>imagegen</strong>'), inventory.index('<strong>skill-creator</strong>'))
+        document = Document(output)
+        groups = [attrs for tag, attrs in document.tags if tag == "details" and attrs.get("class") == "inventory-group"]
+        self.assertEqual(len(groups), 2)
+        self.assertTrue(all("open" not in group for group in groups), "inventory groups start collapsed")
+        self.assertLess(inventory.index("<strong>Claude Code</strong>"), inventory.index("<strong>Codex</strong>"))
+        self.assertIn('<span>2 skills</span>', inventory)
+        self.assertIn('data-total="2">2</span>', inventory)
+        self.assertLess(inventory.index('<strong>helper</strong>'), inventory.index('<strong>imagegen</strong>'))
         self.assertIn('id="inventory-search" type="search"', inventory)
         self.assertIn('Search inventory by name, client, or location', inventory)
-        self.assertIn('data-total="2">2</span>', inventory)
-        self.assertIn('<strong>Skills</strong><span>2 clients</span>', inventory)
         self.assertIn('~/projects/demo/.claude/skills/imagegen/SKILL.md', inventory)
+        finding = next(attrs["id"] for tag, attrs in document.tags if tag == "article" and attrs.get("data-severity") == "info")
+        self.assertIn(f'href="#{finding}">1 finding</a>', inventory)
         self.assertNotIn('unknown', inventory)
         self.assertNotIn('>Present<', inventory)
-        self.assertNotIn('Skill 1<', inventory)
-        self.assertNotIn('Observed state', inventory)
-        self.assertEqual(inventory.count('class="inventory-row"'), 2)
-        self.assertEqual(inventory.count('class="inventory-metadata"'), 2)
-        self.assertIn('<th scope="col" role="columnheader">Location &amp; evidence</th>', inventory)
+        self.assertNotIn('<pre', inventory)
+        self.assertEqual(inventory.count('class="inventory-row"'), 3)
 
     def test_disabled_status_is_preserved_even_for_installed_artifacts(self):
         data = snapshot()
@@ -246,11 +352,14 @@ class ReportTests(unittest.TestCase):
         self.assertIn('<span>12 declarations</span><span>5 distinct</span>', output)
         self.assertIn('<h4>Priority rationale</h4><p>Potential impact &lt;script&gt;bad()&lt;/script&gt;', output)
 
-    def test_missing_files_read_errors_and_skips_remain_distinct(self):
+    def test_read_problems_are_grouped_by_cause_and_absent_paths_are_not_listed(self):
         output = render_report(snapshot(), {})
-        self.assertIn('class="source-status source-missing">Not present', output)
-        self.assertIn('class="source-status source-error">Read error', output)
-        self.assertIn('class="source-status source-skipped">Skipped', output)
+        coverage = output.split('id="coverage"', 1)[1]
+        causes = re.findall(r'<details class="coverage-cause"><summary><strong>(\d+)</strong><span>([^<]+)</span>', coverage)
+        self.assertEqual(sorted(causes), [("1", "Outside the scan scope"), ("1", "Permission denied")])
+        self.assertIn("~/.cursor/mcp.json", coverage)
+        self.assertIn("project/.vscode/mcp.json", coverage)
+        self.assertNotIn("~/.claude/settings.json", coverage, "an absent candidate path is not a coverage problem")
         self.assertNotIn("This scan has collection gaps", output)
         self.assertNotIn("Some sources could not be assessed", output)
         self.assertNotIn("Keep this in perspective", output)
@@ -304,11 +413,14 @@ class ReportTests(unittest.TestCase):
         data["observations"] = [{"id": f"mcp-{index}", "name": f"MCP {index}", "kind": "mcp", "enabled": state, "details": details} for index, (state, details) in enumerate(cases)]
         output = render_report(data, {})
         counts = dict(re.findall(r'<div class="access-chart-row" data-reach="([^"]+)">.*?<strong>(\d+)</strong></div>', output))
-        self.assertEqual(counts, {"local": "2", "loopback": "1", "remote": "1", "unknown": "1"})
+        self.assertEqual(counts, {"local": "2", "loopback": "1", "gateway": "0", "remote": "1", "unknown": "1"})
         self.assertIn("2 disabled entries are excluded from these bars", output)
         self.assertNotIn("whose enabled state is unknown", output)
         self.assertIn("These counts describe configuration, not running processes or live connections", output)
-        self.assertIn('href="#inventory-mcp">Inspect configurations', output)
+        self.assertIn('href="#inventory">Inspect configurations', output)
+        data["observations"].append({"id": "mcp-gateway", "name": "Space", "kind": "mcp", "enabled": "enabled", "details": {"execution": "remote", "endpointScope": "remote", "governedBy": "palma-gateway"}})
+        counts = dict(re.findall(r'<div class="access-chart-row" data-reach="([^"]+)">.*?<strong>(\d+)</strong></div>', render_report(data, {})))
+        self.assertEqual((counts["gateway"], counts["remote"]), ("1", "1"))
         self.assertLess(output.index('class="metric-strip"'), output.index('class="access-overview"'))
         self.assertLess(output.index('class="access-overview"'), output.index('id="findings"'))
 
@@ -362,11 +474,11 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(teaser, empty_teaser, "Illustration must not look like invented team results derived from one snapshot")
 
     def test_team_teaser_booking_is_only_the_explicit_optional_destination(self):
-        output = render_report(snapshot(), {}, booking_url="https://calendar.example.com/palma")
+        output = render_report(snapshot(), {}, booking_url="https://palma.ai/team")
         teaser = output.split('<aside class="team-teaser"', 1)[1].split('</aside>', 1)[0]
         links = [attrs for tag, attrs in Document(teaser).tags if tag == "a"]
         self.assertEqual(len(links), 1)
-        self.assertEqual(links[0]["href"], "https://calendar.example.com/palma")
+        self.assertEqual(links[0]["href"], "https://palma.ai/team")
         self.assertNotIn("Interested in the team view?", teaser)
 
     def test_supported_client_icons_have_text_and_only_observed_clients_are_listed(self):
@@ -409,7 +521,8 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn('class="brand-sprite"', output)
         self.assertIn('data-generic="connector"', output)
         self.assertIn('data-generic="app"', output)
-        self.assertIn('https://attacker.invalid/logo.svg&quot;', output)
+        # Arbitrary detail fields are never rendered, escaped or otherwise.
+        self.assertNotIn("attacker.invalid", output)
         document = Document(output)
         self.assertFalse(any(key.startswith("on") for _, attrs in document.tags for key in attrs))
         self.assertFalse(any(attrs.get("src", "").startswith("https:") for _, attrs in document.tags))

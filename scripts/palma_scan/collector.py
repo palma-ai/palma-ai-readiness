@@ -12,6 +12,7 @@ import re
 import stat
 from urllib.parse import parse_qsl, urlsplit
 
+from .dedup import content_digest, merge_clients
 from .engine.redaction import Redactor
 
 MAX_MANIFESTS = 20000
@@ -154,6 +155,16 @@ def _credential_value(value):
     if value.lower() in {"your_api_key", "your-api-key", "your_token", "your-token", "changeme", "redacted", "<redacted>", "***"} or (value.startswith("<") and value.endswith(">")):
         return (0, 0)
     return (1, 0)
+
+
+# Fields whose values _credential_counts inspects; their content tells credentials apart.
+_CREDENTIAL_FIELDS = ("env", "headers", "http_headers", "apiKey", "api_key", "bearerToken", "bearer_token", "accessToken",
+                      "bearer_token_env_var", "env_http_headers", "args")
+
+
+def credential_content(data):
+    """In-memory identity of a document's credential values: different secrets never merge."""
+    return content_digest({key: data[key] for key in _CREDENTIAL_FIELDS if key in data})
 
 
 def _credential_counts(data):
@@ -319,6 +330,40 @@ def _provider_metadata(entry):
     return unknown
 
 
+# Palma-operated MCP gateway hosts, for example gateway.palma.ai or a regional form such as
+# gateway.eu1.palma.ai. Only Palma controls names under palma.ai.
+PALMA_GATEWAY_HOST = re.compile(r"gateway(?:-[a-z0-9]+)?(?:\.[a-z0-9]+)?\.palma\.ai")
+URL_KEYS = ("httpUrl", "url", "serverUrl")
+
+
+def _url_keys(client):
+    """URL fields in the order the client reads them."""
+    return {"gemini-cli": ("httpUrl", "url"), "windsurf": ("serverUrl", "url")}.get(client, ("url", "serverUrl", "httpUrl"))
+
+
+def _palma_gateway(entry, transport):
+    """Whether a remote connector is routed through a Palma-operated gateway.
+
+    Only an exact HTTPS host on the default port qualifies, and every URL field in the
+    entry must name one: a gateway address beside another URL is not trusted, whichever
+    field the client reads. Connector names, paths and labels are ignored.
+    """
+    urls = [entry[key] for key in URL_KEYS if key in entry]
+    return transport in {"http", "sse", "websocket"} and bool(urls) and all(map(_gateway_url, urls))
+
+
+def _gateway_url(url):
+    if not isinstance(url, str) or "\\" in url or any(ord(character) < 33 for character in url):
+        return False
+    try:
+        parts = urlsplit(url)
+        return (parts.scheme in {"https", "wss"} and parts.username is None and parts.password is None
+                and parts.port in (None, 443) and parts.hostname is not None
+                and PALMA_GATEWAY_HOST.fullmatch(parts.hostname) is not None)
+    except (ValueError, UnicodeError):
+        return False
+
+
 class _LocalRedactor(Redactor):
     def _remember(self, value, level):
         # A credential reference may also contain a literal default. Keep the
@@ -433,7 +478,8 @@ class _Collector:
         client = source["client"]
         literal, references = _credential_counts(data)
         if literal or references:
-            self.observe(source, "setting", "Configuration credential storage", {"key": "credentialStorage", "value": {"literalCredentialCount": literal, "credentialReferenceCount": references}, "literalCredentialCount": literal, "credentialReferenceCount": references, "context": context}, "enabled", context + ":credentials")
+            item = self.observe(source, "setting", "Configuration credential storage", {"key": "credentialStorage", "value": {"literalCredentialCount": literal, "credentialReferenceCount": references}, "literalCredentialCount": literal, "credentialReferenceCount": references, "context": context}, "enabled", context + ":credentials")
+            item["_content"] = credential_content(data)
         for key in ({"codex": ["sandbox_workspace_write.writable_roots"], "claude-code": ["permissions.additionalDirectories", "sandbox.excludedCommands"], "gemini-cli": ["tools.allowed", "tools.discoveryCommand", "tools.callCommand", "agents.browser.allowedDomains"], "cursor": ["permissions.allow", "permissions.deny", "terminalAllowlist", "mcpAllowlist"], "windsurf": ["windsurf.cascadeCommandsAllowList", "windsurf.cascadeCommandsDenyList"], "vscode": ["chat.tools.terminal.autoApprove"]}.get(client, [])):
             value = _get(data, key)
             if value is ABSENT:
@@ -468,6 +514,7 @@ class _Collector:
                 self.observe(source, "setting", key, {"key": key, "value": value, "context": context}, "enabled", context + ":" + key)
 
     def mcps(self, source, entries, parent_disabled=False, context="base", map_key="mcpServers"):
+        from .extra_clients import NormalizedConnection
         self.redactor.learn(entries)
         source["classification"] = "mcp-configuration"
         source["componentKind"] = "mcp"
@@ -497,7 +544,7 @@ class _Collector:
                     malformed = True
                     source["issueKind"] = "unsupported-mcp-shape"
                     self.gap(source, "an MCP field has an unsupported type", "error")
-            url = next((entry.get(key) for key in ("httpUrl", "url", "serverUrl") if key in entry), None)
+            url = next((entry.get(key) for key in _url_keys(source["client"]) if key in entry), None)
             endpoint = _endpoint(url)
             transport = entry.get("type")
             explicit_transport = "type" in entry
@@ -518,22 +565,27 @@ class _Collector:
                 family = "computer"
             from .engine.adapters.mcp import auth_metadata
             auth, _ = auth_metadata(entry)
+            # Whether the header used to sign in holds the secret itself, not a reference.
+            auth_inline = _credential_counts({key: entry[key] for key in ("headers", "http_headers") if key in entry})[0] > 0
             allow_key = "enabled_tools" if source["client"] == "codex" else "includeTools" if source["client"] == "gemini-cli" else None
             deny_key = "disabled_tools" if source["client"] == "codex" else "excludeTools" if source["client"] == "gemini-cli" else "disabledTools"
             allow = isinstance(entry.get(allow_key), list) if allow_key else False
             deny = isinstance(entry.get(deny_key), list)
             approval = "all" if source["client"] == "gemini-cli" and entry.get("trust") is True else "none" if source["client"] == "gemini-cli" and entry.get("trust") is False else "unknown"
             details = {"transport": transport, "execution": execution, **endpoint, "toolFamily": family, "literalCredentialCount": literal + endpoint["urlCredentialCount"], "credentialReferenceCount": references, "toolAllowlistConfigured": allow, "toolDenylistConfigured": deny, "autoApproval": approval, "unversionedPackage": unversioned, "activation": "configured", "auditStatus": "not-assessed", "context": context}
-            details.update(capability, auth=auth, inlineCredentialPresent=literal + endpoint["urlCredentialCount"] > 0)
+            details.update(capability, auth=auth, authSecretInline=auth_inline, inlineCredentialPresent=literal + endpoint["urlCredentialCount"] > 0)
             if malformed:
                 details["configurationIssue"] = "unsupported-mcp-shape"
             elif transport == "unknown" or (url is not None and endpoint["endpointScope"] == "unknown"):
                 details["configurationIssue"] = "uninterpreted-mcp-transport"
             details["declaration"] = declaration
             details.update(_provider_metadata(entry))
+            if _palma_gateway(entry, transport):
+                details["governedBy"] = "palma-gateway"
             if type(entry.get("sandboxEnabled")) is bool:
                 details["sandboxConfigured"] = entry["sandboxEnabled"]
-            self.observe(source, "mcp", display_name, details, enabled, context + ":" + item_id)
+            item = self.observe(source, "mcp", display_name, details, enabled, context + ":" + item_id)
+            item["_content"] = entry.content_digest if isinstance(entry, NormalizedConnection) else content_digest(entry)
             if transport == "unknown" or (url is not None and endpoint["endpointScope"] == "unknown"):
                 source.setdefault("issueKind", "uninterpreted-mcp-transport")
                 self.gap(source, "an MCP transport or endpoint could not be interpreted", "error")
@@ -559,7 +611,9 @@ class _Collector:
             if isinstance(hook_locations, dict) and hook_locations:
                 state = "disabled" if _get(data, "chat.useHooks") is False or all(value is False for value in hook_locations.values()) else "unknown"
                 names = [self.display_text(name) for name in sorted(hook_locations)]
-                self.observe(source, "hook", "Hooks: " + ", ".join(names), {"activation": "configured", "context": context, "auditStatus": "not-assessed", "configuredLocations": names, "typeCounts": {"configuredLocations": len(hook_locations)}}, state)
+                # Folder names stay in configuredLocations; the row name never carries a path.
+                item = self.observe(source, "hook", "Hook folders", {"activation": "configured", "context": context, "auditStatus": "not-assessed", "configuredLocations": names, "typeCounts": {"configuredLocations": len(hook_locations)}}, state)
+                item["_content"] = content_digest(hook_locations)
         hooks = data.get("hooks", {})
         if isinstance(hooks, dict) and hooks:
             # Event names identify the declaration; command and prompt bodies stay private.
@@ -576,11 +630,13 @@ class _Collector:
             state = "disabled" if data.get("disableAllHooks") is True or _get(data, "features.hooks") is False else "unknown"
             if sum(counts.values()):
                 events = [self.display_text(event) for event in sorted(hooks)]
-                self.observe(source, "hook", "Hooks: " + ", ".join(events), {"events": events, "declaration": "hooks", "typeCounts": counts, "activation": "configured", "auditStatus": "not-assessed", "context": context}, state)
+                item = self.observe(source, "hook", "Hooks: " + ", ".join(events), {"events": events, "declaration": "hooks", "typeCounts": counts, "activation": "configured", "auditStatus": "not-assessed", "context": context}, state)
+                item["_content"] = content_digest(hooks)
             else:
                 self.gap(source, "a declared hook block had no interpretable handler entries")
         if isinstance(data.get("notify"), list) and data["notify"]:
-            self.observe(source, "hook", "Configured notification command", {"typeCounts": {"command": 1}, "activation": "configured", "auditStatus": "not-assessed", "context": context})
+            item = self.observe(source, "hook", "Configured notification command", {"typeCounts": {"command": 1}, "activation": "configured", "auditStatus": "not-assessed", "context": context})
+            item["_content"] = content_digest(data["notify"])
 
     def state(self, root, source, data):
         projects = data.get("projects")
@@ -629,10 +685,11 @@ class _Collector:
             self.mcps(source, data[key], context=context, map_key=key)
 
 
-def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type="machine", discovery_gaps=None, include_installations=False):
+def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type="machine", discovery_gaps=None, include_installations=False, excluded_roots=()):
     """Collect discovered profile, workspace, system-file and in-memory policy sources."""
     from .baseline import collect_scopes as collect_baseline
-    return collect_baseline(profiles, system_sources, workspaces, scope_type=scope_type, discovery_gaps=discovery_gaps, include_installations=include_installations)
+    return collect_baseline(profiles, system_sources, workspaces, scope_type=scope_type, discovery_gaps=discovery_gaps,
+                            include_installations=include_installations, excluded_roots=excluded_roots)
 
 
 def collect(home: Path, workspaces=None, *, scope_type="current-user") -> dict:
@@ -643,4 +700,8 @@ def collect(home: Path, workspaces=None, *, scope_type="current-user") -> dict:
     roots = list(dict.fromkeys(Path(path).absolute() for path in (workspaces or [])))
     if any(not path.is_dir() or path.parent == path for path in roots):
         raise ValueError("workspace must be a directory, never a filesystem root")
-    return collect_scopes([{"root": home, "alias": "~"}], workspaces=roots, scope_type=scope_type)
+    snapshot = collect_scopes([{"root": home, "alias": "~"}], workspaces=roots, scope_type=scope_type)
+    snapshot["observations"] = merge_clients(snapshot["observations"])
+    # A copied home is usually named after its account; its paths and name stay out too.
+    from .machine import identity_scrubber
+    return identity_scrubber(home, (), {home.name}).scrub_snapshot(snapshot)

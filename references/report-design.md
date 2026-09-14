@@ -42,6 +42,17 @@ Build one flowing page with these levels of detail. Keep a compact anchored navi
 for Overview, Findings, Inventory, and Coverage. Prefer native links and `<details>` so
 all information remains usable without JavaScript.
 
+Place a compact **EU AI Act** panel immediately after **Review first**, before the
+inventory metrics. Highlight **EU AI Act** in the navigation. Four native disclosure
+tiles show human oversight and technical-safeguard finding counts, plus transparency
+and risk classification as unassessed. Clicking a tile reveals its review guidance
+and original finding links in place. Use one official EU AI Act guidance link in the footer; omit the
+background explainer and timeline from the report. Do not repeat a separate regulation section farther down the page.
+Follow [eu-ai-regulation.md](eu-ai-regulation.md) for status semantics, the explicit
+finding crosswalk and offline contract. Counts are local review inputs; never show a
+regulatory score or certification seal. Use **EU AI Act** as the public title, without
+internal labels such as “indicator”. Keep the research date in the reference.
+
 1. **Palma identity and scope.** Show the Palma wordmark/logo, “AI access scan,” scan date,
    and compact scope metadata. A machine scan shows OS, profiles, and discovered projects.
    Identify machine vs copied-home vs declared scope without a generic warning banner.
@@ -59,21 +70,27 @@ all information remains usable without JavaScript.
    A compact client strip can show the recognized icons of observed clients and link to
    their inventory. Keep the charts focused on the same underlying evidence counts.
 4. **Findings.** Sort by severity, then consistently by category/title/ID. Each finding
-   shows its priority text, title, concise condition, and action. Expand for why it matters,
-   safe evidence, source references, confidence, and official guidance links. A severity
-   filter and search can reduce the visible list; show result counts and a clear reset.
-   Show all priorities by default; never hide Low or informational findings automatically.
-5. **Inventory.** Put clients and declarations below the actions. Group MCP services,
-   skills, plugins, agents, hooks, and settings. Use actual names and recognizable local
-   paths. Never substitute numbered names such as “Skill 164” or hashed directory labels.
-   Keep rows compact, with client/context and a short location; expand technical evidence
-   on demand. Add local search for names, clients, and locations. Show meaningful installed,
-   cached, disabled, or process-observed states where recorded. Omit unknown state totals,
-   zero enabled/disabled counts, and generic “Present” labels that add no useful information.
-6. **Coverage.** Show collected, missing, skipped, and error counts. Expand the source list
-   for reasons. Missing files are distinct from files that exist but could not be read.
-   Keep this section factual and compact. Put actual collection failures beside their
-   source records, retaining every recorded reason when one source has multiple failures.
+   shows its priority text, title, concise condition, why it matters, and action. Evidence
+   expands to one row per declaration: its name, client, typed facts (for example transport,
+   sign-in, credential presence, what a computer or browser connector controls, whether it
+   acts as the user and whether approval is required) and its location. Never print raw
+   records or JSON. Show the first 20 rows and put the rest behind "Show all"; the snapshot
+   keeps every record. A severity filter and search can reduce the visible list; show result
+   counts and a clear reset. Show all priorities by default; never hide Low or informational
+   findings automatically.
+5. **Inventory.** Put it after the findings. Each tool or declaration appears once: group
+   rows by client, collapsed by default, with the client's versions, running state and
+   project count in the group summary. Each row shows the actual name, its kind, a status
+   chip (configured, cached, disabled, installed or running), typed facts, a link to its
+   findings, and its location; merged copies list every place they are declared. Never
+   substitute numbered names such as “Skill 164” or hashed directory labels. Add local
+   search for names, clients, and locations. Omit unknown state totals, zero enabled/disabled
+   counts, and generic “Present” labels that add no useful information.
+6. **Coverage.** Show how many sources were inspected, and group every source that could
+   not be fully read by cause (permission denied, could not be interpreted, over a size or
+   scan limit, links not followed, outside the scan scope, could not be processed), each with
+   what the person can do and every recorded reason. Candidate paths that do not exist are
+   the normal case and are not listed. Keep this section factual and compact.
    Do not add a “Keep this in perspective” section or print a generic
    limitations checklist at the end, including when rebuilding an older snapshot. Do not
    add “This scan has collection gaps” or similar generic messaging above the findings.
@@ -136,6 +153,17 @@ Use `textContent` for dynamic text. External documentation/calendar links must u
 HTTPS destinations and explicit clicks; reject `javascript:`, credentials, and malformed
 URLs. Do not append report data to links.
 
+## Shareable summary
+
+Each run also writes `share.html` from the same snapshot; `report --share` rebuilds one. It
+keeps findings, counts and client, connector, skill and plugin names. Every location keeps
+only its AI configuration folder and file name (`~/.claude.json`, `project/.cursor/mcp.json`,
+`~/Library/…/claude_desktop_config.json`), inside finding summaries too; a location without
+such a folder is withheld. Names and setting values that are paths or web addresses are
+withheld, finding anchors are numbered rather than derived from local paths, and coverage
+shows counts by cause without source locations. It is the only version to publish or send
+to someone else.
+
 ## Empty and partial evidence
 
 - No configured tools: say “No supported declarations found in the inspected locations.”
@@ -154,10 +182,8 @@ file tooling. Preserve stored findings. If safe local output generation is impos
 provide a concise text report following the same reading order and say HTML was not
 created. Do not present a screenshot or hand-written summary as a completed local scan.
 
-If no sanitized snapshot exists, do not paste raw configuration into the model merely to
-reconstruct one. Use available local tooling to extract only typed allowlisted evidence
-without executing config/skill contents. Record exactly which sources were inspected and
-any omitted checks. If collection cannot run on the requested endpoint, explain how the
-person can run the native command. Use `declared-report.md` only for a separately requested
+If no sanitized snapshot exists, do not inspect configuration files manually or paste them
+into the model: they hold credentials and instructions. Give the native run command and
+stop. Use `declared-report.md` only for a separately requested
 session inventory, never as a substitute for the endpoint scan. Unknowns stay
 unknown; never invent scan timestamps, source reads, audit results, or severity evidence.

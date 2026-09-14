@@ -1,5 +1,5 @@
 """Machine scope fixtures; never inventory the developer's real machine."""
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import io
 import json
 import os
@@ -40,7 +40,7 @@ class MachineTests(unittest.TestCase):
         self.received_profiles, self.received = profiles, kwargs
         return {"schemaVersion": "2.0", "collector": {"name": "synthetic", "version": "2.1.0"}, "mode": "endpoint", "status": "complete", "scope": {"type": kwargs["scope_type"]}, "sources": [], "observations": [], "coverage": {"limitations": kwargs["discovery_gaps"]}, "findings": []}
 
-    def scan(self, **budgets):
+    def scan(self, workspaces=None, **budgets):
         with ExitStack() as stack:
             stack.enter_context(patch.object(machine, "_layout", return_value=self.layout))
             stack.enter_context(patch.object(machine, "_environment", return_value={"visibility": "current-operating-system-context", "runtimeContext": "unknown", "containerIndicators": [], "subsystemIndicators": [], "sandboxIndicators": [], "isolation": "not-established"}))
@@ -49,26 +49,202 @@ class MachineTests(unittest.TestCase):
             stack.enter_context(patch.object(machine._Discovery, "services", return_value=None))
             stack.enter_context(patch.object(collector, "collect_scopes", side_effect=self.stub_core, create=True))
             stack.enter_context(patch("socket.create_connection", side_effect=AssertionError("network forbidden")))
-            snapshot = machine.collect_machine(**budgets)
+            snapshot = machine.collect_machine(workspaces, **budgets)
         serialized = json.dumps(snapshot)
         for private in (str(self.root), "PRIVATE_CURRENT", "PRIVATE_OTHER"):
             self.assertNotIn(private, serialized)
         return snapshot
 
-    def test_default_scope_discovers_other_accounts_and_projects_anywhere_on_local_volume(self):
+    @contextmanager
+    def opened(self):
+        """Every directory opened or listed while the block runs."""
+        paths, open_, scandir = [], os.open, os.scandir
+
+        def tracking_open(path, flags, *args, **kwargs):
+            if flags & getattr(os, "O_DIRECTORY", 0) and not isinstance(path, int):
+                paths.append(Path(path))
+            return open_(path, flags, *args, **kwargs)
+
+        def tracking_scandir(path="."):
+            if not isinstance(path, int):
+                paths.append(Path(path))
+            return scandir(path)
+
+        with patch.object(os, "open", tracking_open), patch.object(os, "scandir", tracking_scandir):
+            yield paths
+
+    def exported(self, locations, **patches):
+        """Scan with collection stubbed to return sources at these physical locations."""
+        original = self.stub_core
+
+        def core(profiles, **kwargs):
+            snapshot = original(profiles, **kwargs)
+            snapshot["sources"] = [{"id": f"src-{index}", "client": "claude-code", "scope": "workspace", "status": "collected",
+                                    "location": location} for index, location in enumerate(locations)]
+            return snapshot
+
+        self.stub_core = core
+        try:
+            with patch.object(machine, "_account_names", return_value={"PRIVATE_LOGIN"}):
+                snapshot = self.scan()
+        finally:
+            self.stub_core = original
+        self.assertNotIn("PRIVATE_LOGIN", json.dumps(snapshot))
+        return [source["location"] for source in snapshot["sources"] if not source["location"].startswith("machine:")]
+
+    def test_scope_is_the_current_account_and_projects_outside_other_homes(self):
         outside = self.volume / "arbitrary/deep/data/project"
         self.put(outside / ".mcp.json", {})
         second = self.other / "work/project"
         self.put(second / ".claude/settings.json", {})
-        with patch.dict(os.environ, {"HOME": "/PRIVATE_FAKE_HOME", "CODEX_HOME": "/PRIVATE_FAKE_CODEX"}):
+        with patch.dict(os.environ, {"HOME": "/PRIVATE_FAKE_HOME", "CODEX_HOME": "/PRIVATE_FAKE_CODEX"}), self.opened() as opened:
             snapshot = self.scan()
         self.assertEqual(snapshot["scope"]["type"], "machine")
-        self.assertEqual(snapshot["scope"]["profileCount"], 2)
+        self.assertEqual(snapshot["scope"]["profileCount"], 1)
+        self.assertEqual(self.received_profiles, [{"root": self.home, "alias": "~"}])
         self.assertIn(outside, self.received["workspaces"])
-        self.assertIn(second, self.received["workspaces"])
-        self.assertEqual({row["root"] for row in self.received_profiles}, {self.home, self.other})
+        self.assertNotIn(second, self.received["workspaces"])
+        self.assertFalse([path for path in opened if path == self.other or self.other in path.parents],
+                         "another account's home must never be opened")
+        self.assertEqual(snapshot["scope"]["discovery"]["profilesExcluded"], 1)
         self.assertTrue(self.received["include_installations"])
         self.assertEqual(snapshot["coverage"]["limitations"], [])
+
+    def test_temporary_folders_and_the_scanner_folder_are_not_projects_unless_explicit(self):
+        temporary = self.volume / "tmp"
+        session = temporary / "agent-session/project"
+        self.put(session / ".claude/settings.json", {})
+        scanner = self.volume / "tools/palma-ai-readiness"
+        self.put(scanner / ".claude/settings.json", {})
+        self.put(scanner / ".claude/worktrees/copy/.mcp.json", {})
+        explicit = temporary / "requested"
+        self.put(explicit / ".mcp.json", {})
+        with patch.object(machine, "TEMPORARY_ROOTS", {"linux": (str(temporary),)}), patch.object(machine, "SCANNER_ROOT", scanner):
+            snapshot = self.scan([explicit])
+        workspaces = self.received["workspaces"]
+        self.assertNotIn(session, workspaces)
+        self.assertFalse([path for path in workspaces if path == scanner or scanner in path.parents])
+        self.assertIn(explicit, workspaces)
+        # The temporary folder, the scanner folder and the other account's home.
+        self.assertEqual(snapshot["scope"]["discovery"]["excludedDirectories"], 3)
+
+    def test_an_excluded_home_reached_through_another_path_stays_excluded(self):
+        # The home itself is outside every volume root, so only its identity can exclude the alias.
+        elsewhere = self.root / "elsewhere/PRIVATE_OTHER"
+        elsewhere.mkdir(parents=True)
+        self.layout["profiles"] = [self.home, elsewhere]
+        alias = self.volume / "firmlinked-home"
+        self.put(alias / ".mcp.json", {})
+        original = Path.lstat
+
+        def lstat(path):
+            # The alias reports the excluded home's device and inode, as a firmlink would.
+            return original(elsewhere) if path == alias else original(path)
+
+        with patch.object(Path, "lstat", lstat):
+            self.scan()
+        self.assertNotIn(alias, self.received["workspaces"])
+
+    def test_another_accounts_home_is_not_searched_when_it_is_a_volume_or_holds_one(self):
+        self.put(self.other / "work/project/.claude/settings.json", {})
+        self.put(self.other / "data/repo/.mcp.json", {})
+        # A per-user dataset or encrypted home is its own mount; so is a disk mounted inside it.
+        self.layout["roots"] = [self.volume, self.other, self.other / "data"]
+        with self.opened() as opened:
+            snapshot = self.scan()
+        self.assertFalse([path for path in self.received["workspaces"] if self.other in path.parents])
+        self.assertFalse([path for path in opened if path == self.other or self.other in path.parents])
+        self.assertEqual(snapshot["scope"]["discovery"]["excludedDirectories"], 3)
+
+    def test_another_accounts_linked_home_is_not_searched_where_it_points(self):
+        target = self.volume / "data/PRIVATE_OTHER"
+        self.put(target / "work/project/.mcp.json", {})
+        self.other.rmdir()
+        self.other.symlink_to(target, target_is_directory=True)
+        # A link that would exclude this account's own home is ignored.
+        (self.volume / "home/wide").symlink_to(self.volume, target_is_directory=True)
+        self.layout["profiles"].append(self.volume / "home/wide")
+        mine = self.volume / "code/app"
+        self.put(mine / ".mcp.json", {})
+        with self.opened() as opened:
+            self.scan()
+        self.assertFalse([path for path in self.received["workspaces"] if target in path.parents])
+        self.assertFalse([path for path in opened if path == target or target in path.parents])
+        self.assertIn(mine, self.received["workspaces"])
+
+    @unittest.skipUnless(hasattr(os, "getuid"), "POSIX ownership")
+    def test_folders_owned_by_another_person_are_not_opened_wherever_they_are(self):
+        relocated = self.volume / "data/relocated-home"
+        self.put(relocated / "code/app/.mcp.json", {})
+        system = self.volume / "opt/team-tool"
+        self.put(system / ".mcp.json", {})
+        exported = self.volume / "srv/export"
+        self.put(exported / ".mcp.json", {})
+        owners = {relocated: os.getuid() + 5000, system: 0, exported: 65534}
+        original = Path.lstat
+
+        def lstat(path):
+            info = original(path)
+            if path not in owners:
+                return info
+            values = list(info)
+            values[4] = owners[path]  # st_uid
+            return os.stat_result(values)
+
+        with patch.object(Path, "lstat", lstat), self.opened() as opened:
+            self.scan()
+        self.assertFalse([path for path in self.received["workspaces"] if relocated in path.parents])
+        self.assertFalse([path for path in opened if path == relocated or relocated in path.parents])
+        self.assertIn(system, self.received["workspaces"], "system accounts own shared locations")
+        self.assertIn(exported, self.received["workspaces"], "nobody is not a person")
+
+    def test_backup_volumes_are_not_searched(self):
+        backup = self.volume / "Volumes/com.apple.TimeMachine.localsnapshots/Backups.backupdb/mac/2026-09-14-101010/Data"
+        self.put(backup / "Users/someone/work/.claude/settings.json", {})
+        self.layout["roots"] = [self.volume, backup]
+        with self.opened() as opened:
+            self.scan()
+        self.assertFalse([path for path in self.received["workspaces"] if backup in path.parents])
+        self.assertFalse([path for path in opened if path == backup or backup in path.parents])
+
+    def test_local_drives_are_not_searched_when_other_accounts_cannot_be_identified(self):
+        self.put(self.other / "work/project/.claude/settings.json", {})
+        explicit = self.volume / "requested"
+        self.put(explicit / ".mcp.json", {})
+        with patch.object(machine._Discovery, "profiles", side_effect=RuntimeError("PRIVATE")), self.opened() as opened:
+            snapshot = self.scan([explicit])
+        self.assertEqual(self.received["workspaces"], [explicit])
+        self.assertFalse([path for path in opened if path == self.other or self.other in path.parents])
+        self.assertEqual(snapshot["status"], "partial")
+        self.assertTrue(any("not searched for projects" in item for item in snapshot["coverage"]["limitations"]))
+
+    def test_another_spelling_of_this_accounts_home_is_not_another_account(self):
+        # On a case-insensitive disk the account database can spell the home differently.
+        spelled = self.volume / "home/private_current"
+        self.layout["currentHome"] = spelled
+        original = Path.lstat
+        discovery = machine._Discovery(self.layout)
+        with patch.object(Path, "lstat", lambda path: original(self.home) if path == spelled else original(path)):
+            discovery.profiles()
+        self.assertEqual([item["root"] for item in discovery.accounts], [self.other])
+        self.assertEqual(discovery.counts["profilesExcluded"], 1)
+
+    def test_exported_text_is_scrubbed_of_account_homes_and_the_account_name(self):
+        locations = self.exported(["/cache/-volume-home-PRIVATE_CURRENT-repo/.mcp.json",
+                                   "/cache/PRIVATE_LOGIN-session/.mcp.json",
+                                   str(self.other) + "/shared-project/.mcp.json",
+                                   str(self.home) + "/.claude/settings.json"])
+        self.assertIn("~/.claude/settings.json", locations)
+        self.assertIn("user-1/shared-project/.mcp.json", locations)
+        self.assertIn("/cache/[account]-session/.mcp.json", locations)
+        self.assertTrue(any("-volume-home-[account]-repo" in location for location in locations))
+
+    def test_this_accounts_home_and_name_are_scrubbed_even_when_the_home_is_not_opened(self):
+        self.layout["blockedMounts"] = {self.home}  # for example a network home directory
+        locations = self.exported([str(self.home) + "/code/app/.mcp.json", "/scratch/PRIVATE_LOGIN/proj/.mcp.json"])
+        self.assertEqual(self.received_profiles, [])
+        self.assertIn("~/code/app/.mcp.json", locations)
+        self.assertIn("/scratch/[account]/proj/.mcp.json", locations)
 
     def test_discovery_is_not_limited_to_original_500_entry_budget(self):
         for index in range(650):
@@ -145,12 +321,19 @@ class MachineTests(unittest.TestCase):
     def test_permission_failure_is_counted_without_private_path_or_error_text(self):
         denied = self.volume / "PRIVATE_DENIED"
         denied.mkdir()
-        original = os.scandir
-        def fake_scandir(path):
-            if Path(path) == denied:
+        open_, scandir = os.open, os.scandir
+
+        def denied_open(path, flags, *args, **kwargs):
+            if not isinstance(path, int) and Path(path) == denied:
                 raise PermissionError(13, "PRIVATE_ERROR_CANARY", str(path))
-            return original(path)
-        with patch.object(os, "scandir", fake_scandir):
+            return open_(path, flags, *args, **kwargs)
+
+        def denied_scandir(path="."):
+            if not isinstance(path, int) and Path(path) == denied:
+                raise PermissionError(13, "PRIVATE_ERROR_CANARY", str(path))
+            return scandir(path)
+
+        with patch.object(os, "open", denied_open), patch.object(os, "scandir", denied_scandir):
             snapshot = self.scan()
         self.assertEqual(snapshot["status"], "partial")
         self.assertGreater(snapshot["scope"]["discovery"]["permissionErrors"], 0)
@@ -158,11 +341,12 @@ class MachineTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_ERROR_CANARY", json.dumps(snapshot))
         self.assertTrue(any("/area-" in source["location"] and source["status"] == "error" for source in snapshot["sources"]))
 
+    @unittest.skipUnless(hasattr(os, "getuid"), "POSIX process ownership")
     def test_process_inventory_keeps_only_known_names_not_paths_pids_or_arguments(self):
         discovery = machine._Discovery(self.layout)
         with patch.object(machine, "_system_command", return_value="/PRIVATE_ACCOUNT/bin/claude\nollama\nPRIVATE_UNKNOWN_PROCESS\nnode\n") as run:
             discovery.processes()
-        self.assertEqual(run.call_args.args[0], ["/bin/ps", "-eo", "comm="])
+        self.assertEqual(run.call_args.args[0], ["/bin/ps", "-U", str(os.getuid()), "-o", "comm="], "this account's processes only")
         self.assertEqual({item["client"] for item in discovery.observations}, {"claude-code", "ollama"})
         self.assertTrue(all(item["details"]["activation"] == "running" for item in discovery.observations))
         self.assertNotIn("PRIVATE", json.dumps(discovery.observations))
@@ -171,21 +355,28 @@ class MachineTests(unittest.TestCase):
         layout = dict(self.layout, os="windows")
         discovery = machine._Discovery(layout)
         output = '"Codex.exe","987654","PRIVATE_SESSION","42","999 K"\n"PRIVATE_UNKNOWN.exe","123","PRIVATE_SESSION","9","12 K"'
-        with patch.object(machine, "_windows_system_directory", return_value=Path("C:/Windows/System32")), patch.object(machine, "_system_command", return_value=output):
+        with patch.object(machine, "_windows_system_directory", return_value=Path("C:/Windows/System32")), \
+             patch.object(machine, "_system_command", return_value=output) as run, patch.dict(os.environ, {"USERNAME": "me"}):
             discovery.processes()
+        self.assertEqual(run.call_args.args[0][-2:], ["/FI", "USERNAME eq me"], "this account's processes only")
         self.assertEqual([item["client"] for item in discovery.observations], ["codex"])
         self.assertNotIn("987654", json.dumps(discovery.observations))
         self.assertNotIn("PRIVATE", json.dumps(discovery.observations))
 
+    @unittest.skipUnless(hasattr(os, "getuid"), "POSIX process ownership")
     def test_os_command_runner_has_fixed_paths_no_shell_and_minimal_environment(self):
+        uid = str(os.getuid())
         with patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 0, b"codex\n", b"")) as run:
             with patch.dict(os.environ, {"SECRET_TOKEN": "PRIVATE_ENV_CANARY", "LD_PRELOAD": "/PRIVATE_PRELOAD"}):
-                machine._system_command(["/bin/ps", "-eo", "comm="])
+                machine._system_command(["/bin/ps", "-U", uid, "-o", "comm="])
         self.assertFalse(run.call_args.kwargs["shell"])
         self.assertNotIn("SECRET_TOKEN", run.call_args.kwargs["env"])
         self.assertNotIn("LD_PRELOAD", run.call_args.kwargs["env"])
         with patch.object(subprocess, "run", side_effect=AssertionError("must not run")):
-            for command in (["/tmp/DISCOVERED_EXECUTABLE"], ["/sbin/mount", "-a"], ["/bin/ps", "auxew"], ["/usr/bin/dscl", ".", "-delete", "/Users/PRIVATE"], []):
+            # Every account's processes, another account's, or arbitrary programs are refused.
+            for command in (["/tmp/DISCOVERED_EXECUTABLE"], ["/sbin/mount", "-a"], ["/bin/ps", "auxew"], ["/bin/ps", "-eo", "comm="],
+                            ["/bin/ps", "-axo", "comm="], ["/bin/ps", "-U", str(os.getuid() + 1), "-o", "comm="],
+                            ["/usr/bin/dscl", ".", "-delete", "/Users/PRIVATE"], []):
                 with self.assertRaises(ValueError):
                     machine._system_command(command)
 
@@ -235,7 +426,8 @@ class MachineTests(unittest.TestCase):
         discovery = machine._Discovery(dict(self.layout, os="macos"))
         with patch.object(machine, "_system_command", return_value="/Applications/Codex.app/Contents/MacOS/Codex\n/PRIVATE/Claude\n") as run:
             discovery.processes()
-        self.assertEqual(run.call_args.args[0], ["/bin/ps", "-axo", "comm="])
+        # -x includes this account's apps that have no terminal.
+        self.assertEqual(run.call_args.args[0], ["/bin/ps", "-x", "-U", str(os.getuid()), "-o", "comm="])
         self.assertEqual({o["client"] for o in discovery.observations}, {"codex", "claude-code"})
 
     def test_localized_chromium_and_firefox_metadata_discard_private_names(self):

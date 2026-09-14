@@ -1,0 +1,364 @@
+"""A malformed document or failing adapter ends one source, never the scan."""
+from contextlib import ExitStack, redirect_stderr
+import io
+import json
+import os
+from pathlib import Path
+import plistlib
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from palma_scan import baseline, cli, collector, machine
+from palma_scan.collector import collect
+from palma_scan.engine import observations
+from palma_scan.engine.adapters import configs
+from palma_scan.engine.parsing import ParseError, parse_document
+from palma_scan.model import validate
+from palma_scan.rules import evaluate
+
+# Each input escaped the parser boundary before as something other than ValueError.
+CRASH_CLASS = {
+    "truncated XML plist (ExpatError)": (b'<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.exa', "plist"),
+    "malformed plist date (AttributeError)": (b'<?xml version="1.0"?><plist version="1.0"><dict><key>a</key><date>nope</date></dict></plist>', "plist"),
+    "unknown plist encoding (LookupError)": (b'<?xml version="1.0" encoding="U-0xTF-8"?><plist version="1.0"><dict><key>a</key><string>b</string></dict></plist>', "plist"),
+    "unbalanced plist structure (IndexError)": (b'<?xml version="1.0"?><plist version="1.0"><key>a</key></plist>', "plist"),
+    "invalid YAML timestamp (AttributeError)": (b"name: example\nupdated: !!timestamp 2020-99-99x\n", "yaml"),
+    "invalid front matter timestamp (AttributeError)": (b"---\nname: example\nupdated: !!timestamp 2020-99-99x\n---\nbody\n", "markdown"),
+}
+
+
+class ParserBoundaryTests(unittest.TestCase):
+    def test_every_decoder_failure_is_a_document_parse_error(self):
+        for label, (raw, format_name) in CRASH_CLASS.items():
+            with self.subTest(label):
+                with self.assertRaises(ParseError):
+                    parse_document(raw, format_name)
+
+    def test_machine_metadata_reader_reports_malformed_documents_as_value_errors(self):
+        with tempfile.TemporaryDirectory() as td:
+            # Resolve macOS's /var alias: a redirected ancestor is rejected before parsing.
+            root = Path(td).resolve()
+            for name, raw in (("broken.plist", CRASH_CLASS["truncated XML plist (ExpatError)"][0]),
+                              ("dated.plist", CRASH_CLASS["malformed plist date (AttributeError)"][0])):
+                path = root / name
+                path.write_bytes(raw)
+                with self.subTest(name), self.assertRaises(ValueError) as caught:
+                    machine._regular_metadata(path, "plist")
+                self.assertEqual(str(caught.exception), "unsupported metadata document")
+            deep = root / "deep.json"
+            deep.write_text("[" * 100000 + "]" * 100000)
+            with self.assertRaises(ValueError) as caught:
+                machine._regular_metadata(deep)
+            self.assertEqual(str(caught.exception), "unsupported metadata document")
+
+
+class CollectionBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.home = Path(self.temp.name).resolve() / "home"
+        self.home.mkdir()
+
+    def write(self, relative, value):
+        path = self.home / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(value, bytes):
+            path.write_bytes(value)
+        else:
+            path.write_text(value if isinstance(value, str) else json.dumps(value))
+        return path
+
+    def scan(self):
+        snapshot = collect(self.home, scope_type="copied-home")
+        snapshot["findings"] = evaluate(snapshot)
+        validate(snapshot)
+        return snapshot
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture modes")
+    def test_malformed_app_bundle_plist_neither_ends_the_scan_nor_names_the_bundle(self):
+        self.write("Applications/PRIVATE_BROKEN.app/Contents/Info.plist", CRASH_CLASS["truncated XML plist (ExpatError)"][0])
+        base = self.home / "Applications/Codex.app/Contents"
+        self.write("Applications/Codex.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.openai.codex", "CFBundleShortVersionString": "26.901.1", "CFBundleExecutable": "Main"}))
+        self.write("Applications/Codex.app/Contents/MacOS/Main", b"binary")
+        (base / "MacOS/Main").chmod(0o755)
+        self.write(".claude/settings.json", {"sandbox": {"enabled": False}})
+        snapshot = self.scan()
+        installed = [item for item in snapshot["observations"] if item["kind"] == "client" and item["details"].get("activation") == "installed"]
+        self.assertEqual([(item["client"], item["details"].get("version")) for item in installed], [("codex", "26.901.1")])
+        self.assertIn("sandbox-disabled", {item["ruleId"] for item in snapshot["findings"]})
+        self.assertNotIn("PRIVATE_BROKEN", json.dumps(snapshot))
+
+    def test_failing_adapter_records_a_gap_and_other_sources_are_still_collected(self):
+        self.write(".claude/skills/example/SKILL.md", "---\nname: example\n---\nbody\n")
+        self.write(".claude/settings.json", {"sandbox": {"enabled": False}})
+        with patch("palma_scan.engine.collection.scan_skills", side_effect=RuntimeError("PRIVATE_EXCEPTION_TEXT")):
+            snapshot = self.scan()
+        failed = [source for source in snapshot["sources"] if source.get("reason") == "adapter_error"]
+        self.assertTrue(failed)
+        self.assertTrue(all(source["status"] == "error" for source in failed))
+        self.assertEqual(snapshot["status"], "partial")
+        self.assertIn("sandbox-disabled", {item["ruleId"] for item in snapshot["findings"]})
+        self.assertNotIn("PRIVATE_EXCEPTION_TEXT", json.dumps(snapshot))
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture modes")
+    def test_one_failing_app_bundle_does_not_discard_the_other_apps(self):
+        base = self.home / "Applications/Codex.app/Contents"
+        self.write("Applications/Codex.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.openai.codex", "CFBundleShortVersionString": "26.901.1", "CFBundleExecutable": "Main"}))
+        self.write("Applications/Codex.app/Contents/MacOS/Main", b"binary")
+        (base / "MacOS/Main").chmod(0o755)
+        self.write("Applications/Zzz PRIVATE.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.example.z"}))
+        original = observations.ReportBuilder.probe_document
+
+        def probe_document(builder, candidate):
+            if "Zzz PRIVATE" in str(candidate.path):
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")
+            return original(builder, candidate)
+
+        with patch.object(observations.ReportBuilder, "probe_document", probe_document):
+            snapshot = self.scan()
+        installed = [item for item in snapshot["observations"] if item["kind"] == "client" and item["details"].get("activation") == "installed"]
+        self.assertEqual([item["client"] for item in installed], ["codex"])
+        self.assertNotIn("PRIVATE", json.dumps(snapshot))
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture modes")
+    def test_failed_bundle_probe_leaves_no_trace_of_an_unrelated_application(self):
+        self.write("Applications/PRIVATE_UNRELATED.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.example.unrelated"}))
+        original = observations.ReportBuilder.file_metadata
+
+        def file_metadata(builder, candidate, source, info):
+            if "PRIVATE_UNRELATED" in str(candidate.path):
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")
+            return original(builder, candidate, source, info)
+
+        with patch.object(observations.ReportBuilder, "file_metadata", file_metadata):
+            snapshot = self.scan()
+        self.assertNotIn("PRIVATE_UNRELATED", json.dumps(snapshot))
+        self.assertTrue([source for source in snapshot["sources"] if source.get("reason") == "adapter_error"])
+
+    def test_failing_adapter_discards_its_partial_evidence(self):
+        self.write(".cursor/mcp.json", {"mcpServers": {"remote": {"url": "https://mcp.example.test/mcp", "headers": {"Authorization": "Bearer PRIVATE_TOKEN_VALUE_1234"}}}})
+        with patch("palma_scan.engine.adapters.configs.client_auth", side_effect=RuntimeError("PRIVATE_EXCEPTION_TEXT")):
+            snapshot = self.scan()
+        cursor = [source for source in snapshot["sources"] if source["location"].startswith("~/.cursor/mcp.json")]
+        self.assertTrue(cursor)
+        self.assertEqual({source["status"] for source in cursor}, {"error"})
+        self.assertFalse([item for item in snapshot["observations"] if item["location"] == "~/.cursor/mcp.json"])
+        self.assertNotIn("PRIVATE_TOKEN_VALUE_1234", json.dumps(snapshot))
+
+    def test_one_failing_skill_does_not_discard_its_siblings(self):
+        self.write(".claude/skills/alpha/SKILL.md", "---\nname: alpha\n---\nbody\n")
+        self.write(".claude/skills/beta/SKILL.md", "---\nname: beta\n---\nbody\n")
+        from palma_scan.engine.adapters import artifacts
+        original = artifacts.collect_skill
+
+        def collect_skill(builder, directory, manifest, parent_id):
+            if directory.path.name == "beta":
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")
+            return original(builder, directory, manifest, parent_id)
+
+        with patch.object(artifacts, "collect_skill", collect_skill):
+            snapshot = self.scan()
+        self.assertEqual([item["name"] for item in snapshot["observations"] if item["kind"] == "skill"], ["alpha"])
+        self.assertTrue([source for source in snapshot["sources"] if source.get("reason") == "adapter_error"])
+
+    def test_a_withdrawn_candidate_neither_keeps_nor_removes_its_clients_row(self):
+        self.write(".cursor/cli-config.json", {"permissions": {"allow": ["Shell(ls)"]}})
+        self.write(".cursor/mcp.json", {"mcpServers": {"local": {"command": "node"}}})
+        with patch.object(configs, "collect_mcps", side_effect=RuntimeError("PRIVATE_EXCEPTION_TEXT")):
+            snapshot = self.scan()
+        self.assertEqual([item["client"] for item in snapshot["observations"] if item["kind"] == "client"], ["cursor"])
+
+    def test_a_withdrawn_document_leaves_no_sign_in_claim_on_an_existing_client(self):
+        self.write(".claude/settings.json", {"sandbox": {"enabled": True}})
+        self.write(".claude.json", {"oauthAccount": {"emailAddress": "PRIVATE_EMAIL"}, "autoUpdates": True})
+        original = configs.configured_plugins
+
+        def configured_plugins(builder, candidate, source, data):
+            if candidate.path.name == ".claude.json":
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")  # after sign-in modes were recorded
+            return original(builder, candidate, source, data)
+
+        with patch.object(configs, "configured_plugins", configured_plugins):
+            snapshot = self.scan()
+        client = next(item for item in snapshot["observations"] if item["kind"] == "client" and item["client"] == "claude-code")
+        self.assertNotIn("vendor_login", client["details"]["authModes"])
+        self.assertEqual({source["status"] for source in snapshot["sources"] if source["location"].startswith("~/.claude.json")}, {"error"})
+
+    def test_one_failing_project_entry_keeps_the_rest_of_the_file(self):
+        (self.home / "proj").mkdir()
+        self.write(".claude.json", {"mcpServers": {"user-remote": {"type": "http", "url": "https://mcp.example.test/mcp"}},
+                                    "bypassPermissionsModeAccepted": True,
+                                    "projects": {str(self.home / "proj"): {"mcpServers": {"proj-local": {"command": "node"}}}}})
+        original = collector._Collector.mcps
+
+        def mcps(instance, source, entries, parent_disabled=False, context="base", map_key="mcpServers"):
+            if context == "project":
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, source, entries, parent_disabled, context, map_key)
+
+        with patch.object(collector._Collector, "mcps", mcps):
+            snapshot = self.scan()
+        state = next(source for source in snapshot["sources"] if source["location"] == "~/.claude.json")
+        self.assertEqual(state["status"], "error")
+        rows = {(item["kind"], item["name"]) for item in snapshot["observations"] if item["sourceId"] == state["id"]}
+        self.assertNotIn(("mcp", "proj-local"), rows)
+        for kept in (("mcp", "user-remote"), ("client", "claude-code"), ("setting", "bypassPermissionsModeAccepted")):
+            self.assertIn(kept, rows)
+
+    def test_in_memory_policy_that_fails_part_way_leaves_no_rows(self):
+        policy = {"data": {"permissions": {"defaultMode": "bypassPermissions"}}, "client": "claude-code",
+                  "location": "system:claude-code/managed-preferences", "format": "json", "context": "managed"}
+        original = baseline.collect_config
+
+        def collect_config(*args):
+            original(*args)
+            raise TypeError("PRIVATE_EXCEPTION_TEXT")
+
+        with patch.object(baseline, "collect_config", collect_config):
+            snapshot = baseline.collect_scopes([], system_sources=[policy], workspaces=[])
+        managed = [source for source in snapshot["sources"] if source["location"].startswith("system:claude-code/managed-preferences")]
+        self.assertEqual({source["status"] for source in managed}, {"error"})
+        self.assertFalse([item for item in snapshot["observations"] if item["location"].startswith("system:claude-code/managed-preferences")])
+
+    def test_a_source_that_fails_in_the_first_pass_is_not_retranslated_later(self):
+        self.write("Library/Application Support/Code/User/profiles/work/mcp.json", {"servers": {"source-control": {"type": "http", "url": "https://api.githubcopilot.com/mcp/"}}})
+        original = collector._Collector.process_data
+
+        def process_data(instance, root, source, data, context="base", filename=""):
+            if source["client"] == "vscode":
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, root, source, data, context, filename)
+
+        with patch.object(collector._Collector, "process_data", process_data):
+            snapshot = self.scan()
+        # Neither its declarations nor fallback rows from the later passes are exported.
+        self.assertFalse([item for item in snapshot["observations"] if item["client"] == "vscode"])
+        self.assertTrue([source for source in snapshot["sources"] if source["client"] == "vscode" and source["status"] == "error"])
+
+    def test_a_withdrawn_parent_leaves_no_dangling_links(self):
+        relative = ".codex/plugins/cache/market/demo/1.0.0"
+        self.write(relative + "/.codex-plugin/plugin.json", {"name": "demo"})
+        self.write(relative + "/skills/helper/SKILL.md", "---\nname: helper\n---\nbody\n")
+        self.write(relative + "/.mcp.json", {"mcpServers": {"local": {"command": "node"}}})
+        original = collector._Collector.observe
+
+        def observe(instance, source, kind, name, details, enabled="unknown", discriminator="", location=None):
+            if kind == "plugin" and discriminator.startswith("engine:"):
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, source, kind, name, details, enabled, discriminator, location)
+
+        with patch.object(collector._Collector, "observe", observe):
+            snapshot = self.scan()
+        self.assertFalse([item for item in snapshot["observations"] if item["kind"] == "plugin"])
+        identities = {item["id"] for item in snapshot["observations"]}
+        self.assertTrue(all(item["details"]["parentId"] in identities for item in snapshot["observations"] if "parentId" in item["details"]))
+
+    def test_failing_translation_rolls_back_only_that_source(self):
+        self.write(".gemini/settings.json", {"tools": {"sandbox": False}})
+        self.write(".claude/settings.json", {"sandbox": {"enabled": False}})
+        original = collector._Collector.extensions
+
+        def extensions(instance, source, data, context="base"):
+            if source["client"] == "gemini-cli":
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, source, data, context)
+
+        with patch.object(collector._Collector, "extensions", extensions):
+            snapshot = self.scan()
+        gemini = next(source for source in snapshot["sources"] if source["location"] == "~/.gemini/settings.json")
+        self.assertEqual(gemini["status"], "error")
+        self.assertIn("evidence in this source could not be interpreted safely", gemini.get("reasons", []) + [gemini["reason"]])
+        # Settings extracted before the failure are withdrawn, not left half-annotated.
+        self.assertFalse([item for item in snapshot["observations"] if item["sourceId"] == gemini["id"] and item["kind"] == "setting"])
+        sandbox = [item for item in snapshot["findings"] if item["ruleId"] == "sandbox-disabled"]
+        self.assertEqual({evidence["location"] for item in sandbox for evidence in item["evidence"]}, {"~/.claude/settings.json"})
+        self.assertNotIn("PRIVATE_EXTRACTOR_TEXT", json.dumps(snapshot))
+
+
+class MachineStepTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.home = self.root / "volume/home/PRIVATE_CURRENT"
+        self.home.mkdir(parents=True)
+        self.layout = {"os": "linux", "roots": [self.root / "volume"], "blockedMounts": set(), "networkMountCount": 0,
+                       "profiles": [self.home], "profileRoots": [self.root / "volume/home"], "currentHome": self.home,
+                       "gaps": [], "mountIndexVerified": True}
+
+    def core(self, profiles, **kwargs):
+        return {"schemaVersion": "2.0", "collector": {"name": "synthetic", "version": "2.1.0"}, "mode": "endpoint",
+                "status": "complete", "scope": {"type": kwargs["scope_type"]}, "sources": [], "observations": [],
+                "coverage": {"limitations": kwargs["discovery_gaps"]}, "findings": []}
+
+    def collect_with(self, **replacements):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(machine, "_layout", return_value=self.layout))
+            stack.enter_context(patch.object(machine, "_system_sources", return_value=[]))
+            stack.enter_context(patch.object(machine, "_system_command", return_value=""))
+            stack.enter_context(patch.object(machine._Discovery, "services", return_value=None))
+            stack.enter_context(patch.object(collector, "collect_scopes", side_effect=self.core, create=True))
+            for name, value in replacements.items():
+                stack.enter_context(patch.object(machine._Discovery, name, value))
+            return machine.collect_machine()
+
+    def test_unexpected_step_failure_is_partial_coverage_not_a_lost_scan(self):
+        def failing(discovery, *_):
+            discovery.source("browser-ai-extension-metadata")  # The step's own source exists before it fails.
+            raise RuntimeError("PRIVATE_STEP_TEXT")
+
+        snapshot = self.collect_with(browser_extensions=failing)
+        step = next(source for source in snapshot["sources"] if source["location"] == "machine:browser-ai-extension-metadata")
+        self.assertEqual(step["status"], "error")
+        self.assertEqual(snapshot["status"], "partial")
+        self.assertEqual(len({source["id"] for source in snapshot["sources"]}), len(snapshot["sources"]))
+        self.assertNotIn("PRIVATE_STEP_TEXT", json.dumps(snapshot))
+
+    def test_profile_step_failure_scans_no_unchecked_profile(self):
+        received = []
+
+        def core(profiles, **kwargs):
+            received.extend(profiles)
+            return self.core(profiles, **kwargs)
+
+        with patch.object(machine._Discovery, "profiles", side_effect=RuntimeError("PRIVATE")), \
+             patch.object(machine, "_layout", return_value=self.layout), \
+             patch.object(machine, "_system_sources", return_value=[]), \
+             patch.object(machine, "_system_command", return_value=""), \
+             patch.object(machine._Discovery, "services", return_value=None), \
+             patch.object(collector, "collect_scopes", side_effect=core, create=True):
+            snapshot = machine.collect_machine()
+        self.assertEqual(received, [])
+        self.assertEqual(snapshot["status"], "partial")
+
+
+class CliBoundaryTests(unittest.TestCase):
+    def run_cli(self, error):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / "snapshot.json"
+            stderr = io.StringIO()
+            with patch("palma_scan.machine.collect_machine", side_effect=error), redirect_stderr(stderr), \
+                 patch("sys.stdout", new_callable=io.StringIO):
+                code = cli.main(["collect", "--output", str(target)])
+            self.assertFalse(target.exists())
+        return code, stderr.getvalue()
+
+    def test_unexpected_internal_error_exits_2_without_traceback_or_contents(self):
+        code, stderr = self.run_cli(RuntimeError("PRIVATE_DOCUMENT_TEXT"))
+        self.assertEqual(code, 2)
+        self.assertIn("unexpected internal error (RuntimeError)", stderr)
+        self.assertNotIn("PRIVATE_DOCUMENT_TEXT", stderr)
+        self.assertNotIn("Traceback", stderr)
+
+    def test_interrupt_exits_130_without_traceback(self):
+        code, stderr = self.run_cli(KeyboardInterrupt())
+        self.assertEqual(code, 130)
+        self.assertIn("interrupted", stderr)
+        self.assertNotIn("Traceback", stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

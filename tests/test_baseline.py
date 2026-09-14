@@ -120,7 +120,10 @@ class BaselineTests(unittest.TestCase):
         settings = self.kinds(result, 'setting')
         self.assertEqual(len(settings), 2)
         self.assertEqual(len({item['sourceId'] for item in settings}), 2)
-        self.assertEqual(len(self.kinds(result, 'mcp')), 2)
+        # The same connector in both profiles is one declaration listed in two places.
+        mcps = self.kinds(result, 'mcp')
+        self.assertEqual(len(mcps), 1)
+        self.assertEqual(mcps[0]['details']['locationCount'], 2)
         self.assertEqual({item['location'] for item in settings}, {'~/Library/Application Support/Code/User/profiles/' + name + '/settings.json' for name in ('PRIVATE_PERSON_A', 'PRIVATE_PERSON_B')})
 
     def test_package_named_docs_is_not_skipped_and_parent_edges_resolve(self):
@@ -187,7 +190,10 @@ class BaselineTests(unittest.TestCase):
             path.chmod(0o755)
         result = self.scan()
         clients = [item for item in self.kinds(result, 'client') if item['details']['activation'] == 'installed']
-        self.assertEqual({item['details'].get('version') for item in clients}, {'2.1.1', '2.1.2'})
+        # Two installed versions are one client with both versions recorded.
+        self.assertEqual(len(clients), 1)
+        self.assertEqual(clients[0]['details']['versions'], ['2.1.1', '2.1.2'])
+        self.assertEqual(clients[0]['details']['version'], '2.1.2')
         self.assertNotIn('PRIVATE_BINARY', json.dumps(result))
 
     @unittest.skipIf(os.name == 'nt', 'POSIX fixture modes')

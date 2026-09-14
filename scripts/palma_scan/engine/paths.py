@@ -73,14 +73,15 @@ USER_SCOPED_OVERRIDES = ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "CURSOR_CONFIG_DIR",
                          "CLAUDE_CODE_PLUGIN_CACHE_DIR", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME")
 
 
-def bounded_environment(environ, os_name, home):
+def bounded_environment(environ, os_name, home, excluded=()):
     """Reject directory overrides that target a volume or leave the selected account.
 
     User-scoped overrides (CODEX_HOME, CLAUDE_CONFIG_DIR, ...) must be absolute and
     inside the selected home: a relative value resolves against the scanner's
     working directory and an outside-home value would silently pull another
     account's or project's inventory into a current-account scan. System roots
-    (ProgramFiles, ProgramData) keep the volume-root rule only.
+    (ProgramFiles, ProgramData) keep the volume-root rule only. Nothing may point into an
+    ``excluded`` folder (other accounts' homes, network or virtual mounts) or a network share.
     """
     rejected = []
     variables = USER_SCOPED_OVERRIDES + ("ProgramFiles", "ProgramData")
@@ -95,13 +96,13 @@ def bounded_environment(environ, os_name, home):
         value = result.get(variable)
         if not value:
             continue
-        if _volume_root(value) or (variable in user_scoped and _outside_account(value, home)):
+        if _volume_root(value) or _excluded(value, excluded) or (variable in user_scoped and _outside_account(value, home)):
             rejected.append(variable)
             del result[variable]
     separator = ";" if os_name == "windows" else ":"
     # Search-path entries feed installation probes, so an entry under ANOTHER
     # account's profile directory would read that account's install metadata.
-    unsafe = lambda part: _volume_root(part) or _foreign_profile(part, home, os_name)
+    unsafe = lambda part: _volume_root(part) or _foreign_profile(part, home, os_name) or _excluded(part, excluded)
     seeds = result.get("CLAUDE_CODE_PLUGIN_SEED_DIR", "").split(separator)
     if any(part and unsafe(part) for part in seeds) or len(seeds) > 32:
         rejected.append("CLAUDE_CODE_PLUGIN_SEED_DIR")
@@ -160,6 +161,17 @@ def _outside_account(value, home):
         return target != account and account not in target.parents
     except (RuntimeError, OSError, ValueError):
         return True
+
+
+def _excluded(value, excluded):
+    """True for a network share, or a path inside one of the excluded folders."""
+    if value.startswith(("\\\\", "//")):
+        return True
+    try:
+        path = Path(value).expanduser().absolute()
+    except (RuntimeError, OSError, ValueError):
+        return True
+    return any(path == Path(folder) or Path(folder) in path.parents for folder in excluded)
 
 
 def _volume_root(value):

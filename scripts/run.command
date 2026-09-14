@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Finder launcher. Results go beside the skill folder.
-here=$(cd "$(dirname "$0")" && pwd)
-cd "$(dirname "$(dirname "$here")")" || exit 2
+# Finder launcher. Results go in a new readiness-run folder in your home folder.
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 bash "$here/run.sh" "$@"
 result=$?
 if [ "$result" -eq 0 ]; then echo 'Finished. Your report is saved locally.'; fi

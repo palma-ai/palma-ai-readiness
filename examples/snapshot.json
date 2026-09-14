@@ -1,7 +1,7 @@
 {
   "collector": {
     "name": "palma-ai-readiness",
-    "rulesVersion": "2026-09-10.2",
+    "rulesVersion": "2026-09-14.1",
     "version": "2.2.0"
   },
   "completedAt": "2026-09-10T12:00:01+00:00",
@@ -9,7 +9,8 @@
     "limitations": [
       "SYNTHETIC EXAMPLE: every declaration in this report was generated from fictional test configuration, not a person's endpoint.",
       "~/.codeium/windsurf/mcp_config.json: parse_error"
-    ]
+    ],
+    "sourcesInspected": 20
   },
   "findings": [
     {
@@ -24,63 +25,9 @@
       "distinct": 5,
       "evidence": [
         {
-          "key": "documentation",
-          "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        },
-        {
-          "key": "source-control",
-          "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        },
-        {
           "key": "team-messages",
           "location": "~/.config/Code/User/mcp.json",
-          "sourceId": "src-2f6a22b650ce1ef376ea4e68",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        },
-        {
-          "key": "design",
-          "location": "~/.config/Code/User/mcp.json",
-          "sourceId": "src-2f6a22b650ce1ef376ea4e68",
+          "sourceId": "src-b69f995696d23bc824396f67",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -98,7 +45,7 @@
         {
           "key": "test-service",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
           "value": {
             "activation": "configured",
             "auth": "bearer_header",
@@ -112,17 +59,71 @@
             "observedState": "unknown",
             "transport": "http"
           }
+        },
+        {
+          "key": "design",
+          "location": "~/.config/Code/User/mcp.json",
+          "sourceId": "src-b69f995696d23bc824396f67",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "remote",
+            "execution": "remote",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "http"
+          }
+        },
+        {
+          "key": "documentation",
+          "location": "~/.cursor/mcp.json",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "remote",
+            "execution": "remote",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "http"
+          }
+        },
+        {
+          "key": "source-control",
+          "location": "~/.cursor/mcp.json",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "remote",
+            "execution": "remote",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "http"
+          }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-92492134522d170e",
+      "id": "finding-3bd9b227386d2c78",
       "impact": "Connector requests may send PII, source code, or other sensitive data to remote services. Untrusted tool output can carry prompt injection, while excessive tool permissions increase the impact of unintended calls.",
       "observationIds": [
-        "obs-197f9933c5dc4533",
-        "obs-1d112ce427b5ad65",
-        "obs-54aff17e0b316fd2",
-        "obs-600de8ad2f1565b9",
-        "obs-b23e8ad3c3d8dac1"
+        "obs-1c031fa9e459154d",
+        "obs-30ec29acccebdf9f",
+        "obs-35fb8d6a6d36774b",
+        "obs-ab6dec8b270f2fa3",
+        "obs-c4213fbf79398187"
       ],
       "ratingReason": "Palma's standalone governance policy elevates this exposure to Critical.",
       "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
@@ -149,7 +150,7 @@
         {
           "key": "browser",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -165,27 +166,9 @@
           }
         },
         {
-          "key": "documentation",
-          "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
-          "sourceId": "src-b35a34d36ca34b90e7cb4b57",
-          "value": {
-            "activation": "configured",
-            "auth": "unknown",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "unknown",
-            "execution": "local",
-            "inlineCredentialPresent": false,
-            "literalCredentialCount": 0,
-            "observedState": "unknown",
-            "transport": "stdio"
-          }
-        },
-        {
           "key": "disabled",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -199,15 +182,33 @@
             "observedState": "disabled",
             "transport": "stdio"
           }
+        },
+        {
+          "key": "documentation",
+          "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
+          "sourceId": "src-6f44ce53668e226d19b9fce4",
+          "value": {
+            "activation": "configured",
+            "auth": "unknown",
+            "capability": null,
+            "capabilityEvidence": "not-identified",
+            "context": "base",
+            "endpointScope": "unknown",
+            "execution": "local",
+            "inlineCredentialPresent": false,
+            "literalCredentialCount": 0,
+            "observedState": "unknown",
+            "transport": "stdio"
+          }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-fc1052eaafc46fbd",
+      "id": "finding-ae3c99061f6ca37c",
       "impact": "A local MCP server can reach files, credentials, and personally identifiable information (PII) with its host permissions. Malicious code or prompt-injected tool interactions can cause unauthorized actions or data leakage.",
       "observationIds": [
-        "obs-1b059f7a238e0e36",
-        "obs-2ab8110e58f2c938",
-        "obs-4854610011334445"
+        "obs-810cdaa0f87dc450",
+        "obs-c6bc5f784cf71865",
+        "obs-f0eae420972b64dd"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
@@ -227,7 +228,7 @@
         {
           "key": "agents.browser.sessionMode",
           "location": "~/.gemini/settings.json",
-          "sourceId": "src-3577fefe58bcb7a4b5d3f26e",
+          "sourceId": "src-736057806085cf204a7b1197",
           "value": {
             "category": "browser",
             "context": "base",
@@ -240,7 +241,7 @@
         {
           "key": "agents.overrides.browser_agent.enabled",
           "location": "~/.gemini/settings.json",
-          "sourceId": "src-3577fefe58bcb7a4b5d3f26e",
+          "sourceId": "src-736057806085cf204a7b1197",
           "value": {
             "category": "browser",
             "context": "base",
@@ -252,11 +253,11 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-a7d8ea493b50a8a4",
+      "id": "finding-43b1a778afc4493d",
       "impact": "A reused browser session may expose additional context, while selected actions can have fewer confirmation steps. Signed-in access is not verified.",
       "observationIds": [
-        "obs-483cdc6227ad8144",
-        "obs-dd371b9e37830934"
+        "obs-1a718ba4f4cea546",
+        "obs-474f596780c22486"
       ],
       "recommendation": "Prefer isolated sessions and retain sensitive-action confirmation. Review file upload restrictions and browser-domain scope in the active agent.",
       "references": [
@@ -280,9 +281,9 @@
       "distinct": 2,
       "evidence": [
         {
-          "key": "workbench.browser.enableChatTools",
-          "location": "~/.config/Code/User/settings.json",
-          "sourceId": "src-d6e372a492e76c1caf4fe245",
+          "key": "agents.overrides.browser_agent.enabled",
+          "location": "~/.gemini/settings.json",
+          "sourceId": "src-736057806085cf204a7b1197",
           "value": {
             "category": "browser",
             "context": "base",
@@ -293,9 +294,9 @@
           }
         },
         {
-          "key": "agents.overrides.browser_agent.enabled",
-          "location": "~/.gemini/settings.json",
-          "sourceId": "src-3577fefe58bcb7a4b5d3f26e",
+          "key": "workbench.browser.enableChatTools",
+          "location": "~/.config/Code/User/settings.json",
+          "sourceId": "src-5f75b6abae1941a4f1d64cae",
           "value": {
             "category": "browser",
             "context": "base",
@@ -307,11 +308,11 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-98f4ee8354efeec1",
-      "impact": "Web content can contain prompt injection. An agent with browser access may expose PII or act through authenticated sessions unless site access and sensitive actions are governed.",
+      "id": "finding-a8698574623fa92e",
+      "impact": "The agent can browse and act in sites with your signed-in sessions. A page it reads can contain instructions that steer it into unintended actions or into sending data elsewhere, unless site access and sensitive actions require your approval.",
       "observationIds": [
-        "obs-b12639e902fb54ff",
-        "obs-dd371b9e37830934"
+        "obs-474f596780c22486",
+        "obs-f43086074f9e2957"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
@@ -336,9 +337,9 @@
       "distinct": 1,
       "evidence": [
         {
-          "key": "research-helper",
-          "location": "~/.claude/skills/research-helper/SKILL.md",
-          "sourceId": "src-163e2419a1b1942a9876b7ac",
+          "key": "release-helper",
+          "location": "~/.agents/skills/release-helper/SKILL.md",
+          "sourceId": "src-cf985d82d0e79a7e937ece3f",
           "value": {
             "activation": "present",
             "context": "base",
@@ -348,9 +349,9 @@
           }
         },
         {
-          "key": "release-helper",
-          "location": "~/.agents/skills/release-helper/SKILL.md",
-          "sourceId": "src-d7993440918db1dbec78fa6b",
+          "key": "research-helper",
+          "location": "~/.claude/skills/research-helper/SKILL.md",
+          "sourceId": "src-9e96e4eafb65f99a46fc2e68",
           "value": {
             "activation": "present",
             "context": "base",
@@ -361,11 +362,11 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-84cc0873081476f4",
+      "id": "finding-2e8a0a66f0c64b4d",
       "impact": "Unreviewed skill instructions and scripts can contain prompt injection, mishandle PII, disclose secrets, or steer tools into data leakage. Review evidence should identify the installed version.",
       "observationIds": [
-        "obs-6cba7663d37dc6ea",
-        "obs-87aabe30645b63d5"
+        "obs-44e619afe060d36f",
+        "obs-f80df07faefb7cf2"
       ],
       "ratingReason": "Palma's standalone governance policy elevates this exposure to Critical.",
       "recommendation": "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team.",
@@ -390,7 +391,7 @@
         {
           "key": "agents.browser.confirmSensitiveActions",
           "location": "~/.gemini/settings.json",
-          "sourceId": "src-3577fefe58bcb7a4b5d3f26e",
+          "sourceId": "src-736057806085cf204a7b1197",
           "value": {
             "category": "browser",
             "context": "base",
@@ -402,10 +403,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-05698747b114f358",
+      "id": "finding-65e8a6deffc78152",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-9e9fe6ae5185a3ef"
+        "obs-ea6d61c79b8f9c6e"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Check how Palma AI can help: sensitive browser actions run behind an approval policy instead of silently.",
@@ -431,7 +432,7 @@
         {
           "key": "features.computer_use",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
           "value": {
             "category": "computer",
             "context": "base",
@@ -443,10 +444,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-2d98c1d8bb57ac14",
-      "impact": "Desktop actions can reach PII and authenticated applications. Prompt injection or unexpected instructions can cross application boundaries and cause data leakage.",
+      "id": "finding-bdaec0cc21b04907",
+      "impact": "The agent can see your screen and use the keyboard and mouse as you, across your signed-in apps. Content it reads can contain instructions that steer those actions, including sending data elsewhere.",
       "observationIds": [
-        "obs-34011cb3b64f98b0"
+        "obs-e37e8e3d9356bfd6"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Check how Palma AI can help: desktop control becomes a governed capability with approval policies and an audit trail.",
@@ -472,7 +473,7 @@
         {
           "key": "Hooks: PreToolUse",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
+          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
           "value": {
             "activation": "configured",
             "context": "base",
@@ -487,10 +488,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-dd86cca6ee69cc37",
+      "id": "finding-0e82a6af4921aa6f",
       "impact": "Hooks can execute custom logic automatically, access PII and credentials, transmit data, or inject instructions into an agent workflow. A compromised hook or writable script creates a path to data leakage.",
       "observationIds": [
-        "obs-ea42a2125dbadadb"
+        "obs-ce952539b6cff3ac"
       ],
       "ratingReason": "Palma's standalone governance policy elevates this exposure to Critical.",
       "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
@@ -516,7 +517,7 @@
         {
           "key": "browser",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -533,10 +534,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-d0f6fab7dcfaa9a6",
-      "impact": "Browser automation may reach authenticated pages and PII. Page-borne prompt injection can induce unintended navigation, form submission, or data leakage using the user's session.",
+      "id": "finding-c0d75224a56cfdbf",
+      "impact": "It can open pages, fill in forms and click in sites where you are signed in, as you. A page it visits can contain instructions that steer it into unintended actions or into sending data elsewhere.",
       "observationIds": [
-        "obs-1b059f7a238e0e36"
+        "obs-810cdaa0f87dc450"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
@@ -545,7 +546,7 @@
       ],
       "ruleId": "mcp-browser-automation",
       "severity": "critical",
-      "summary": "1 connector declares browser automation. Review access to signed-in sessions, page data, form submissions, and script execution.",
+      "summary": "\u201cbrowser\u201d can control a web browser as you. Declared in ~/.codex/config.toml.",
       "title": "Browser automation via a connector: drives a browser without governance"
     },
     {
@@ -561,7 +562,7 @@
         {
           "key": "test-service",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
           "value": {
             "activation": "configured",
             "auth": "bearer_header",
@@ -578,10 +579,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-4fed88511a6caf12",
-      "impact": "Control who can invoke tools, what permissions they receive, and when human confirmation is required. An audit trail makes sensitive actions traceable and supports investigation.",
+      "id": "finding-bddf4b96f6b5733d",
+      "impact": "If the value is a working credential, anyone who can read the file can use it as you: other processes, extensions and skills running under your account, and every backup, sync folder or dotfiles repository that copies the file. It keeps working until it is rotated.",
       "observationIds": [
-        "obs-b23e8ad3c3d8dac1"
+        "obs-30ec29acccebdf9f"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Move the credential behind the gateway and rotate the exposed value.",
@@ -590,7 +591,7 @@
       ],
       "ruleId": "mcp-inline-credential",
       "severity": "critical",
-      "summary": "1 connector declaration contains potential credential literals. Values are redacted; review the named configuration files for exposure.",
+      "summary": "\u201ctest-service\u201d keeps a potential credential in plain text in ~/.cursor/mcp.json. The value is withheld from this report.",
       "title": "Credentials stored in local client config"
     },
     {
@@ -605,22 +606,9 @@
       "distinct": 2,
       "evidence": [
         {
-          "key": "sandbox_mode",
-          "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
-          "value": {
-            "category": "sandbox",
-            "context": "base",
-            "effectiveState": "unknown",
-            "observedState": "enabled",
-            "value": "danger-full-access",
-            "valueCollected": true
-          }
-        },
-        {
           "key": "sandbox.enabled",
           "location": "~/project/.claude/settings.json",
-          "sourceId": "src-cbe9a0f17b06e53f075bbe21",
+          "sourceId": "src-ff224cd17fbacb85995eb026",
           "value": {
             "category": "sandbox",
             "context": "project",
@@ -629,14 +617,27 @@
             "value": false,
             "valueCollected": true
           }
+        },
+        {
+          "key": "sandbox_mode",
+          "location": "~/.codex/config.toml",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
+          "value": {
+            "category": "sandbox",
+            "context": "base",
+            "effectiveState": "unknown",
+            "observedState": "enabled",
+            "value": "danger-full-access",
+            "valueCollected": true
+          }
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-06479b7b10df2990",
+      "id": "finding-23c18942eac871cd",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-90ba5999bc78d42f",
-        "obs-c87a249837d39bcc"
+        "obs-d0a760d394600e82",
+        "obs-e97e94ab5c13c1b3"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Evidence for the security review now; managed settings from Palma later.",
@@ -650,51 +651,6 @@
       "title": "Sandbox turned off: agents run unconfined"
     },
     {
-      "baselineSeverity": "high",
-      "category": "mcp",
-      "clients": [
-        "cursor"
-      ],
-      "confidence": "high",
-      "declarations": 1,
-      "distinct": 1,
-      "evidence": [
-        {
-          "key": "test-service",
-          "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
-          "value": {
-            "activation": "configured",
-            "auth": "bearer_header",
-            "capability": null,
-            "capabilityEvidence": "not-identified",
-            "context": "base",
-            "endpointScope": "remote",
-            "execution": "remote",
-            "inlineCredentialPresent": true,
-            "literalCredentialCount": 1,
-            "observedState": "unknown",
-            "transport": "http"
-          }
-        }
-      ],
-      "evidenceType": "configuration",
-      "id": "finding-2ab70432661d9643",
-      "impact": "Control who can invoke tools, what permissions they receive, and when human confirmation is required. An audit trail makes sensitive actions traceable and supports investigation.",
-      "observationIds": [
-        "obs-b23e8ad3c3d8dac1"
-      ],
-      "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
-      "recommendation": "Let the gateway hold the credential, or move the server to OAuth.",
-      "references": [
-        "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"
-      ],
-      "ruleId": "mcp-static-secret-auth",
-      "severity": "high",
-      "summary": "1 connector declares authentication using a fixed header secret. Review ownership, scope, rotation, and storage.",
-      "title": "Connectors signed in with a fixed secret"
-    },
-    {
       "baselineSeverity": "medium",
       "category": "configuration",
       "clients": [
@@ -705,21 +661,9 @@
       "distinct": 2,
       "evidence": [
         {
-          "key": "retired-plugin@demo",
-          "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
-          "value": {
-            "activation": "configured",
-            "context": "base",
-            "installationState": "config_only",
-            "observedState": "disabled",
-            "origin": "unknown"
-          }
-        },
-        {
           "key": "sample-plugin@demo",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
+          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
           "value": {
             "activation": "configured",
             "context": "base",
@@ -727,14 +671,26 @@
             "observedState": "enabled",
             "origin": "unknown"
           }
+        },
+        {
+          "key": "retired-plugin@demo",
+          "location": "~/.claude/settings.json",
+          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
+          "value": {
+            "activation": "configured",
+            "context": "base",
+            "installationState": "config_only",
+            "observedState": "disabled",
+            "origin": "unknown"
+          }
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-39a49ff8d75cd74b",
+      "id": "finding-4bef1b8bfe0f8a64",
       "impact": "Evidence the scan could not classify is neither safe nor unsafe: it is unknown. Resolving it is cheap and turns a gap into a decision.",
       "observationIds": [
-        "obs-3da1ff0b6540e7b0",
-        "obs-cd8fa8e7591dd391"
+        "obs-90339d79247ce601",
+        "obs-b2b37c7de1440e15"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Inventory them now; governed conversion registers the ones that stay.",
@@ -754,7 +710,7 @@
         {
           "key": "sandbox.enabled",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
+          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
           "value": {
             "category": "sandbox",
             "context": "base",
@@ -767,7 +723,7 @@
         {
           "key": "sandbox.enabled",
           "location": "~/project/.claude/settings.json",
-          "sourceId": "src-cbe9a0f17b06e53f075bbe21",
+          "sourceId": "src-ff224cd17fbacb85995eb026",
           "value": {
             "category": "sandbox",
             "context": "project",
@@ -779,11 +735,11 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-9904db4fc378d173",
+      "id": "finding-ff97864bd427da1f",
       "impact": "Repeated or conflicting declarations can make maintenance and troubleshooting harder; this does not establish which value is effective.",
       "observationIds": [
-        "obs-6eeff71939760bee",
-        "obs-c87a249837d39bcc"
+        "obs-14d877dc7dfd6232",
+        "obs-d0a760d394600e82"
       ],
       "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
       "references": [
@@ -804,7 +760,7 @@
         {
           "key": "reviewer",
           "location": "~/.claude/agents/reviewer.md",
-          "sourceId": "src-48a53656e95c0571bd8930e2",
+          "sourceId": "src-f8c9b591c898f93d53bd701d",
           "value": {
             "activation": "present",
             "context": "base",
@@ -815,10 +771,10 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-6eff1896be7bf6aa",
+      "id": "finding-9a75860b388dd45e",
       "impact": "Prompt injection or unsafe instructions can steer an agent into unintended tool use, PII exposure, or data leakage.",
       "observationIds": [
-        "obs-0c64954c26aacf01"
+        "obs-362e0b21468ae977"
       ],
       "recommendation": "Review instructions, declared tools, dependencies, and update sources; retain the reviewed version.",
       "references": [
@@ -839,7 +795,7 @@
         {
           "key": "browser",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -856,10 +812,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-aedbd617388cfd46",
+      "id": "finding-294f1602d6617ce1",
       "impact": "Later launches can obtain different code, increasing supply-chain exposure and making security review harder to reproduce.",
       "observationIds": [
-        "obs-1b059f7a238e0e36"
+        "obs-810cdaa0f87dc450"
       ],
       "recommendation": "Pin a reviewed package version and establish an update review process.",
       "references": [
@@ -884,7 +840,7 @@
         {
           "key": "approval_policy",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
           "value": {
             "category": "permissions",
             "context": "base",
@@ -896,10 +852,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-686903113d9f2fcc",
+      "id": "finding-9da5f2a60d6f3aec",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-c1a68c494fb3a909"
+        "obs-7378021f5cbc8819"
       ],
       "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review.",
       "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
@@ -925,7 +881,7 @@
         {
           "key": "permissions.defaultMode",
           "location": "~/.claude/remote-settings.json",
-          "sourceId": "src-4618e3571e7bbd4c4ee9ede9",
+          "sourceId": "src-b7dfac3f88f6f8eb6de6e151",
           "value": {
             "category": "permissions",
             "context": "cached",
@@ -937,10 +893,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-db530e1e131781f3",
+      "id": "finding-b33bd66bb32f3c68",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-9d69ccb299a4487d"
+        "obs-3edb557f86f7ca8a"
       ],
       "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review.",
       "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
@@ -966,7 +922,7 @@
         {
           "key": "chat.tools.global.autoApprove",
           "location": "~/.config/Code/User/settings.json",
-          "sourceId": "src-d6e372a492e76c1caf4fe245",
+          "sourceId": "src-5f75b6abae1941a4f1d64cae",
           "value": {
             "category": "permissions",
             "context": "base",
@@ -978,10 +934,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-b0297581ce433dce",
+      "id": "finding-c54d7e087ab47524",
       "impact": "A switch that lets an agent browse, control the desktop or run tools without asking removes the only human checkpoint on the endpoint. Governance moves that checkpoint to a policy you control.",
       "observationIds": [
-        "obs-f270aff99bbee238"
+        "obs-73b8c0909ead77a2"
       ],
       "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review.",
       "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
@@ -1008,24 +964,13 @@
         "windsurf"
       ],
       "confidence": "high",
-      "declarations": 10,
+      "declarations": 8,
       "distinct": 8,
       "evidence": [
         {
           "key": "claude-desktop",
           "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
-          "sourceId": "src-b35a34d36ca34b90e7cb4b57",
-          "value": {
-            "activation": "present",
-            "context": "base",
-            "installationState": "config_only",
-            "observedState": "unknown"
-          }
-        },
-        {
-          "key": "claude-code",
-          "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
+          "sourceId": "src-6f44ce53668e226d19b9fce4",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1036,7 +981,18 @@
         {
           "key": "windsurf",
           "location": "~/.config/Windsurf/User/settings.json",
-          "sourceId": "src-b57cb1d4532cc15476c20c7a",
+          "sourceId": "src-267435219e47ba6512c3d729",
+          "value": {
+            "activation": "present",
+            "context": "base",
+            "installationState": "config_only",
+            "observedState": "unknown"
+          }
+        },
+        {
+          "key": "gemini-cli",
+          "location": "~/.gemini/settings.json",
+          "sourceId": "src-736057806085cf204a7b1197",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1047,18 +1003,7 @@
         {
           "key": "claude-code",
           "location": "~/.claude.json",
-          "sourceId": "src-713a6ae4b5df75450b33aadd",
-          "value": {
-            "activation": "present",
-            "context": "state",
-            "installationState": "config_only",
-            "observedState": "unknown"
-          }
-        },
-        {
-          "key": "gemini-cli",
-          "location": "~/.gemini/settings.json",
-          "sourceId": "src-3577fefe58bcb7a4b5d3f26e",
+          "sourceId": "src-33da539789fcc703a9b65d58",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1069,7 +1014,7 @@
         {
           "key": "cursor",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1078,20 +1023,9 @@
           }
         },
         {
-          "key": "claude-code",
-          "location": "~/project/.claude/settings.json",
-          "sourceId": "src-cbe9a0f17b06e53f075bbe21",
-          "value": {
-            "activation": "present",
-            "context": "project",
-            "installationState": "config_only",
-            "observedState": "unknown"
-          }
-        },
-        {
           "key": "codex",
           "location": "~/.codex/config.toml",
-          "sourceId": "src-2ab9181b219d8d064ed19cc0",
+          "sourceId": "src-e5d597d926e294eb84a65a8b",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1102,7 +1036,7 @@
         {
           "key": "vscode",
           "location": "~/.config/Code/User/settings.json",
-          "sourceId": "src-d6e372a492e76c1caf4fe245",
+          "sourceId": "src-5f75b6abae1941a4f1d64cae",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1113,7 +1047,7 @@
         {
           "key": "shared",
           "location": "~/.agents/skills/release-helper/SKILL.md",
-          "sourceId": "src-d7993440918db1dbec78fa6b",
+          "sourceId": "src-cf985d82d0e79a7e937ece3f",
           "value": {
             "activation": "present",
             "context": "base",
@@ -1123,16 +1057,14 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-2f82bf62906dc28b",
+      "id": "finding-81e3ad66d0479358",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
         "obs-3671ec6cfdbe6865",
-        "obs-64db094821c3f44a",
         "obs-6e20edb3ea355b5a",
-        "obs-72a1168a53e9c762",
         "obs-81e9c66bae35cf73",
+        "obs-89256078b24c4ecf",
         "obs-cf3f6e2efb911626",
-        "obs-d772441e8a725418",
         "obs-eb34b63d965dabe4",
         "obs-f110289c9711463f",
         "obs-fa5193a766e09a47"
@@ -1144,7 +1076,7 @@
       ],
       "ruleId": "clients-config-only",
       "severity": "info",
-      "summary": "10 AI client declarations have configuration present without a detected installation. Review whether the configuration is still needed.",
+      "summary": "8 AI client declarations have configuration present without a detected installation. Review whether the configuration is still needed.",
       "title": "AI client config left behind without an installation"
     },
     {
@@ -1155,7 +1087,7 @@
         {
           "key": "permissions.defaultMode",
           "location": "~/project/.claude/settings.json",
-          "sourceId": "src-cbe9a0f17b06e53f075bbe21",
+          "sourceId": "src-ff224cd17fbacb85995eb026",
           "value": {
             "category": "permissions",
             "context": "project",
@@ -1168,7 +1100,7 @@
         {
           "key": "permissions.defaultMode",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
+          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
           "value": {
             "category": "permissions",
             "context": "base",
@@ -1180,11 +1112,11 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-f5207665d9ff03ac",
+      "id": "finding-12fbdff139b0d9f5",
       "impact": "Repeated or conflicting declarations can make maintenance and troubleshooting harder; this does not establish which value is effective.",
       "observationIds": [
-        "obs-1ab697be931c6e12",
-        "obs-d76ea7fff59bdf25"
+        "obs-27114bc0f7ae2f55",
+        "obs-726d8ee984947ea3"
       ],
       "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
       "references": [
@@ -1205,7 +1137,7 @@
         {
           "key": "projects.referenceInventory",
           "location": "~/.claude.json",
-          "sourceId": "src-713a6ae4b5df75450b33aadd",
+          "sourceId": "src-33da539789fcc703a9b65d58",
           "value": {
             "category": "other",
             "context": "state",
@@ -1221,10 +1153,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-5517adb8562b206c",
+      "id": "finding-b29b5aaf37f18d09",
       "impact": "Historical project entries can add clutter or preserve obsolete trust choices. Missing locations may also be temporarily unavailable or intentionally retained.",
       "observationIds": [
-        "obs-32d29d7d5d13b219"
+        "obs-40aefc1d608802d5"
       ],
       "recommendation": "Review saved projects in the client and remove obsolete references after confirming their purpose. The scan does not alter settings or delete any files.",
       "references": [
@@ -1250,7 +1182,7 @@
         {
           "key": "disabled",
           "location": "~/.cursor/mcp.json",
-          "sourceId": "src-68a0facda07c42b771beede9",
+          "sourceId": "src-74c9f2b82a0b00416bff9266",
           "value": {
             "activation": "configured",
             "auth": "unknown",
@@ -1267,10 +1199,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-403c0f84b93904a4",
+      "id": "finding-bf4a53ad0e8d4f84",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
-        "obs-4854610011334445"
+        "obs-c6bc5f784cf71865"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Remove them, or re-enable them deliberately.",
@@ -1295,7 +1227,7 @@
         {
           "key": "retired-plugin@demo",
           "location": "~/.claude/settings.json",
-          "sourceId": "src-616070c505e62d777e5600ff",
+          "sourceId": "src-807d5c7aa41fc7f84ab00cf9",
           "value": {
             "activation": "configured",
             "context": "base",
@@ -1306,10 +1238,10 @@
         }
       ],
       "evidenceType": "inventory",
-      "id": "finding-1957b5f15fa36e6f",
+      "id": "finding-d91ea14c73c12b5a",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
-        "obs-3da1ff0b6540e7b0"
+        "obs-b2b37c7de1440e15"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Hygiene: remove the entries, or re-enable them deliberately.",
@@ -1332,9 +1264,9 @@
       "distinct": 1,
       "evidence": [
         {
-          "key": "projects.item-45c914f1d50f62b9",
+          "key": "projects.stale-1",
           "location": "~/.claude.json",
-          "sourceId": "src-713a6ae4b5df75450b33aadd",
+          "sourceId": "src-33da539789fcc703a9b65d58",
           "value": {
             "category": "other",
             "context": "state",
@@ -1346,10 +1278,10 @@
         }
       ],
       "evidenceType": "configuration",
-      "id": "finding-307433c05619d9fe",
+      "id": "finding-8aa40e5964d4854d",
       "impact": "Entries that are disabled, cached, stale or orphaned do nothing today, but they are configuration nobody owns. Removing them shrinks what the next review has to read.",
       "observationIds": [
-        "obs-402e7e97902c7764"
+        "obs-8552d433bdabf131"
       ],
       "ratingReason": "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
       "recommendation": "Hygiene: if a folder is gone for good, remove its entries from the client configuration; nothing can use them.",
@@ -1380,11 +1312,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-d76ea7fff59bdf25",
+      "id": "obs-726d8ee984947ea3",
       "kind": "setting",
       "location": "~/.claude/settings.json",
       "name": "permissions.defaultMode",
-      "sourceId": "src-616070c505e62d777e5600ff"
+      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
     },
     {
       "client": "claude-code",
@@ -1401,11 +1333,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-6eeff71939760bee",
+      "id": "obs-14d877dc7dfd6232",
       "kind": "setting",
       "location": "~/.claude/settings.json",
       "name": "sandbox.enabled",
-      "sourceId": "src-616070c505e62d777e5600ff"
+      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
     },
     {
       "client": "claude-code",
@@ -1420,11 +1352,11 @@
         "origin": "unknown"
       },
       "enabled": "disabled",
-      "id": "obs-3da1ff0b6540e7b0",
+      "id": "obs-b2b37c7de1440e15",
       "kind": "plugin",
       "location": "~/.claude/settings.json",
       "name": "retired-plugin@demo",
-      "sourceId": "src-616070c505e62d777e5600ff"
+      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
     },
     {
       "client": "claude-code",
@@ -1439,11 +1371,11 @@
         "origin": "unknown"
       },
       "enabled": "enabled",
-      "id": "obs-cd8fa8e7591dd391",
+      "id": "obs-90339d79247ce601",
       "kind": "plugin",
       "location": "~/.claude/settings.json",
       "name": "sample-plugin@demo",
-      "sourceId": "src-616070c505e62d777e5600ff"
+      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
     },
     {
       "client": "claude-code",
@@ -1464,11 +1396,11 @@
         }
       },
       "enabled": "unknown",
-      "id": "obs-ea42a2125dbadadb",
+      "id": "obs-ce952539b6cff3ac",
       "kind": "hook",
       "location": "~/.claude/settings.json",
       "name": "Hooks: PreToolUse",
-      "sourceId": "src-616070c505e62d777e5600ff"
+      "sourceId": "src-807d5c7aa41fc7f84ab00cf9"
     },
     {
       "client": "claude-code",
@@ -1489,11 +1421,11 @@
         "valueType": "object"
       },
       "enabled": "unknown",
-      "id": "obs-32d29d7d5d13b219",
+      "id": "obs-40aefc1d608802d5",
       "kind": "setting",
       "location": "~/.claude.json",
       "name": "Saved project references",
-      "sourceId": "src-713a6ae4b5df75450b33aadd"
+      "sourceId": "src-33da539789fcc703a9b65d58"
     },
     {
       "client": "codex",
@@ -1510,11 +1442,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-c1a68c494fb3a909",
+      "id": "obs-7378021f5cbc8819",
       "kind": "setting",
       "location": "~/.codex/config.toml",
       "name": "approval_policy",
-      "sourceId": "src-2ab9181b219d8d064ed19cc0"
+      "sourceId": "src-e5d597d926e294eb84a65a8b"
     },
     {
       "client": "codex",
@@ -1531,11 +1463,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-90ba5999bc78d42f",
+      "id": "obs-e97e94ab5c13c1b3",
       "kind": "setting",
       "location": "~/.codex/config.toml",
       "name": "sandbox_mode",
-      "sourceId": "src-2ab9181b219d8d064ed19cc0"
+      "sourceId": "src-e5d597d926e294eb84a65a8b"
     },
     {
       "client": "codex",
@@ -1552,11 +1484,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-34011cb3b64f98b0",
+      "id": "obs-e37e8e3d9356bfd6",
       "kind": "setting",
       "location": "~/.codex/config.toml",
       "name": "features.computer_use",
-      "sourceId": "src-2ab9181b219d8d064ed19cc0"
+      "sourceId": "src-e5d597d926e294eb84a65a8b"
     },
     {
       "client": "codex",
@@ -1565,6 +1497,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": "browser",
         "capabilityEvidence": "declared-package",
@@ -1588,11 +1521,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-1b059f7a238e0e36",
+      "id": "obs-810cdaa0f87dc450",
       "kind": "mcp",
       "location": "~/.codex/config.toml",
       "name": "browser",
-      "sourceId": "src-2ab9181b219d8d064ed19cc0"
+      "sourceId": "src-e5d597d926e294eb84a65a8b"
     },
     {
       "client": "cursor",
@@ -1601,6 +1534,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1624,11 +1558,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "disabled",
-      "id": "obs-4854610011334445",
+      "id": "obs-c6bc5f784cf71865",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "disabled",
-      "sourceId": "src-68a0facda07c42b771beede9"
+      "sourceId": "src-74c9f2b82a0b00416bff9266"
     },
     {
       "client": "cursor",
@@ -1637,6 +1571,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1660,11 +1595,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-197f9933c5dc4533",
+      "id": "obs-ab6dec8b270f2fa3",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "documentation",
-      "sourceId": "src-68a0facda07c42b771beede9"
+      "sourceId": "src-74c9f2b82a0b00416bff9266"
     },
     {
       "client": "cursor",
@@ -1673,6 +1608,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1696,11 +1632,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-1d112ce427b5ad65",
+      "id": "obs-c4213fbf79398187",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "source-control",
-      "sourceId": "src-68a0facda07c42b771beede9"
+      "sourceId": "src-74c9f2b82a0b00416bff9266"
     },
     {
       "client": "cursor",
@@ -1709,6 +1645,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "bearer_header",
+        "authSecretInline": true,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1732,11 +1669,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-b23e8ad3c3d8dac1",
+      "id": "obs-30ec29acccebdf9f",
       "kind": "mcp",
       "location": "~/.cursor/mcp.json",
       "name": "test-service",
-      "sourceId": "src-68a0facda07c42b771beede9"
+      "sourceId": "src-74c9f2b82a0b00416bff9266"
     },
     {
       "client": "gemini-cli",
@@ -1753,11 +1690,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-dd371b9e37830934",
+      "id": "obs-474f596780c22486",
       "kind": "setting",
       "location": "~/.gemini/settings.json",
       "name": "agents.overrides.browser_agent.enabled",
-      "sourceId": "src-3577fefe58bcb7a4b5d3f26e"
+      "sourceId": "src-736057806085cf204a7b1197"
     },
     {
       "client": "gemini-cli",
@@ -1774,11 +1711,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-483cdc6227ad8144",
+      "id": "obs-1a718ba4f4cea546",
       "kind": "setting",
       "location": "~/.gemini/settings.json",
       "name": "agents.browser.sessionMode",
-      "sourceId": "src-3577fefe58bcb7a4b5d3f26e"
+      "sourceId": "src-736057806085cf204a7b1197"
     },
     {
       "client": "gemini-cli",
@@ -1795,11 +1732,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-9e9fe6ae5185a3ef",
+      "id": "obs-ea6d61c79b8f9c6e",
       "kind": "setting",
       "location": "~/.gemini/settings.json",
       "name": "agents.browser.confirmSensitiveActions",
-      "sourceId": "src-3577fefe58bcb7a4b5d3f26e"
+      "sourceId": "src-736057806085cf204a7b1197"
     },
     {
       "client": "claude-desktop",
@@ -1808,6 +1745,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1831,11 +1769,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-2ab8110e58f2c938",
+      "id": "obs-f0eae420972b64dd",
       "kind": "mcp",
       "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "name": "documentation",
-      "sourceId": "src-b35a34d36ca34b90e7cb4b57"
+      "sourceId": "src-6f44ce53668e226d19b9fce4"
     },
     {
       "client": "claude-code",
@@ -1852,11 +1790,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-9d69ccb299a4487d",
+      "id": "obs-3edb557f86f7ca8a",
       "kind": "setting",
       "location": "~/.claude/remote-settings.json",
       "name": "permissions.defaultMode",
-      "sourceId": "src-4618e3571e7bbd4c4ee9ede9"
+      "sourceId": "src-b7dfac3f88f6f8eb6de6e151"
     },
     {
       "client": "vscode",
@@ -1873,11 +1811,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-f270aff99bbee238",
+      "id": "obs-73b8c0909ead77a2",
       "kind": "setting",
       "location": "~/.config/Code/User/settings.json",
       "name": "chat.tools.global.autoApprove",
-      "sourceId": "src-d6e372a492e76c1caf4fe245"
+      "sourceId": "src-5f75b6abae1941a4f1d64cae"
     },
     {
       "client": "vscode",
@@ -1894,11 +1832,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-b12639e902fb54ff",
+      "id": "obs-f43086074f9e2957",
       "kind": "setting",
       "location": "~/.config/Code/User/settings.json",
       "name": "workbench.browser.enableChatTools",
-      "sourceId": "src-d6e372a492e76c1caf4fe245"
+      "sourceId": "src-5f75b6abae1941a4f1d64cae"
     },
     {
       "client": "vscode",
@@ -1907,6 +1845,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1930,11 +1869,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-600de8ad2f1565b9",
+      "id": "obs-35fb8d6a6d36774b",
       "kind": "mcp",
       "location": "~/.config/Code/User/mcp.json",
       "name": "design",
-      "sourceId": "src-2f6a22b650ce1ef376ea4e68"
+      "sourceId": "src-b69f995696d23bc824396f67"
     },
     {
       "client": "vscode",
@@ -1943,6 +1882,7 @@
         "activation": "configured",
         "auditStatus": "not-assessed",
         "auth": "unknown",
+        "authSecretInline": false,
         "autoApproval": "unknown",
         "capability": null,
         "capabilityEvidence": "not-identified",
@@ -1966,11 +1906,11 @@
         "urlCredentialCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-54aff17e0b316fd2",
+      "id": "obs-1c031fa9e459154d",
       "kind": "mcp",
       "location": "~/.config/Code/User/mcp.json",
       "name": "team-messages",
-      "sourceId": "src-2f6a22b650ce1ef376ea4e68"
+      "sourceId": "src-b69f995696d23bc824396f67"
     },
     {
       "client": "windsurf",
@@ -1989,11 +1929,11 @@
         "valueType": "object"
       },
       "enabled": "enabled",
-      "id": "obs-7a07910fd9c8fdbc",
+      "id": "obs-9f8d45065a639e20",
       "kind": "setting",
       "location": "~/.config/Windsurf/User/settings.json",
       "name": "windsurf.cascadeCommandsAllowList",
-      "sourceId": "src-b57cb1d4532cc15476c20c7a"
+      "sourceId": "src-267435219e47ba6512c3d729"
     },
     {
       "client": "windsurf",
@@ -2012,11 +1952,11 @@
         "valueType": "object"
       },
       "enabled": "enabled",
-      "id": "obs-d98a30c786b72012",
+      "id": "obs-3f72d442da11a781",
       "kind": "setting",
       "location": "~/.config/Windsurf/User/settings.json",
       "name": "windsurf.cascadeCommandsDenyList",
-      "sourceId": "src-b57cb1d4532cc15476c20c7a"
+      "sourceId": "src-267435219e47ba6512c3d729"
     },
     {
       "client": "claude-code",
@@ -2033,11 +1973,11 @@
         "valueType": "string"
       },
       "enabled": "enabled",
-      "id": "obs-1ab697be931c6e12",
+      "id": "obs-27114bc0f7ae2f55",
       "kind": "setting",
       "location": "~/project/.claude/settings.json",
       "name": "permissions.defaultMode",
-      "sourceId": "src-cbe9a0f17b06e53f075bbe21"
+      "sourceId": "src-ff224cd17fbacb85995eb026"
     },
     {
       "client": "claude-code",
@@ -2054,11 +1994,11 @@
         "valueType": "boolean"
       },
       "enabled": "enabled",
-      "id": "obs-c87a249837d39bcc",
+      "id": "obs-d0a760d394600e82",
       "kind": "setting",
       "location": "~/project/.claude/settings.json",
       "name": "sandbox.enabled",
-      "sourceId": "src-cbe9a0f17b06e53f075bbe21"
+      "sourceId": "src-ff224cd17fbacb85995eb026"
     },
     {
       "client": "claude-code",
@@ -2070,37 +2010,23 @@
           "unknown"
         ],
         "context": "base",
-        "contextId": "context-927162950c7a39f1",
+        "contextId": "context-fa19348d85323968",
         "installationState": "config_only",
-        "variant": "cli"
-      },
-      "enabled": "unknown",
-      "id": "obs-64db094821c3f44a",
-      "kind": "client",
-      "location": "~/.claude/settings.json",
-      "name": "claude-code",
-      "sourceId": "src-616070c505e62d777e5600ff"
-    },
-    {
-      "client": "claude-code",
-      "details": {
-        "accountAlias": "~",
-        "activation": "present",
-        "authEvidence": "unknown",
-        "authModes": [
-          "unknown"
+        "locationCount": 3,
+        "locations": [
+          "~/.claude.json",
+          "~/.claude/settings.json",
+          "~/project/.claude/settings.json"
         ],
-        "context": "state",
-        "contextId": "context-6319819868e8ed24",
-        "installationState": "config_only",
+        "projectCount": 2,
         "variant": "cli"
       },
       "enabled": "unknown",
-      "id": "obs-72a1168a53e9c762",
+      "id": "obs-89256078b24c4ecf",
       "kind": "client",
       "location": "~/.claude.json",
       "name": "claude-code",
-      "sourceId": "src-713a6ae4b5df75450b33aadd"
+      "sourceId": "src-33da539789fcc703a9b65d58"
     },
     {
       "client": "claude-code",
@@ -2108,22 +2034,22 @@
         "accountAlias": "~",
         "category": "other",
         "context": "state",
-        "contextId": "context-6319819868e8ed24",
+        "contextId": "context-fa19348d85323968",
         "declaredState": "stale",
         "effectiveState": "stale",
         "interpretation": "inventory-only",
-        "key": "projects.item-45c914f1d50f62b9",
-        "nativeKey": "projects.item-45c914f1d50f62b9",
+        "key": "projects.stale-1",
+        "nativeKey": "projects.stale-1",
         "value": null,
         "valueCollected": false,
         "valueType": "object"
       },
       "enabled": "unknown",
-      "id": "obs-402e7e97902c7764",
+      "id": "obs-8552d433bdabf131",
       "kind": "setting",
       "location": "~/.claude.json",
-      "name": "projects.item-45c914f1d50f62b9",
-      "sourceId": "src-713a6ae4b5df75450b33aadd"
+      "name": "projects.stale-1",
+      "sourceId": "src-33da539789fcc703a9b65d58"
     },
     {
       "client": "codex",
@@ -2144,7 +2070,7 @@
       "kind": "client",
       "location": "~/.codex/config.toml",
       "name": "codex",
-      "sourceId": "src-2ab9181b219d8d064ed19cc0"
+      "sourceId": "src-e5d597d926e294eb84a65a8b"
     },
     {
       "client": "cursor",
@@ -2165,7 +2091,7 @@
       "kind": "client",
       "location": "~/.cursor/mcp.json",
       "name": "cursor",
-      "sourceId": "src-68a0facda07c42b771beede9"
+      "sourceId": "src-74c9f2b82a0b00416bff9266"
     },
     {
       "client": "gemini-cli",
@@ -2186,7 +2112,7 @@
       "kind": "client",
       "location": "~/.gemini/settings.json",
       "name": "gemini-cli",
-      "sourceId": "src-3577fefe58bcb7a4b5d3f26e"
+      "sourceId": "src-736057806085cf204a7b1197"
     },
     {
       "client": "claude-code",
@@ -2205,11 +2131,11 @@
         "origin": "user"
       },
       "enabled": "unknown",
-      "id": "obs-6cba7663d37dc6ea",
+      "id": "obs-f80df07faefb7cf2",
       "kind": "skill",
       "location": "~/.claude/skills/research-helper/SKILL.md",
       "name": "research-helper",
-      "sourceId": "src-163e2419a1b1942a9876b7ac"
+      "sourceId": "src-9e96e4eafb65f99a46fc2e68"
     },
     {
       "client": "shared",
@@ -2230,7 +2156,7 @@
       "kind": "client",
       "location": "~/.agents/skills/release-helper/SKILL.md",
       "name": "shared",
-      "sourceId": "src-d7993440918db1dbec78fa6b"
+      "sourceId": "src-cf985d82d0e79a7e937ece3f"
     },
     {
       "client": "shared",
@@ -2249,11 +2175,11 @@
         "origin": "user"
       },
       "enabled": "unknown",
-      "id": "obs-87aabe30645b63d5",
+      "id": "obs-44e619afe060d36f",
       "kind": "skill",
       "location": "~/.agents/skills/release-helper/SKILL.md",
       "name": "release-helper",
-      "sourceId": "src-d7993440918db1dbec78fa6b"
+      "sourceId": "src-cf985d82d0e79a7e937ece3f"
     },
     {
       "client": "claude-code",
@@ -2272,11 +2198,11 @@
         "toolCount": 0
       },
       "enabled": "unknown",
-      "id": "obs-0c64954c26aacf01",
+      "id": "obs-362e0b21468ae977",
       "kind": "agent",
       "location": "~/.claude/agents/reviewer.md",
       "name": "reviewer",
-      "sourceId": "src-48a53656e95c0571bd8930e2"
+      "sourceId": "src-f8c9b591c898f93d53bd701d"
     },
     {
       "client": "claude-desktop",
@@ -2297,7 +2223,7 @@
       "kind": "client",
       "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
       "name": "claude-desktop",
-      "sourceId": "src-b35a34d36ca34b90e7cb4b57"
+      "sourceId": "src-6f44ce53668e226d19b9fce4"
     },
     {
       "client": "vscode",
@@ -2318,7 +2244,7 @@
       "kind": "client",
       "location": "~/.config/Code/User/settings.json",
       "name": "vscode",
-      "sourceId": "src-d6e372a492e76c1caf4fe245"
+      "sourceId": "src-5f75b6abae1941a4f1d64cae"
     },
     {
       "client": "windsurf",
@@ -2339,28 +2265,7 @@
       "kind": "client",
       "location": "~/.config/Windsurf/User/settings.json",
       "name": "windsurf",
-      "sourceId": "src-b57cb1d4532cc15476c20c7a"
-    },
-    {
-      "client": "claude-code",
-      "details": {
-        "accountAlias": "~",
-        "activation": "present",
-        "authEvidence": "unknown",
-        "authModes": [
-          "unknown"
-        ],
-        "context": "project",
-        "contextId": "context-1bb304668b133c2f",
-        "installationState": "config_only",
-        "variant": "cli"
-      },
-      "enabled": "unknown",
-      "id": "obs-d772441e8a725418",
-      "kind": "client",
-      "location": "~/project/.claude/settings.json",
-      "name": "claude-code",
-      "sourceId": "src-cbe9a0f17b06e53f075bbe21"
+      "sourceId": "src-267435219e47ba6512c3d729"
     }
   ],
   "schemaVersion": "2.0",
@@ -2377,9 +2282,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-616070c505e62d777e5600ff",
+      "id": "src-807d5c7aa41fc7f84ab00cf9",
       "location": "~/.claude/settings.json",
-      "modifiedAt": "2026-09-10T16:05:32.150Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 246,
@@ -2391,9 +2296,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "state",
-      "id": "src-713a6ae4b5df75450b33aadd",
+      "id": "src-33da539789fcc703a9b65d58",
       "location": "~/.claude.json",
-      "modifiedAt": "2026-09-10T16:05:32.150Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 200,
@@ -2406,9 +2311,9 @@
       "client": "codex",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-2ab9181b219d8d064ed19cc0",
+      "id": "src-e5d597d926e294eb84a65a8b",
       "location": "~/.codex/config.toml",
-      "modifiedAt": "2026-09-10T16:05:32.150Z",
+      "modifiedAt": "2026-09-14T11:54:52.856Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 155,
@@ -2421,9 +2326,9 @@
       "client": "cursor",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-68a0facda07c42b771beede9",
+      "id": "src-74c9f2b82a0b00416bff9266",
       "location": "~/.cursor/mcp.json",
-      "modifiedAt": "2026-09-10T16:05:32.150Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 309,
@@ -2432,24 +2337,12 @@
     {
       "accountAlias": "~",
       "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-deb10570fc769e1b815e71b5",
-      "location": "~/.cursor/cli-config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
       "client": "gemini-cli",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-3577fefe58bcb7a4b5d3f26e",
+      "id": "src-736057806085cf204a7b1197",
       "location": "~/.gemini/settings.json",
-      "modifiedAt": "2026-09-10T16:05:32.151Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 137,
@@ -2458,38 +2351,13 @@
     {
       "accountAlias": "~",
       "artifactRole": "configuration",
-      "client": "gemini-cli",
-      "componentKind": "configuration",
-      "context": "state",
-      "id": "src-7d0860ff643ab5ece6f558ce",
-      "location": "~/.gemini/trustedFolders.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "kiro",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-863b469eefaceb6de0a425f2",
-      "location": "~/.kiro/settings/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
       "classification": "mcp-configuration",
       "client": "windsurf",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-94314a34e0a40a2bee44e3e2",
+      "id": "src-767571b0aabb4067d59dc4e9",
       "location": "~/.codeium/windsurf/mcp_config.json",
-      "modifiedAt": "2026-09-10T16:05:32.152Z",
+      "modifiedAt": "2026-09-14T11:54:52.858Z",
       "reason": "parse_error",
       "scope": "user",
       "sizeBytes": 15,
@@ -2497,102 +2365,16 @@
     },
     {
       "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-3c22d2ed48e26c3c13085f17",
-      "location": "~/.cline/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-6a1a35ea67a9cb6bba273b59",
-      "location": "~/.cline/data/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cline",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-75324f5f5842f2b283494ef0",
-      "location": "~/.cline/data/settings/global-settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "claude-code",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-d93122d823e201294e676771",
-      "location": "~/.claude/skills",
-      "reason": "",
-      "scope": "user",
-      "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "claude-code",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-1151cc4c7d75edfb32531f37",
-      "location": "~/.claude/skills/research-helper",
-      "reason": "",
-      "scope": "user",
-      "status": "collected"
-    },
-    {
-      "accountAlias": "~",
       "artifactRole": "skill",
       "client": "claude-code",
       "componentKind": "skill",
       "context": "base",
-      "id": "src-163e2419a1b1942a9876b7ac",
+      "id": "src-9e96e4eafb65f99a46fc2e68",
       "location": "~/.claude/skills/research-helper/SKILL.md",
-      "modifiedAt": "2026-09-10T16:05:32.152Z",
+      "modifiedAt": "2026-09-14T11:54:52.858Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 34,
-      "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "shared",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-9ad9f06bef5a81007f934d9c",
-      "location": "~/.agents/skills",
-      "reason": "",
-      "scope": "user",
-      "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "shared",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-e1d51fe05e690a1872fc5008",
-      "location": "~/.agents/skills/release-helper",
-      "reason": "",
-      "scope": "user",
       "status": "collected"
     },
     {
@@ -2601,96 +2383,12 @@
       "client": "shared",
       "componentKind": "skill",
       "context": "base",
-      "id": "src-d7993440918db1dbec78fa6b",
+      "id": "src-cf985d82d0e79a7e937ece3f",
       "location": "~/.agents/skills/release-helper/SKILL.md",
-      "modifiedAt": "2026-09-10T16:05:32.152Z",
+      "modifiedAt": "2026-09-14T11:54:52.858Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 34,
-      "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "codex",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-2a5977d4f050953c341e62dd",
-      "location": "~/.codex/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "cursor",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-fdc4db23797d3e0d6e7c1478",
-      "location": "~/.cursor/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "gemini-cli",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-6d3ef539cce9eed451106652",
-      "location": "~/.gemini/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "kiro",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-2c93e0fc746fa399222cb003",
-      "location": "~/.kiro/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "cline",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-f5773c924546aa1725630aec",
-      "location": "~/.cline/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "copilot-cli",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-c1b2fd6f5d03954cbb64b028",
-      "location": "~/.copilot/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "claude-code",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-05304c39081292a5d85ec90f",
-      "location": "~/.claude/agents",
-      "reason": "",
-      "scope": "user",
       "status": "collected"
     },
     {
@@ -2699,400 +2397,13 @@
       "client": "claude-code",
       "componentKind": "agent",
       "context": "base",
-      "id": "src-48a53656e95c0571bd8930e2",
+      "id": "src-f8c9b591c898f93d53bd701d",
       "location": "~/.claude/agents/reviewer.md",
-      "modifiedAt": "2026-09-10T16:05:32.152Z",
+      "modifiedAt": "2026-09-14T11:54:52.858Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 34,
       "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "cursor",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-2647beeff6096cc827a16f48",
-      "location": "~/.cursor/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "kiro",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-ce8b139aef6002a87ea012f8",
-      "location": "~/.kiro/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "cline",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-d86662eb1755598d4d630936",
-      "location": "~/.cline/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "claude-code",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-4d29e370763c86826620f09f",
-      "location": "~/.claude/plugins/cache",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "codex",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-1ab8545dcce245e0474b8205",
-      "location": "~/.codex/plugins/cache",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "gemini-cli",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-b44c1baf79c1f98f3b1e28d2",
-      "location": "~/.gemini/extensions",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-97d5c268970189f220be47be",
-      "location": "~/Library/Application Support/Code/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "vscode",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-60c79f995caa32493e2035ff",
-      "location": "~/Library/Application Support/Code/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-682657c2a6c10fcfbddab684",
-      "location": "~/Library/Application Support/Code/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-d8359e38ebe5b8bb87b78b89",
-      "location": "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-8ccf5795bebbf953d04b38b5",
-      "location": "~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-0861f2a7c28c44a249960819",
-      "location": "~/Library/Application Support/Code - Insiders/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "vscode",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-0b72f0c1a137e8e1b118929f",
-      "location": "~/Library/Application Support/Code - Insiders/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-62eb00aa7728c22ec5111e31",
-      "location": "~/Library/Application Support/Code - Insiders/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-c6ea4164bcd003e79e45b580",
-      "location": "~/Library/Application Support/Code - Insiders/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-b7b5e9f8f4e5185e047248df",
-      "location": "~/Library/Application Support/Code - Insiders/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-72296dd82d78bd29a31a4a2d",
-      "location": "~/Library/Application Support/Cursor/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cursor",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-60c81fa033c3331c72c7d56c",
-      "location": "~/Library/Application Support/Cursor/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-13fac9ad629f5484aabc354d",
-      "location": "~/Library/Application Support/Cursor/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-6aec6085efaf8f812d5f68bf",
-      "location": "~/Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-2906f973b78f9270baafd13b",
-      "location": "~/Library/Application Support/Cursor/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "kiro",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-8665b0a898b4eefcb94260bb",
-      "location": "~/Library/Application Support/Kiro/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "kiro",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-dd54c51d751146d67f8f4d04",
-      "location": "~/Library/Application Support/Kiro/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "kiro",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-16fbd04494d29c8f403c0def",
-      "location": "~/Library/Application Support/Kiro/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-1d4b25500f13e20b49693883",
-      "location": "~/Library/Application Support/Kiro/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-2af9dd6d62852845f989b1fd",
-      "location": "~/Library/Application Support/Kiro/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "windsurf",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-39b1b6a140df1955a4609a21",
-      "location": "~/Library/Application Support/Windsurf/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "windsurf",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-035b34cd0a058db418e0e0c7",
-      "location": "~/Library/Application Support/Windsurf/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "windsurf",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-062b588e4beb3d259329c2eb",
-      "location": "~/Library/Application Support/Windsurf/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-02b18188610422b968216093",
-      "location": "~/Library/Application Support/Windsurf/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-ac7d24db5960d96ec18fbf1a",
-      "location": "~/Library/Application Support/Windsurf/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
     },
     {
       "accountAlias": "~",
@@ -3101,9 +2412,9 @@
       "client": "claude-desktop",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-b35a34d36ca34b90e7cb4b57",
+      "id": "src-6f44ce53668e226d19b9fce4",
       "location": "~/Library/Application Support/Claude/claude_desktop_config.json",
-      "modifiedAt": "2026-09-10T16:05:32.151Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 94,
@@ -3115,9 +2426,9 @@
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "cached",
-      "id": "src-4618e3571e7bbd4c4ee9ede9",
+      "id": "src-b7dfac3f88f6f8eb6de6e151",
       "location": "~/.claude/remote-settings.json",
-      "modifiedAt": "2026-09-10T16:05:32.150Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 53,
@@ -3126,84 +2437,12 @@
     {
       "accountAlias": "~",
       "artifactRole": "configuration",
-      "client": "codex",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-a369059a9fc6c8c90484e461",
-      "location": "~/.codex",
-      "reason": "",
-      "scope": "user",
-      "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "codex",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-cb0621be944a399e9b8b7535",
-      "location": "~/.codex/hooks.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "cursor",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-312ecad0da16a9cdd4a8cbc8",
-      "location": "~/.cursor/skills-cursor",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "cursor",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-c7361290c94a4d7cb7eb20a1",
-      "location": "~/.cursor/plugins/local",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "claude-code",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-d07c42362e1f3c888685efbd",
-      "location": "~/.claude/plugins/installed_plugins.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "claude-code",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-b10875b33a0a078be5b88b01",
-      "location": "~/.claude/plugins/known_marketplaces.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
       "client": "vscode",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-d6e372a492e76c1caf4fe245",
+      "id": "src-5f75b6abae1941a4f1d64cae",
       "location": "~/.config/Code/User/settings.json",
-      "modifiedAt": "2026-09-10T16:05:32.151Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 82,
@@ -3216,9 +2455,9 @@
       "client": "vscode",
       "componentKind": "mcp",
       "context": "base",
-      "id": "src-2f6a22b650ce1ef376ea4e68",
+      "id": "src-b69f995696d23bc824396f67",
       "location": "~/.config/Code/User/mcp.json",
-      "modifiedAt": "2026-09-10T16:05:32.151Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 148,
@@ -3227,239 +2466,12 @@
     {
       "accountAlias": "~",
       "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-ed244743b0141de75f1af2c1",
-      "location": "~/.config/Code/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-d1042f2d4f301233a21c2e68",
-      "location": "~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-add7dd62eee8b127b4087b15",
-      "location": "~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-7f68f8582cb223e03621e230",
-      "location": "~/.config/Code - Insiders/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "vscode",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-fe612e6e47d7e30eaf16a02c",
-      "location": "~/.config/Code - Insiders/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-b299b616d20720aeda2b9802",
-      "location": "~/.config/Code - Insiders/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-46adbacf6fce6e3498091e3c",
-      "location": "~/.config/Code - Insiders/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-198eefab36657b0659ca9652",
-      "location": "~/.config/Code - Insiders/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-091c2d68737fcf1aade30b07",
-      "location": "~/.config/Cursor/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cursor",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-cb9096203862783de2ec4f06",
-      "location": "~/.config/Cursor/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-664f0cc6c2ff1a8c1d6b9ac1",
-      "location": "~/.config/Cursor/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-6cf32d4049482d55b8631f06",
-      "location": "~/.config/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-62ca653100fc46e64afbb1e8",
-      "location": "~/.config/Cursor/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "kiro",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-f00c514f730b8c807d0fd086",
-      "location": "~/.config/Kiro/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "kiro",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-6f9216975264095319b4a23e",
-      "location": "~/.config/Kiro/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "kiro",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-a7a60e4146ff28b9afc6c127",
-      "location": "~/.config/Kiro/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-98bd0936ed9d5fc0fbebf67e",
-      "location": "~/.config/Kiro/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-09015ca84b9a6b5d3374ecdf",
-      "location": "~/.config/Kiro/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
       "client": "windsurf",
       "componentKind": "configuration",
       "context": "base",
-      "id": "src-b57cb1d4532cc15476c20c7a",
+      "id": "src-267435219e47ba6512c3d729",
       "location": "~/.config/Windsurf/User/settings.json",
-      "modifiedAt": "2026-09-10T16:05:32.151Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "user",
       "sizeBytes": 81,
@@ -3468,1556 +2480,16 @@
     {
       "accountAlias": "~",
       "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "windsurf",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-6bf0ab4f06cc31775abf91c9",
-      "location": "~/.config/Windsurf/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "windsurf",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-6f3a4bb91dc29de8647e7f4b",
-      "location": "~/.config/Windsurf/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-f07ca40dfad01aaecb762925",
-      "location": "~/.config/Windsurf/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-a21a81cd30c4baff90b8da93",
-      "location": "~/.config/Windsurf/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-0abd75449ca3fa7706253646",
-      "location": "~/AppData/Roaming/Code/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "vscode",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-8275eb40481270d1d1911b95",
-      "location": "~/AppData/Roaming/Code/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-bd7b14c011f86dc28410ae31",
-      "location": "~/AppData/Roaming/Code/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-53cb0733969c85f334fe9859",
-      "location": "~/AppData/Roaming/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-f781bd0af8400d4281cb7fa2",
-      "location": "~/AppData/Roaming/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-fa9fd6c0465c18dd8fc6ff64",
-      "location": "~/AppData/Roaming/Code - Insiders/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "vscode",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-b993bb9244805ac00a842272",
-      "location": "~/AppData/Roaming/Code - Insiders/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-ddfc6173d944719e78311917",
-      "location": "~/AppData/Roaming/Code - Insiders/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-4ef6bfc0ce4e452ed2d7fa1c",
-      "location": "~/AppData/Roaming/Code - Insiders/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-e96121a7342d7de460bb09db",
-      "location": "~/AppData/Roaming/Code - Insiders/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-ec6e3cd4a7558ea727d3cba2",
-      "location": "~/AppData/Roaming/Cursor/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cursor",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-50b1340b06bed6cc3b06315c",
-      "location": "~/AppData/Roaming/Cursor/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-55150c0e36a532916f88ceb8",
-      "location": "~/AppData/Roaming/Cursor/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-05ce5ddb39e22e17703f537a",
-      "location": "~/AppData/Roaming/Cursor/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-77ea4788859eb6e198cf480a",
-      "location": "~/AppData/Roaming/Cursor/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "kiro",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-4c1862d68de555a378e81963",
-      "location": "~/AppData/Roaming/Kiro/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "kiro",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-b37ce38baf9f87de6a4aae70",
-      "location": "~/AppData/Roaming/Kiro/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "kiro",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-8492e88af22e28e0f0c0dec8",
-      "location": "~/AppData/Roaming/Kiro/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-7e473581ddd962a710de2118",
-      "location": "~/AppData/Roaming/Kiro/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-310698a50579fadf97e0be0f",
-      "location": "~/AppData/Roaming/Kiro/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "windsurf",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-635378ef178cf0ff7109a84f",
-      "location": "~/AppData/Roaming/Windsurf/User/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "windsurf",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-e025e9cba3d88dfa5e8d063a",
-      "location": "~/AppData/Roaming/Windsurf/User/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "windsurf",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-016f90f2600b6139996f2b2a",
-      "location": "~/AppData/Roaming/Windsurf/User/profiles",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cline",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-1bb025155bc96a8df7f88ebe",
-      "location": "~/AppData/Roaming/Windsurf/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-e0752dfdb9ac7815d047798b",
-      "location": "~/AppData/Roaming/Windsurf/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "claude-desktop",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-f8d432bb1704e4bac06b54de",
-      "location": "~/AppData/Roaming/Claude/claude_desktop_config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "claude-desktop",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-4e95aa012f1b3b293ced00ec",
-      "location": "~/AppData/Local/Packages/Claude_pzs8sxrjxfjjc/LocalCache/Roaming/Claude/claude_desktop_config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-e14a02de91154496b451fbe6",
-      "location": "~/.cursor/permissions.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "opencode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-8c410ff11a4d0260735cabeb",
-      "location": "~/.config/opencode/opencode.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "opencode",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-2941ae475d346764bdfa52ec",
-      "location": "~/.config/opencode/opencode.jsonc",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "copilot-cli",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-2dc26633fd0ca27f81699667",
-      "location": "~/.copilot/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "copilot-cli",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-2dc71c9d3c16cd37a875dc03",
-      "location": "~/.copilot/config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "copilot-cli",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-114329cc0e611712b8b608fb",
-      "location": "~/.copilot/mcp-config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "copilot-cli",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-eeddf19bc09a56830c015344",
-      "location": "~/.copilot/permissions-config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "continue",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-75b5395eba267512377a5c65",
-      "location": "~/.continue/config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "continue",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-d9f06a1d8a84b2c9aff3380d",
-      "location": "~/.continue/config.yaml",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "aider",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-5501e1e86af341219e8e9e63",
-      "location": "~/.aider.conf.yml",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "lm-studio",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-824f16833989cbc5e7467d82",
-      "location": "~/.lmstudio/mcp.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "antigravity",
-      "componentKind": "mcp",
-      "context": "base",
-      "id": "src-e1af00ed93f81d2d77a400a4",
-      "location": "~/.gemini/config/mcp_config.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "antigravity",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-1929b5dd9da1a294b0d86cf7",
-      "location": "~/.gemini/antigravity-cli/settings.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "openclaw",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-4b379e08f8193f79cc96d10b",
-      "location": "~/.openclaw/openclaw.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "openclaw",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-2be106a845ce54fc4b983fa8",
-      "location": "~/.openclaw/exec-approvals.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cline",
-      "componentKind": "configuration",
-      "context": "base",
-      "id": "src-a60cd4a88c540e177f105c61",
-      "location": "~/.cline/data/settings/providers.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "opencode",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-bf3271ef36b1e3e902f6148b",
-      "location": "~/.config/opencode/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "opencode",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-4305c488a5a3a206b0cbf28c",
-      "location": "~/.opencode/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "copilot-cli",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-4fdf8ed3b3ade28e63179430",
-      "location": "~/.github/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "antigravity",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-dfa62eaef92483bab95adc32",
-      "location": "~/.gemini/antigravity-cli/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "openclaw",
-      "componentKind": "skill",
-      "context": "base",
-      "id": "src-8385b0f73be7f06e0e07d729",
-      "location": "~/.openclaw/skills",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "codex",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-31912fc2c07da60bc595f2c4",
-      "location": "~/.codex/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "gemini-cli",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-17583d3bdb5fb24c4bfa40f0",
-      "location": "~/.gemini/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "opencode",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-585f8ba14e77f127ab4e3c94",
-      "location": "~/.config/opencode/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "opencode",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-27e83a5a36622475f0d068f0",
-      "location": "~/.opencode/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "copilot-cli",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-cd7346e7dd770c8530c45994",
-      "location": "~/.copilot/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "copilot-cli",
-      "componentKind": "agent",
-      "context": "base",
-      "id": "src-98cd120efb939310c62bc1b8",
-      "location": "~/.github/agents",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "antigravity",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-3aa10f6620cc5c1096ca2c8f",
-      "location": "~/.gemini/config/plugins",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "antigravity",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-a8a384dad7a0351979536f84",
-      "location": "~/.gemini/antigravity-cli/plugins",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "antigravity",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-f169f509c80a79046ca0098c",
-      "location": "~/.agents/plugins",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "copilot-cli",
-      "componentKind": "plugin",
-      "context": "base",
-      "id": "src-2e12af8c73e5ff794c51c5b0",
-      "location": "~/.copilot/installed-plugins",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "claude-code",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-02313e088d045f25efd2441e",
-      "location": "~/project/.mcp.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
       "client": "claude-code",
       "componentKind": "configuration",
       "context": "project",
-      "id": "src-cbe9a0f17b06e53f075bbe21",
+      "id": "src-ff224cd17fbacb85995eb026",
       "location": "~/project/.claude/settings.json",
-      "modifiedAt": "2026-09-10T16:05:32.150Z",
+      "modifiedAt": "2026-09-14T11:54:52.857Z",
       "reason": "",
       "scope": "workspace",
       "sizeBytes": 74,
       "status": "collected"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "claude-code",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-40b000c3c4e6f4f59e2b3ff2",
-      "location": "~/project/.claude/settings.local.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "codex",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-1b257fe1e1c5bd940cc02b7c",
-      "location": "~/project/.codex/config.toml",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "cursor",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-6f521f86316ec35ab55991f8",
-      "location": "~/project/.cursor/mcp.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-ee3abe730fc0403a9aebb7f7",
-      "location": "~/project/.cursor/cli.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "gemini-cli",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-881f22f8915a80a83df3a6e8",
-      "location": "~/project/.gemini/settings.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "kiro",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-00feab65164b5ebf2f9c4447",
-      "location": "~/project/.kiro/settings/mcp.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "vscode",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-81e33c435d8d117cceeea696",
-      "location": "~/project/.vscode/mcp.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "vscode",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-8b74c37175576c736bd21630",
-      "location": "~/project/.vscode/settings.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "roo-code",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-39ba8707a4e1e838ef8fadb1",
-      "location": "~/project/.roo/mcp.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "codex",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-55ce504809f58d9f45e65989",
-      "location": "~/project/.codex/hooks.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "claude-code",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-de25a4b437da431dea0d4193",
-      "location": "~/project/.claude/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "shared",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-6a0c38f195d04b6a2b6681bd",
-      "location": "~/project/.agents/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "codex",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-f73feb27676acd00162b9eb4",
-      "location": "~/project/.codex/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "cursor",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-baf27c172f687ae52bcd3acb",
-      "location": "~/project/.cursor/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "gemini-cli",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-a482b162ee3981fdccbde805",
-      "location": "~/project/.gemini/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "kiro",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-300a88b8a1a38529bd7f0e44",
-      "location": "~/project/.kiro/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "cline",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-2d707d61884def43b11df3a7",
-      "location": "~/project/.cline/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "vscode",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-702d01f9272089bd41e9ee18",
-      "location": "~/project/.github/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "claude-code",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-df217f8ee3969528fdcd060d",
-      "location": "~/project/.claude/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "cursor",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-4b18760a0552e08951db5955",
-      "location": "~/project/.cursor/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "kiro",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-e9efc2f2f77e84efd73267cb",
-      "location": "~/project/.kiro/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "cline",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-3779e30bea0e6febb03db071",
-      "location": "~/project/.cline/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "cursor",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-f1725381e0261a8c602dfa1e",
-      "location": "~/project/.cursor/permissions.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "opencode",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-3ea5baaa5e76608f719b3af1",
-      "location": "~/project/opencode.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "opencode",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-0c96b658a987c551f745031a",
-      "location": "~/project/opencode.jsonc",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "opencode",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-4f6cc7866e4ab74360195bb2",
-      "location": "~/project/.opencode/opencode.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "opencode",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-19dfa312f65713bfb8acb476",
-      "location": "~/project/.opencode/opencode.jsonc",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "copilot-cli",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-40c028fac2c57b07b7786ba7",
-      "location": "~/project/.github/copilot/settings.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "copilot-cli",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-e25ae7a43ebae63e4dfa39dc",
-      "location": "~/project/.github/copilot/settings.local.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "copilot-cli",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-bda431230f96224abd8464d7",
-      "location": "~/project/.github/mcp.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "client": "aider",
-      "componentKind": "configuration",
-      "context": "project",
-      "id": "src-c7704e9d35081ee9577f8cb9",
-      "location": "~/project/.aider.conf.yml",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "configuration",
-      "classification": "mcp-configuration",
-      "client": "antigravity",
-      "componentKind": "mcp",
-      "context": "project",
-      "id": "src-8aa0652a05bb7fd13d26eb8f",
-      "location": "~/project/.agents/mcp_config.json",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "opencode",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-aca848dbdd26f937fcd46944",
-      "location": "~/project/.opencode/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "copilot-cli",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-9482eeb959611b82cb9b0426",
-      "location": "~/project/.github/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "skills",
-      "client": "antigravity",
-      "componentKind": "skill",
-      "context": "project",
-      "id": "src-793e8ce10df01ac6fb94a985",
-      "location": "~/project/.gemini/antigravity-cli/skills",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "codex",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-eab7c4db865effe383df1337",
-      "location": "~/project/.codex/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "gemini-cli",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-d8b4edc62e7ea7b556146210",
-      "location": "~/project/.gemini/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "opencode",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-7e9dc9a4a0b6f5d3b1d5bfcf",
-      "location": "~/project/.opencode/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "agents",
-      "client": "copilot-cli",
-      "componentKind": "agent",
-      "context": "project",
-      "id": "src-33ae30291ced2495deba10c6",
-      "location": "~/project/.github/agents",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "antigravity",
-      "componentKind": "plugin",
-      "context": "project",
-      "id": "src-c660a21dd2a7f39707aa6013",
-      "location": "~/project/.gemini/config/plugins",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "antigravity",
-      "componentKind": "plugin",
-      "context": "project",
-      "id": "src-b4e31d6a2353db69289b34a0",
-      "location": "~/project/.gemini/antigravity-cli/plugins",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "plugins",
-      "client": "antigravity",
-      "componentKind": "plugin",
-      "context": "project",
-      "id": "src-2637c142d3a4f4fa9690c8e1",
-      "location": "~/project/.agents/plugins",
-      "reason": "not_found",
-      "scope": "workspace",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "unknown",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-2e34193b8e1e48d62e31c57f",
-      "location": "~/Applications",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-bfc714e8dabef76c44ddcc80",
-      "location": "~/Library/Application Support/Claude/claude-code",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-800195c07e2b44a60181a850",
-      "location": "~/.local/share/claude/versions",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-165085e019e589fb30e39d84",
-      "location": "~/.local/bin/claude",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "cursor",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-16cc26514a3d50853db94f82",
-      "location": "~/.local/bin/cursor-agent",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "cursor",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-d62b19a4d86b64f6f91766db",
-      "location": "~/.local/share/cursor-agent/versions",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "codex",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-30088a7366ee41a55db9e7d8",
-      "location": "~/.codex/packages/standalone/releases",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-326767547eda6ac5dffd7d46",
-      "location": "~/.npm-global/lib/node_modules/@anthropic-ai/claude-code/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "codex",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-b47e29f20cffce5ba12f7921",
-      "location": "~/.npm-global/lib/node_modules/@openai/codex/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "gemini-cli",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-5927a70e52a7404a54caf637",
-      "location": "~/.npm-global/lib/node_modules/@google/gemini-cli/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-8272601959740027a832d6cb",
-      "location": "~/.claude/local/node_modules/@anthropic-ai/claude-code/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "kiro",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-2adc7fd6c67f0c56b714873f",
-      "location": "~/.local/bin/kiro-cli",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "kiro",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-45d72fe71e7148238fad71cb",
-      "location": "~/AppData/Local/Kiro-Cli/kiro-cli.exe",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-aec50c96e4dfff7c656531b1",
-      "location": "~/.local/share/claude/versions",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-f533d94b159d8cb9a094f65f",
-      "location": "~/.local/bin/claude.exe",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "vscode",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-4b26e9048248d1df4e55fe6c",
-      "location": "~/AppData/Local/Programs/Microsoft VS Code/resources/app/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "vscode",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-899351e062c800346cbb5450",
-      "location": "~/AppData/Local/Programs/Microsoft VS Code Insiders/resources/app/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "cursor",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-8355a205bdffab1fce43e0b9",
-      "location": "~/AppData/Local/Programs/cursor/resources/app/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "claude-code",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-3b68806ca3cff4cce610e5da",
-      "location": "~/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "codex",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-4f2238ca1e36a0881ecda12d",
-      "location": "~/AppData/Roaming/npm/node_modules/@openai/codex/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
-    },
-    {
-      "accountAlias": "~",
-      "artifactRole": "installation",
-      "client": "gemini-cli",
-      "componentKind": "installation",
-      "context": "base",
-      "id": "src-85cd71295b3751432ccd4715",
-      "location": "~/AppData/Roaming/npm/node_modules/@google/gemini-cli/package.json",
-      "reason": "not_found",
-      "scope": "user",
-      "status": "missing"
     }
   ],
   "startedAt": "2026-09-10T12:00:00+00:00",

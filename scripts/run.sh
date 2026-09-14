@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-shot local scan. No dependency installation, account state, or reporting service.
 set -euo pipefail
-here=$(cd "$(dirname "$0")" && pwd)
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 palma_python=""
 if [ -n "${PALMA_PYTHON:-}" ]; then
   candidates=("$PALMA_PYTHON")

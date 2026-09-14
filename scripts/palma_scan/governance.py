@@ -3,12 +3,18 @@ from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
+import re
 
-RULES_VERSION = "2026-09-10.2"
+from .engine.redaction import visible
+
+RULES_VERSION = "2026-09-14.1"
 INSTRUCTION_REVIEW_BYTES = 64 * 1024
 ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 UPGRADES = {"mcp-network-direct", "skills-local-unreviewed", "hooks-declared"}
 LOW_PERMISSIONS = {"permissions-bypassed", "tools-auto-approved", "approval-prompts-disabled"}
+# Connectors routed through a Palma-operated gateway are governed. The catalog expresses its
+# exemption as `endpointOrigin notInParam gatewayOrigins`; this marker joins that list.
+PALMA_GATEWAY = "palma-gateway"
 # Inventory categories group every discovered setting by subject. These catalog
 # categories make stronger assertions, so only actual switches/access grants
 # qualify. Supporting controls such as confirmation, network restrictions, and
@@ -126,6 +132,8 @@ def attributes(item):
         return {key: details.get(key) for key in ("variant", "version", "installationState", "authModes")}
     if kind == "mcp":
         result = {key: details.get(key) for key in ("transport", "endpointOrigin", "packageName", "executable", "auth", "inlineCredentialPresent")}
+        if details.get("governedBy") == PALMA_GATEWAY:
+            result["endpointOrigin"] = PALMA_GATEWAY
         result["transport"] = result["transport"] or {"local": "stdio", "remote": "http"}.get(details.get("execution"), "unknown")
         result["inlineCredentialPresent"] = result["inlineCredentialPresent"] is True or _positive_count(details.get("literalCredentialCount"))
         result["capability"] = details.get("capability") or (details.get("toolFamily") if details.get("toolFamily") in {"computer", "browser"} else None)
@@ -198,10 +206,12 @@ SUMMARIES = {
 IMPACTS = {
     "mcp-local-unaudited": "A local MCP server can reach files, credentials, and personally identifiable information (PII) with its host permissions. Malicious code or prompt-injected tool interactions can cause unauthorized actions or data leakage.",
     "mcp-network-direct": "Connector requests may send PII, source code, or other sensitive data to remote services. Untrusted tool output can carry prompt injection, while excessive tool permissions increase the impact of unintended calls.",
-    "mcp-computer-use": "Desktop control can expose visible PII, signed-in applications, clipboard data, and account actions. Prompt injection can redirect this access into unintended actions or data disclosure.",
-    "mcp-browser-automation": "Browser automation may reach authenticated pages and PII. Page-borne prompt injection can induce unintended navigation, form submission, or data leakage using the user's session.",
-    "browser-use-enabled": "Web content can contain prompt injection. An agent with browser access may expose PII or act through authenticated sessions unless site access and sensitive actions are governed.",
-    "computer-use-enabled": "Desktop actions can reach PII and authenticated applications. Prompt injection or unexpected instructions can cross application boundaries and cause data leakage.",
+    "mcp-inline-credential": "If the value is a working credential, anyone who can read the file can use it as you: other processes, extensions and skills running under your account, and every backup, sync folder or dotfiles repository that copies the file. It keeps working until it is rotated.",
+    "mcp-static-secret-auth": "The connector signs in with a fixed secret instead of a short-lived sign-in. If the secret is copied or leaks, it keeps granting access until someone rotates it.",
+    "mcp-computer-use": "It can see your screen and use the keyboard and mouse as you, in any app you are signed in to. A page, document or message it reads can contain instructions that steer those actions, including sending data somewhere else.",
+    "mcp-browser-automation": "It can open pages, fill in forms and click in sites where you are signed in, as you. A page it visits can contain instructions that steer it into unintended actions or into sending data elsewhere.",
+    "browser-use-enabled": "The agent can browse and act in sites with your signed-in sessions. A page it reads can contain instructions that steer it into unintended actions or into sending data elsewhere, unless site access and sensitive actions require your approval.",
+    "computer-use-enabled": "The agent can see your screen and use the keyboard and mouse as you, across your signed-in apps. Content it reads can contain instructions that steer those actions, including sending data elsewhere.",
     "skills-local-unreviewed": "Unreviewed skill instructions and scripts can contain prompt injection, mishandle PII, disclose secrets, or steer tools into data leakage. Review evidence should identify the installed version.",
     "hooks-declared": "Hooks can execute custom logic automatically, access PII and credentials, transmit data, or inject instructions into an agent workflow. A compromised hook or writable script creates a path to data leakage.",
 }
@@ -219,7 +229,51 @@ def _evidence(item):
             "key": details.get("nativeKey", details.get("key", item["name"])), "value": value}
 
 
-def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, impact=None, recommendation=None):
+# Names come from scanned files. Inside a sentence they lose quotation marks, control and
+# invisible direction characters, so a name cannot close its quotation or reorder the text.
+_UNSAFE_PROSE = re.compile(r'[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff\u201c\u201d"]')
+PROSE_NAME_LIMIT = 60
+PROSE_LOCATION_LIMIT = 512
+
+
+def _join(parts):
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _prose_name(name):
+    """A declared name as it may appear in a summary, or None for a path or web address."""
+    text = " ".join(visible(_UNSAFE_PROSE.sub("", str(name))).split())
+    if not text or re.search(r"[\\/]|://", text):
+        return None  # Shown with its evidence, never inside a sentence.
+    return text if len(text) <= PROSE_NAME_LIMIT else text[:PROSE_NAME_LIMIT - 1] + "\u2026"
+
+
+def _names(items, limit=3):
+    # Quoted, so a name such as "browser" never reads as part of the sentence.
+    names = sorted({item["name"] for item in items}, key=str.casefold)
+    listed = [f"\u201c{name}\u201d" for name in list(dict.fromkeys(filter(None, map(_prose_name, names))))[:limit]]
+    rest = len(names) - len(listed)
+    if not listed:
+        return f"{rest:,} {'connector' if rest == 1 else 'connectors'}"
+    return _join(listed + ([f"{rest:,} more"] if rest > 0 else []))
+
+
+def _files(items, limit=2):
+    """The files a summary names; merged copies count, and very long paths are only counted."""
+    # The least nested file first: normally the main checkout rather than a copy.
+    files = sorted({location for item in items for location in [item["location"], *item.get("details", {}).get("locations", [])]},
+                   key=lambda location: (location.count("/"), len(location), location))
+    unlisted = sum(max(0, item.get("details", {}).get("locationCount", 0) - len(item.get("details", {}).get("locations", []))) for item in items)
+    named = [location for location in files if len(location) <= PROSE_LOCATION_LIMIT][:limit]
+    rest = len(files) + unlisted - len(named)
+    if not named:
+        return f"{rest:,} {'file' if rest == 1 else 'files'}"
+    return _join(named + ([f"{rest:,} other {'file' if rest == 1 else 'files'}"] if rest > 0 else []))
+
+
+def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text=None, impact=None, recommendation=None, rating_reason=None):
+    """One finding. ``summary`` is a template with {n}; ``text`` is a finished sentence that
+    names declarations, so nothing in a name is ever treated as a template."""
     items = sorted(items, key=lambda item: item["id"])
     extra_sources = sorted(extra_sources, key=lambda item: item["id"])
     ids = [item["id"] for item in items]
@@ -227,7 +281,9 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, impa
     count = len(items) + len(extra_sources)
     sentence = summary or SUMMARIES.get(spec["id"], spec.get("headline", "{n} declarations require review."))
     sentence = sentence.replace("{n}", f"{count:,}").replace("{where}", "on this machine")
-    if count == 1:
+    if text is not None:
+        sentence = text
+    elif count == 1:
         for plural, singular in catalog()["singularPhrases"]:
             sentence = sentence.replace(plural, singular)
         for plural, singular in (
@@ -265,7 +321,7 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, impa
         evidence.append({"sourceId": source["id"], "location": source["location"], "key": source.get("componentKind", "configuration"), "value": facts})
     return {"id": "finding-" + identity, "ruleId": spec["id"], "title": spec["title"],
             "severity": severity, "baselineSeverity": spec["severity"],
-            "ratingReason": "Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review." if severity == "low" and (spec["id"] in LOW_PERMISSIONS or spec["id"] == "sandbox-disabled") else "Palma's standalone governance policy elevates this exposure to Critical." if severity != spec["severity"] else "Palma governance policy prioritizes this observed configuration pattern and its potential impact.",
+            "ratingReason": rating_reason or ("Palma classifies permission bypass and unrestricted folder grants as Low for visibility and governance review." if severity == "low" and (spec["id"] in LOW_PERMISSIONS or spec["id"] == "sandbox-disabled") else "Palma's standalone governance policy elevates this exposure to Critical." if severity != spec["severity"] else "Palma governance policy prioritizes this observed configuration pattern and its potential impact."),
             "category": category, "confidence": "high", "evidenceType": "inventory" if spec.get("kind") in {"skill", "plugin", "agent", "client"} else "configuration",
             "summary": sentence, "impact": impact or IMPACTS.get(spec["id"], catalog()["areas"]["guidance"][area]["why"]),
             "recommendation": recommendation or spec["action"], "observationIds": ids, "evidence": evidence,
@@ -274,16 +330,42 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, impa
             "references": PUBLIC_REFERENCES.get(spec.get("kind"), PUBLIC_REFERENCES["setting"])}
 
 
+def _skill_findings(spec, items):
+    """Local skills keep Critical priority; version-controlled project skills keep High.
+
+    A skill committed to the project's repository has change history and can go through
+    code review, unlike a copied or downloaded folder. Its installed version still needs
+    a review record, so the catalog's High rating applies rather than the Critical upgrade.
+    """
+    recommendation = "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team."
+    versioned = [item for item in items if item.get("details", {}).get("provenance") == "version-controlled"]
+    local = [item for item in items if item.get("details", {}).get("provenance") != "version-controlled"]
+    findings = []
+    if local:
+        findings.append(_finding(spec, local, severity="critical", recommendation=recommendation))
+    if versioned:
+        findings.append(_finding({**spec, "title": "Project skills in version control need a review record"}, versioned, severity="high",
+            summary="{n} project skill declarations are inside the project's git repository and not excluded by its .gitignore, so their changes can be reviewed like code. The installed version has no recorded review.",
+            recommendation="Review the skill instructions and scripts through the repository's code review, and record the reviewed version before sensitive use.",
+            rating_reason="Version-controlled project skills keep the catalog's High priority: their changes can be reviewed like code, but the installed version still needs a review record."))
+    return findings
+
+
 def evaluate(snapshot, params=None):
     """Preserve all original matches; cached/disabled evidence stays visible.
 
     params supports the original catalog's pure fixture comparison only. The CLI
     has no gateway/enrollment option and native collection does not export URLs.
     """
-    params = params or {}
+    params = dict(params or {})
+    params["gatewayOrigins"] = [*params.get("gatewayOrigins", []), PALMA_GATEWAY]
     observations = snapshot.get("observations", [])
     sources = snapshot.get("sources", [])
     malformed = {source["id"] for source in sources if source.get("issueKind") == "unsupported-mcp-shape"}
+    # The sign-in secret itself is written in the file. Older snapshots only record that some
+    # credential is.
+    inline = {item["id"] for item in observations if item["kind"] == "mcp"
+              and item.get("details", {}).get("authSecretInline", attributes(item)["inlineCredentialPresent"]) is True}
     result = []
     for spec in catalog()["rules"]:
         items = [item for item in observations if item["kind"] == spec["kind"]
@@ -292,20 +374,35 @@ def evaluate(snapshot, params=None):
             items = [item for item in items if item["sourceId"] not in malformed]
         if spec["id"] == "hooks-declared":
             items += [item for item in observations if item["kind"] == "hook"]
-        if items:
-            severity = "low" if spec["id"] in LOW_PERMISSIONS else "critical" if spec["id"] in UPGRADES else spec["severity"]
-            if spec["id"] == "sandbox-disabled" and all(attributes(item).get("value") == "danger-full-access" for item in items):
-                severity = "low"
-                spec = {**spec, "title": "Unrestricted folder and command access is configured"}
-            result.append(_finding(spec, items, severity=severity,
-                recommendation="Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team." if spec["id"] == "skills-local-unreviewed" else None))
+        if spec["id"] == "mcp-static-secret-auth":
+            # One root cause is reported once: a fixed secret written into the file is the
+            # Critical credential finding, not also a separate High one.
+            items = [item for item in items if item["id"] not in inline]
+        if not items:
+            continue
+        severity = "low" if spec["id"] in LOW_PERMISSIONS else "critical" if spec["id"] in UPGRADES else spec["severity"]
+        if spec["id"] == "sandbox-disabled" and all(attributes(item).get("value") == "danger-full-access" for item in items):
+            severity = "low"
+            spec = {**spec, "title": "Unrestricted folder and command access is configured"}
+        if spec["id"] == "skills-local-unreviewed":
+            result.extend(_skill_findings(spec, items))
+            continue
+        summary = None
+        if spec["id"] == "mcp-inline-credential":
+            summary = f"{_names(items)} {'keeps' if len({item['name'] for item in items}) == 1 else 'keep'} a potential credential in plain text in {_files(items)}. The value is withheld from this report."
+        elif spec["id"] == "mcp-static-secret-auth":
+            summary = f"{_names(items)} {'signs' if len({item['name'] for item in items}) == 1 else 'sign'} in with a fixed secret supplied through configuration, declared in {_files(items)}."
+        elif spec["id"] in {"mcp-computer-use", "mcp-browser-automation"}:
+            reach = "the screen, keyboard and mouse" if spec["id"] == "mcp-computer-use" else "a web browser"
+            summary = f"{_names(items)} can control {reach} as you. Declared in {_files(items)}."
+        result.append(_finding(spec, items, severity=severity, text=summary))
 
     credentials = [item for item in observations if item["kind"] != "mcp" and _positive_count(item.get("details", {}).get("literalCredentialCount"))]
     if credentials:
         result.append(_finding({"id": "config-inline-credential", "kind": "setting", "area": "access", "severity": "critical",
             "title": "Potential credentials stored in configuration files", "action": "Replace literal secrets with supported secret references or credential storage. Review exposure and rotate affected credentials."}, credentials,
-            summary="{n} configuration records contain potential credential literals. Values are redacted; inspect the named files for secrets that could be copied, committed, or exposed to an agent.",
-            impact="Configuration files may be shared, backed up, indexed, or read by tools. A stored credential can expose connected services and data."))
+            text=f"Potential credentials are stored in plain text in {_files(credentials)}. Values are withheld from this report.",
+            impact="If these values are working credentials, anyone who can read the files can use them as you: other processes, extensions and skills running under your account, and every backup, sync folder or repository that copies them. They keep working until they are rotated."))
     packaged_skills = [item for item in observations if item["kind"] == "skill" and attributes(item).get("origin") == "plugin"]
     if packaged_skills:
         result.append(_finding({"id": "skills-plugin-unreviewed", "kind": "skill", "area": "content", "severity": "critical",

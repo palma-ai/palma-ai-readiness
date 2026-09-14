@@ -8,6 +8,7 @@ import stat
 from urllib.parse import urlsplit
 
 SEVERITIES = ("critical", "high", "medium", "low", "info")
+MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 KINDS = ("client", "mcp", "skill", "plugin", "agent", "setting", "hook")
 
 
@@ -16,13 +17,15 @@ def booking_link(value):
         return None
     try:
         parts = urlsplit(value)
+        # A "Talk to Palma" link must lead to Palma, not to a look-alike sign-in page.
         if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password
                 or parts.fragment or any(c.isspace() or ord(c) < 32 for c in value)
-                or "\\" in value or len(value) > 2048):
+                or "\\" in value or len(value) > 2048
+                or not (parts.hostname == "palma.ai" or parts.hostname.endswith(".palma.ai"))):
             raise ValueError
         _ = parts.port
     except ValueError:
-        raise ValueError("The optional booking link must be an HTTPS URL without credentials or a fragment.") from None
+        raise ValueError("The optional booking link must be an HTTPS link on palma.ai without credentials or a fragment.") from None
     return value
 
 
@@ -82,6 +85,9 @@ def validate(snapshot):
     if not isinstance(snapshot["coverage"].get("limitations"), list) or not all(
             isinstance(item, str) for item in snapshot["coverage"]["limitations"]):
         raise ValueError("Snapshot coverage.limitations must be a list of text.")
+    inspected = snapshot["coverage"].get("sourcesInspected", 0)
+    if type(inspected) is not int or inspected < 0:
+        raise ValueError("Snapshot coverage.sourcesInspected must be a non-negative integer.")
     if snapshot["scope"].get("type") not in {"machine", "current-user", "copied-home", "declared"}:
         raise ValueError("Snapshot has an unsupported scope type.")
     if snapshot["mode"] == "declared" and (snapshot["status"] != "partial" or snapshot["scope"]["type"] != "declared"):
@@ -127,7 +133,9 @@ def read_snapshot(path):
     with os.fdopen(descriptor, "rb") as stream:
         if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
             raise ValueError("Snapshot input must be a regular file.")
-        data = stream.read()
+        data = stream.read(MAX_SNAPSHOT_BYTES + 1)
+    if len(data) > MAX_SNAPSHOT_BYTES:
+        raise ValueError("Snapshot input exceeds the 64 MB local artifact limit.")
     try:
         result = json.loads(data.decode("utf-8"), object_pairs_hook=_object)
     except (UnicodeError, json.JSONDecodeError, RecursionError):
@@ -140,12 +148,18 @@ def summarize(snapshot):
     counts["client"] = len({item["client"].casefold() for item in snapshot["observations"] if item["kind"] == "client"})
     severity = Counter(item["severity"] for item in snapshot["findings"])
     coverage = Counter(item["status"] for item in snapshot["sources"])
+    inspected = snapshot["coverage"].get("sourcesInspected")
+    coverage["collected"] = inspected if type(inspected) is int else coverage["collected"]
     return {"schemaVersion": "2.0", "mode": snapshot["mode"], "status": snapshot["status"],
             "scope": snapshot["scope"]["type"],
             "counts": {kind: counts[kind] for kind in KINDS},
             "findings": {level: severity[level] for level in SEVERITIES},
-            "coverage": {state: coverage[state] for state in ("collected", "missing", "skipped", "error")},
-            "limitationCount": len(snapshot["coverage"]["limitations"])}
+            "coverage": {state: coverage[state] for state in ("collected", "skipped", "error")},
+            "limitationCount": len(snapshot["coverage"]["limitations"]),
+            # Rule text only, in report order: an assistant can present priorities without
+            # reading scanned names or locations.
+            "priorities": [{key: finding.get(key) for key in ("severity", "title", "ruleId", "declarations", "clients", "recommendation")}
+                           for finding in snapshot["findings"]]}
 
 
 def json_text(data):

@@ -11,18 +11,260 @@
   "coverage": {
     "collected": 20,
     "error": 1,
-    "missing": 192,
     "skipped": 0
   },
   "findings": {
     "critical": 10,
-    "high": 2,
+    "high": 1,
     "info": 6,
     "low": 6,
     "medium": 1
   },
   "limitationCount": 2,
   "mode": "endpoint",
+  "priorities": [
+    {
+      "clients": [
+        "cursor",
+        "vscode"
+      ],
+      "declarations": 5,
+      "recommendation": "Route them through Palma: the same tools, audited and governed per policy.",
+      "ruleId": "mcp-network-direct",
+      "severity": "critical",
+      "title": "Remote connectors used outside Palma's governance"
+    },
+    {
+      "clients": [
+        "claude-desktop",
+        "codex",
+        "cursor"
+      ],
+      "declarations": 3,
+      "recommendation": "Register them in Palma and route calls through the gateway, where approval policies audit every call.",
+      "ruleId": "mcp-local-unaudited",
+      "severity": "critical",
+      "title": "Connectors running locally without monitoring or governance"
+    },
+    {
+      "clients": null,
+      "declarations": 2,
+      "recommendation": "Prefer isolated sessions and retain sensitive-action confirmation. Review file upload restrictions and browser-domain scope in the active agent.",
+      "ruleId": "PALMA-CAPABILITY-002",
+      "severity": "critical",
+      "title": "Review browser session reuse and sensitive actions"
+    },
+    {
+      "clients": [
+        "gemini-cli",
+        "vscode"
+      ],
+      "declarations": 2,
+      "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "ruleId": "browser-use-enabled",
+      "severity": "critical",
+      "title": "Browser use turned on: acts as the signed-in user without governance"
+    },
+    {
+      "clients": [
+        "claude-code",
+        "shared"
+      ],
+      "declarations": 2,
+      "recommendation": "Review the named skill contents, scripts, dependencies, and update source. Remove unused skills and record the approved version; Palma can distribute reviewed skills across a team.",
+      "ruleId": "skills-local-unreviewed",
+      "severity": "critical",
+      "title": "Local unaudited skills installed"
+    },
+    {
+      "clients": [
+        "gemini-cli"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: sensitive browser actions run behind an approval policy instead of silently.",
+      "ruleId": "browser-actions-unconfirmed",
+      "severity": "critical",
+      "title": "Browser actions allowed without confirmation"
+    },
+    {
+      "clients": [
+        "codex"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: desktop control becomes a governed capability with approval policies and an audit trail.",
+      "ruleId": "computer-use-enabled",
+      "severity": "critical",
+      "title": "Computer use turned on: acts as the signed-in user without governance"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 1,
+      "recommendation": "Audit the scripts; observation feeds will make hook activity visible.",
+      "ruleId": "hooks-declared",
+      "severity": "critical",
+      "title": "Scripts run automatically on agent events"
+    },
+    {
+      "clients": [
+        "codex"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: browser access becomes a governed capability with approval policies and an audit trail.",
+      "ruleId": "mcp-browser-automation",
+      "severity": "critical",
+      "title": "Browser automation via a connector: drives a browser without governance"
+    },
+    {
+      "clients": [
+        "cursor"
+      ],
+      "declarations": 1,
+      "recommendation": "Move the credential behind the gateway and rotate the exposed value.",
+      "ruleId": "mcp-inline-credential",
+      "severity": "critical",
+      "title": "Credentials stored in local client config"
+    },
+    {
+      "clients": [
+        "claude-code",
+        "codex"
+      ],
+      "declarations": 2,
+      "recommendation": "Evidence for the security review now; managed settings from Palma later.",
+      "ruleId": "sandbox-disabled",
+      "severity": "high",
+      "title": "Sandbox turned off: agents run unconfined"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 2,
+      "recommendation": "Inventory them now; governed conversion registers the ones that stay.",
+      "ruleId": "plugins-unknown-origin",
+      "severity": "medium",
+      "title": "Packs of unknown origin"
+    },
+    {
+      "clients": null,
+      "declarations": 2,
+      "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
+      "ruleId": "PALMA-HYGIENE-003",
+      "severity": "low",
+      "title": "Configuration sources disagree on a setting"
+    },
+    {
+      "clients": null,
+      "declarations": 1,
+      "recommendation": "Review instructions, declared tools, dependencies, and update sources; retain the reviewed version.",
+      "ruleId": "PALMA-AGENT-001",
+      "severity": "low",
+      "title": "Local agent instructions need a review record"
+    },
+    {
+      "clients": null,
+      "declarations": 1,
+      "recommendation": "Pin a reviewed package version and establish an update review process.",
+      "ruleId": "PALMA-GOV-002",
+      "severity": "low",
+      "title": "An MCP package lacks an exact version"
+    },
+    {
+      "clients": [
+        "codex"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "ruleId": "approval-prompts-disabled",
+      "severity": "low",
+      "title": "Codex never asks before acting"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "ruleId": "permissions-bypassed",
+      "severity": "low",
+      "title": "Permission prompts turned off"
+    },
+    {
+      "clients": [
+        "vscode"
+      ],
+      "declarations": 1,
+      "recommendation": "Check how Palma AI can help: approval policies at the gateway restore a human in the loop for MCP tools.",
+      "ruleId": "tools-auto-approved",
+      "severity": "low",
+      "title": "Every tool call auto-approved"
+    },
+    {
+      "clients": [
+        "claude-code",
+        "claude-desktop",
+        "codex",
+        "cursor",
+        "gemini-cli",
+        "shared",
+        "vscode",
+        "windsurf"
+      ],
+      "declarations": 8,
+      "recommendation": "Remove stale configuration.",
+      "ruleId": "clients-config-only",
+      "severity": "info",
+      "title": "AI client config left behind without an installation"
+    },
+    {
+      "clients": null,
+      "declarations": 2,
+      "recommendation": "Review the listed sources in the client's precedence order. Keep deliberate overrides and remove redundant or obsolete declarations only after confirming their purpose.",
+      "ruleId": "PALMA-HYGIENE-002",
+      "severity": "info",
+      "title": "A setting is repeated across configuration sources"
+    },
+    {
+      "clients": null,
+      "declarations": 1,
+      "recommendation": "Review saved projects in the client and remove obsolete references after confirming their purpose. The scan does not alter settings or delete any files.",
+      "ruleId": "PALMA-HYGIENE-004",
+      "severity": "info",
+      "title": "Some saved project locations are no longer present"
+    },
+    {
+      "clients": [
+        "cursor"
+      ],
+      "declarations": 1,
+      "recommendation": "Remove them, or re-enable them deliberately.",
+      "ruleId": "mcp-declared-disabled",
+      "severity": "info",
+      "title": "Disabled connector entries left in config"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 1,
+      "recommendation": "Hygiene: remove the entries, or re-enable them deliberately.",
+      "ruleId": "plugins-declared-disabled",
+      "severity": "info",
+      "title": "Disabled pack entries left in config"
+    },
+    {
+      "clients": [
+        "claude-code"
+      ],
+      "declarations": 1,
+      "recommendation": "Hygiene: if a folder is gone for good, remove its entries from the client configuration; nothing can use them.",
+      "ruleId": "settings-stale",
+      "severity": "info",
+      "title": "Settings for project folders that no longer exist"
+    }
+  ],
   "schemaVersion": "2.0",
   "scope": "copied-home",
   "status": "partial"

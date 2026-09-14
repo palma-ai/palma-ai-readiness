@@ -20,7 +20,8 @@ def collect_codex_releases(builder, candidate):
         child = replace(candidate, path=path / "codex-package.json", format="json",
                         role="installed-codex-package", context="installation:" + fingerprint(str(path)),
                         location=candidate.location + "/release-" + fingerprint(str(path))[:16])
-        collect_codex_package(builder, child)
+        with builder.isolated(candidate):
+            collect_codex_package(builder, child)
 
 
 def collect_codex_package(builder, candidate):

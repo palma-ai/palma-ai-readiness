@@ -56,7 +56,9 @@ def collect_applications(builder, candidate):
         return
     for path in children:
         if path.suffix.lower() == ".app":
-            collect_bundle(builder, candidate, path)
+            # One failing bundle must not discard the others; its gap names no bundle.
+            with builder.isolated(candidate):
+                collect_bundle(builder, candidate, path)
 
 
 def collect_desktop_versions(builder, candidate):
@@ -67,4 +69,5 @@ def collect_desktop_versions(builder, candidate):
         if version_label(path.name):
             # Current observed Desktop layout; each bundle's own version is authoritative metadata.
             # The family is known a priori here, so an unreadable bundle stays a visible gap.
-            collect_bundle(builder, candidate, path / "claude.app", known_family=True)
+            with builder.isolated(candidate):
+                collect_bundle(builder, candidate, path / "claude.app", known_family=True)

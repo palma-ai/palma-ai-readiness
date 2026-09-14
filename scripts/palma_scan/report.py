@@ -8,6 +8,7 @@ Configuration is evidence of capability, not evidence of execution or compromise
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import html
 import json
@@ -16,7 +17,11 @@ from collections import Counter
 from urllib.parse import urlsplit
 
 from .brands_extra import EXTRA_ARTWORK_NOTICE, EXTRA_BRAND_ASSETS, EXTRA_CLIENTS
+from .engine.redaction import visible
+from .governance import PUBLIC_REFERENCES
+from .model import booking_link as _booking_link
 from .report_font import FONT_NOTICE
+from .report_regulation import render_regulation_section
 from .report_theme import CSS as _CSS
 
 # The embedded Palma logo is a fixed asset, never fetched at runtime.
@@ -34,8 +39,8 @@ _SOURCE_NAMES = {"collected": "Collected", "missing": "Not present", "skipped": 
 
 # Fixed brand artwork, included only for recognized enum values. No asset URL or
 # arbitrary SVG from a snapshot is accepted. Client geometry comes from Palma's
-# apps/mcp-platform/static/images/mcp-hosts; connector geometry comes from its
-# static/brand-icons catalog, pinned to homarr-labs/dashboard-icons commit
+# application asset library (images/mcp-hosts); connector geometry comes from its
+# brand-icons catalog, pinned to homarr-labs/dashboard-icons commit
 # 03e8f8e22da16ccddf5e14afa90711391357231e (Apache-2.0; upstream LICENSE:
 # https://github.com/homarr-labs/dashboard-icons/blob/03e8f8e22da16ccddf5e14afa90711391357231e/LICENSE).
 # Playwright artwork: https://playwright.dev/img/playwright-logo.svg (Microsoft,
@@ -82,7 +87,7 @@ _PROVIDERS = {
     "context7": ("Context7", "book"), "browserbase": ("Browserbase", "browser"),
     "filesystem": ("Filesystem", "folder"), "browser": ("Browser", "browser"),
 }
-_ARTWORK_NOTICE = '# Third-party artwork notices\n\nThe report includes a fixed, offline catalog of product marks to help identify declared AI clients and connectors. Marks remain the property of their respective owners. Use of a mark does not imply endorsement, a verified service identity, a live connection, or a security assessment of the provider.\n\nNo artwork is fetched when collecting data, generating a report, or opening it. Only icons selected by the renderer\'s fixed client/provider enum catalog are included. Unknown connectors and providers without a bundled mark use a generic interface icon and an adjacent text label.\n\n## Artwork sources and transformations\n\n- **Palma**: the Palma wordmark is supplied by Palma AI from its application asset library (`static/images/PalmaLogoLightMode.png`).\n- **Existing Palma client artwork**: Codex/OpenAI, Claude (Code and Desktop), Cursor, Gemini CLI, VS Code, and Windsurf were supplied by Palma from `apps/mcp-platform/static/images/mcp-hosts/`. These are existing product-identification assets; their original brand and trademark rights remain with their owners. This notice does not assert a new open-source license for the marks.\n- **Dashboard Icons**: GitHub, Slack, Notion, Linear, Atlassian, Figma, Google Drive, and Google Chrome use [Homarr Labs Dashboard Icons](https://github.com/homarr-labs/dashboard-icons/tree/03e8f8e22da16ccddf5e14afa90711391357231e), pinned to commit `03e8f8e22da16ccddf5e14afa90711391357231e`. Existing connector files were copied from Palma\'s vendored `static/brand-icons/` catalog at that pin. The Chrome asset came from the same pinned upstream. The upstream Apache License 2.0 is reproduced below, including its attribution notice.\n- **Playwright**: the Playwright mark is from [Microsoft\'s Playwright documentation artwork](https://playwright.dev/img/playwright-logo.svg). The [documentation repository license](https://github.com/microsoft/playwright.dev/blob/main/LICENSE) is Creative Commons Attribution 4.0 International, reproduced below. Retrieved 10 September 2026; the source digest is recorded below.\n- **Generic interface icons**: the shared-client, custom connector, filesystem, browser, and documentation glyphs are code-native interface symbols authored for this report. Browserbase and Context7 use these generic symbols with their names; the glyphs are not presented as their brand marks.\n\nDevelopment-time SVG normalization removes titles and metadata, converts CSS fills to SVG presentation attributes, and namespaces internal IDs for safe embedding. Original path geometry and colors are preserved. The renderer stores the normalized symbols directly; it does not parse or accept SVG content from a snapshot.\n\n## Original source checksums\n\nPaths in this table are relative to Palma\'s `apps/mcp-platform/static/` asset directory unless a public URL is shown. Checksums identify the original bytes before SVG normalization.\n\n| Catalog asset | Source | SHA-256 |\n| --- | --- | --- |\n| atlassian | `brand-icons/atlassian.svg` | `a8237d9afe82feb64291bdaad6d52174d1f693ea6d6900eaf78dad9c3a529a65` |\n| chrome | `https://raw.githubusercontent.com/homarr-labs/dashboard-icons/03e8f8e22da16ccddf5e14afa90711391357231e/svg/google-chrome.svg` | `4748547bb1d1cca359b67d3b164e57efb11eaeb41d2ac9cc3f97fccabfa05b0b` |\n| claude | `images/mcp-hosts/claude.svg` | `0010d8bd023d70c89bced1b9c26601ffeed0e5dbb312cd3d7d1a099b072317bd` |\n| codex | `images/mcp-hosts/codex.svg` | `4008e147d4715ea31a4281e746b65130edd886e5fd05b12021814cbc87e447d9` |\n| cursor | `images/mcp-hosts/cursor.svg` | `8235ce4a9d50961ebf8ed238841e0795a2a15ea65b7256c40a7d061742eb3d46` |\n| figma | `brand-icons/figma.svg` | `59f327ef3ae14b09c1c96ed5696f890c92efde2a5e6e52779e0515166385b6b9` |\n| gemini | `images/mcp-hosts/gemini.svg` | `cc4cfb30bd7ac48dc7ea4df873cfbc97c5f26ff97cac8920064b1b4f31afdaa1` |\n| github | `brand-icons/github.svg` | `cdfb82ff14c8c2484eacba9d211d86cd0c993c933855cad2b03633414fa10ddb` |\n| google-drive | `brand-icons/google-drive.svg` | `963477d7e4a0b0d8865dd7aec8e27d8fd9c3a4b4f2e5b81f9df8581f9f2eca11` |\n| linear | `brand-icons/linear.svg` | `586a989c79bcf2284193e3240f1d12cc5a2ad42fa00bd09c622dfbb95438bcd6` |\n| notion | `brand-icons/notion.svg` | `b98fea4bc3f3259c6907a40dae994c959c3240d7ee4b4afea144a555c638f6c2` |\n| playwright | `https://playwright.dev/img/playwright-logo.svg` | `6b0a4367bdeab10995bc239278f04c68c10e48adbec15e799e01909a0d66dcb9` |\n| slack | `brand-icons/slack.svg` | `62e556a75b94516fd8dcfa9c8ee4eae76268b4087ee927d91a5f2d3115d54118` |\n| vscode | `images/mcp-hosts/vscode.svg` | `27f78c66393a925b8702100d788a08427a971ac048c98843c448bf74a5f93b44` |\n| windsurf | `images/mcp-hosts/windsurf.svg` | `5870805d8313e7540b517bc9df7fc8a96bc16b8b7c07eeccb12920cddf818964` |\n\n## Dashboard Icons: Apache License 2.0\n\n```text\nApache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      "License" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      "Licensor" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      "Legal Entity" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      "control" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      "You" (or "Your") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      "Source" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      "Object" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      "Work" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      "Derivative Works" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      "Contribution" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, "submitted"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as "Not a Contribution."\n\n      "Contributor" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a "NOTICE" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an "AS IS" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability.\n\n   END OF TERMS AND CONDITIONS\n\n   APPENDIX: How to apply the Apache License to your work.\n\n      To apply the Apache License to your work, attach the following\n      boilerplate notice, with the fields enclosed by brackets "[]"\n      replaced with your own identifying information. (Don\'t include\n      the brackets!)  The text should be enclosed in the appropriate\n      comment syntax for the file format. We also recommend that a\n      file or class name and description of purpose be included on the\n      same "printed page" as the copyright notice for easier\n      identification within third-party archives.\n\n   Copyright (c) 2024 Bjorn Lammers, Meier Lukas, Thomas Camlong and Homarr Labs\n\n   Licensed under the Apache License, Version 2.0 (the "License");\n   you may not use this file except in compliance with the License.\n   You may obtain a copy of the License at\n\n       http://www.apache.org/licenses/LICENSE-2.0\n\n   Unless required by applicable law or agreed to in writing, software\n   distributed under the License is distributed on an "AS IS" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n   See the License for the specific language governing permissions and\n   limitations under the License.\n```\n\n## Playwright documentation: Creative Commons Attribution 4.0 International\n\n```text\nAttribution 4.0 International\n\n=======================================================================\n\nCreative Commons Corporation ("Creative Commons") is not a law firm and\ndoes not provide legal services or legal advice. Distribution of\nCreative Commons public licenses does not create a lawyer-client or\nother relationship. Creative Commons makes its licenses and related\ninformation available on an "as-is" basis. Creative Commons gives no\nwarranties regarding its licenses, any material licensed under their\nterms and conditions, or any related information. Creative Commons\ndisclaims all liability for damages resulting from their use to the\nfullest extent possible.\n\nUsing Creative Commons Public Licenses\n\nCreative Commons public licenses provide a standard set of terms and\nconditions that creators and other rights holders may use to share\noriginal works of authorship and other material subject to copyright\nand certain other rights specified in the public license below. The\nfollowing considerations are for informational purposes only, are not\nexhaustive, and do not form part of our licenses.\n\n     Considerations for licensors: Our public licenses are\n     intended for use by those authorized to give the public\n     permission to use material in ways otherwise restricted by\n     copyright and certain other rights. Our licenses are\n     irrevocable. Licensors should read and understand the terms\n     and conditions of the license they choose before applying it.\n     Licensors should also secure all rights necessary before\n     applying our licenses so that the public can reuse the\n     material as expected. Licensors should clearly mark any\n     material not subject to the license. This includes other CC-\n     licensed material, or material used under an exception or\n     limitation to copyright. More considerations for licensors:\n\twiki.creativecommons.org/Considerations_for_licensors\n\n     Considerations for the public: By using one of our public\n     licenses, a licensor grants the public permission to use the\n     licensed material under specified terms and conditions. If\n     the licensor\'s permission is not necessary for any reason--for\n     example, because of any applicable exception or limitation to\n     copyright--then that use is not regulated by the license. Our\n     licenses grant only permissions under copyright and certain\n     other rights that a licensor has authority to grant. Use of\n     the licensed material may still be restricted for other\n     reasons, including because others have copyright or other\n     rights in the material. A licensor may make special requests,\n     such as asking that all changes be marked or described.\n     Although not required by our licenses, you are encouraged to\n     respect those requests where reasonable. More_considerations\n     for the public: \n\twiki.creativecommons.org/Considerations_for_licensees\n\n=======================================================================\n\nCreative Commons Attribution 4.0 International Public License\n\nBy exercising the Licensed Rights (defined below), You accept and agree\nto be bound by the terms and conditions of this Creative Commons\nAttribution 4.0 International Public License ("Public License"). To the\nextent this Public License may be interpreted as a contract, You are\ngranted the Licensed Rights in consideration of Your acceptance of\nthese terms and conditions, and the Licensor grants You such rights in\nconsideration of benefits the Licensor receives from making the\nLicensed Material available under these terms and conditions.\n\n\nSection 1 -- Definitions.\n\n  a. Adapted Material means material subject to Copyright and Similar\n     Rights that is derived from or based upon the Licensed Material\n     and in which the Licensed Material is translated, altered,\n     arranged, transformed, or otherwise modified in a manner requiring\n     permission under the Copyright and Similar Rights held by the\n     Licensor. For purposes of this Public License, where the Licensed\n     Material is a musical work, performance, or sound recording,\n     Adapted Material is always produced where the Licensed Material is\n     synched in timed relation with a moving image.\n\n  b. Adapter\'s License means the license You apply to Your Copyright\n     and Similar Rights in Your contributions to Adapted Material in\n     accordance with the terms and conditions of this Public License.\n\n  c. Copyright and Similar Rights means copyright and/or similar rights\n     closely related to copyright including, without limitation,\n     performance, broadcast, sound recording, and Sui Generis Database\n     Rights, without regard to how the rights are labeled or\n     categorized. For purposes of this Public License, the rights\n     specified in Section 2(b)(1)-(2) are not Copyright and Similar\n     Rights.\n\n  d. Effective Technological Measures means those measures that, in the\n     absence of proper authority, may not be circumvented under laws\n     fulfilling obligations under Article 11 of the WIPO Copyright\n     Treaty adopted on December 20, 1996, and/or similar international\n     agreements.\n\n  e. Exceptions and Limitations means fair use, fair dealing, and/or\n     any other exception or limitation to Copyright and Similar Rights\n     that applies to Your use of the Licensed Material.\n\n  f. Licensed Material means the artistic or literary work, database,\n     or other material to which the Licensor applied this Public\n     License.\n\n  g. Licensed Rights means the rights granted to You subject to the\n     terms and conditions of this Public License, which are limited to\n     all Copyright and Similar Rights that apply to Your use of the\n     Licensed Material and that the Licensor has authority to license.\n\n  h. Licensor means the individual(s) or entity(ies) granting rights\n     under this Public License.\n\n  i. Share means to provide material to the public by any means or\n     process that requires permission under the Licensed Rights, such\n     as reproduction, public display, public performance, distribution,\n     dissemination, communication, or importation, and to make material\n     available to the public including in ways that members of the\n     public may access the material from a place and at a time\n     individually chosen by them.\n\n  j. Sui Generis Database Rights means rights other than copyright\n     resulting from Directive 96/9/EC of the European Parliament and of\n     the Council of 11 March 1996 on the legal protection of databases,\n     as amended and/or succeeded, as well as other essentially\n     equivalent rights anywhere in the world.\n\n  k. You means the individual or entity exercising the Licensed Rights\n     under this Public License. Your has a corresponding meaning.\n\n\nSection 2 -- Scope.\n\n  a. License grant.\n\n       1. Subject to the terms and conditions of this Public License,\n          the Licensor hereby grants You a worldwide, royalty-free,\n          non-sublicensable, non-exclusive, irrevocable license to\n          exercise the Licensed Rights in the Licensed Material to:\n\n            a. reproduce and Share the Licensed Material, in whole or\n               in part; and\n\n            b. produce, reproduce, and Share Adapted Material.\n\n       2. Exceptions and Limitations. For the avoidance of doubt, where\n          Exceptions and Limitations apply to Your use, this Public\n          License does not apply, and You do not need to comply with\n          its terms and conditions.\n\n       3. Term. The term of this Public License is specified in Section\n          6(a).\n\n       4. Media and formats; technical modifications allowed. The\n          Licensor authorizes You to exercise the Licensed Rights in\n          all media and formats whether now known or hereafter created,\n          and to make technical modifications necessary to do so. The\n          Licensor waives and/or agrees not to assert any right or\n          authority to forbid You from making technical modifications\n          necessary to exercise the Licensed Rights, including\n          technical modifications necessary to circumvent Effective\n          Technological Measures. For purposes of this Public License,\n          simply making modifications authorized by this Section 2(a)\n          (4) never produces Adapted Material.\n\n       5. Downstream recipients.\n\n            a. Offer from the Licensor -- Licensed Material. Every\n               recipient of the Licensed Material automatically\n               receives an offer from the Licensor to exercise the\n               Licensed Rights under the terms and conditions of this\n               Public License.\n\n            b. No downstream restrictions. You may not offer or impose\n               any additional or different terms or conditions on, or\n               apply any Effective Technological Measures to, the\n               Licensed Material if doing so restricts exercise of the\n               Licensed Rights by any recipient of the Licensed\n               Material.\n\n       6. No endorsement. Nothing in this Public License constitutes or\n          may be construed as permission to assert or imply that You\n          are, or that Your use of the Licensed Material is, connected\n          with, or sponsored, endorsed, or granted official status by,\n          the Licensor or others designated to receive attribution as\n          provided in Section 3(a)(1)(A)(i).\n\n  b. Other rights.\n\n       1. Moral rights, such as the right of integrity, are not\n          licensed under this Public License, nor are publicity,\n          privacy, and/or other similar personality rights; however, to\n          the extent possible, the Licensor waives and/or agrees not to\n          assert any such rights held by the Licensor to the limited\n          extent necessary to allow You to exercise the Licensed\n          Rights, but not otherwise.\n\n       2. Patent and trademark rights are not licensed under this\n          Public License.\n\n       3. To the extent possible, the Licensor waives any right to\n          collect royalties from You for the exercise of the Licensed\n          Rights, whether directly or through a collecting society\n          under any voluntary or waivable statutory or compulsory\n          licensing scheme. In all other cases the Licensor expressly\n          reserves any right to collect such royalties.\n\n\nSection 3 -- License Conditions.\n\nYour exercise of the Licensed Rights is expressly made subject to the\nfollowing conditions.\n\n  a. Attribution.\n\n       1. If You Share the Licensed Material (including in modified\n          form), You must:\n\n            a. retain the following if it is supplied by the Licensor\n               with the Licensed Material:\n\n                 i. identification of the creator(s) of the Licensed\n                    Material and any others designated to receive\n                    attribution, in any reasonable manner requested by\n                    the Licensor (including by pseudonym if\n                    designated);\n\n                ii. a copyright notice;\n\n               iii. a notice that refers to this Public License;\n\n                iv. a notice that refers to the disclaimer of\n                    warranties;\n\n                 v. a URI or hyperlink to the Licensed Material to the\n                    extent reasonably practicable;\n\n            b. indicate if You modified the Licensed Material and\n               retain an indication of any previous modifications; and\n\n            c. indicate the Licensed Material is licensed under this\n               Public License, and include the text of, or the URI or\n               hyperlink to, this Public License.\n\n       2. You may satisfy the conditions in Section 3(a)(1) in any\n          reasonable manner based on the medium, means, and context in\n          which You Share the Licensed Material. For example, it may be\n          reasonable to satisfy the conditions by providing a URI or\n          hyperlink to a resource that includes the required\n          information.\n\n       3. If requested by the Licensor, You must remove any of the\n          information required by Section 3(a)(1)(A) to the extent\n          reasonably practicable.\n\n       4. If You Share Adapted Material You produce, the Adapter\'s\n          License You apply must not prevent recipients of the Adapted\n          Material from complying with this Public License.\n\n\nSection 4 -- Sui Generis Database Rights.\n\nWhere the Licensed Rights include Sui Generis Database Rights that\napply to Your use of the Licensed Material:\n\n  a. for the avoidance of doubt, Section 2(a)(1) grants You the right\n     to extract, reuse, reproduce, and Share all or a substantial\n     portion of the contents of the database;\n\n  b. if You include all or a substantial portion of the database\n     contents in a database in which You have Sui Generis Database\n     Rights, then the database in which You have Sui Generis Database\n     Rights (but not its individual contents) is Adapted Material; and\n\n  c. You must comply with the conditions in Section 3(a) if You Share\n     all or a substantial portion of the contents of the database.\n\nFor the avoidance of doubt, this Section 4 supplements and does not\nreplace Your obligations under this Public License where the Licensed\nRights include other Copyright and Similar Rights.\n\n\nSection 5 -- Disclaimer of Warranties and Limitation of Liability.\n\n  a. UNLESS OTHERWISE SEPARATELY UNDERTAKEN BY THE LICENSOR, TO THE\n     EXTENT POSSIBLE, THE LICENSOR OFFERS THE LICENSED MATERIAL AS-IS\n     AND AS-AVAILABLE, AND MAKES NO REPRESENTATIONS OR WARRANTIES OF\n     ANY KIND CONCERNING THE LICENSED MATERIAL, WHETHER EXPRESS,\n     IMPLIED, STATUTORY, OR OTHER. THIS INCLUDES, WITHOUT LIMITATION,\n     WARRANTIES OF TITLE, MERCHANTABILITY, FITNESS FOR A PARTICULAR\n     PURPOSE, NON-INFRINGEMENT, ABSENCE OF LATENT OR OTHER DEFECTS,\n     ACCURACY, OR THE PRESENCE OR ABSENCE OF ERRORS, WHETHER OR NOT\n     KNOWN OR DISCOVERABLE. WHERE DISCLAIMERS OF WARRANTIES ARE NOT\n     ALLOWED IN FULL OR IN PART, THIS DISCLAIMER MAY NOT APPLY TO YOU.\n\n  b. TO THE EXTENT POSSIBLE, IN NO EVENT WILL THE LICENSOR BE LIABLE\n     TO YOU ON ANY LEGAL THEORY (INCLUDING, WITHOUT LIMITATION,\n     NEGLIGENCE) OR OTHERWISE FOR ANY DIRECT, SPECIAL, INDIRECT,\n     INCIDENTAL, CONSEQUENTIAL, PUNITIVE, EXEMPLARY, OR OTHER LOSSES,\n     COSTS, EXPENSES, OR DAMAGES ARISING OUT OF THIS PUBLIC LICENSE OR\n     USE OF THE LICENSED MATERIAL, EVEN IF THE LICENSOR HAS BEEN\n     ADVISED OF THE POSSIBILITY OF SUCH LOSSES, COSTS, EXPENSES, OR\n     DAMAGES. WHERE A LIMITATION OF LIABILITY IS NOT ALLOWED IN FULL OR\n     IN PART, THIS LIMITATION MAY NOT APPLY TO YOU.\n\n  c. The disclaimer of warranties and limitation of liability provided\n     above shall be interpreted in a manner that, to the extent\n     possible, most closely approximates an absolute disclaimer and\n     waiver of all liability.\n\n\nSection 6 -- Term and Termination.\n\n  a. This Public License applies for the term of the Copyright and\n     Similar Rights licensed here. However, if You fail to comply with\n     this Public License, then Your rights under this Public License\n     terminate automatically.\n\n  b. Where Your right to use the Licensed Material has terminated under\n     Section 6(a), it reinstates:\n\n       1. automatically as of the date the violation is cured, provided\n          it is cured within 30 days of Your discovery of the\n          violation; or\n\n       2. upon express reinstatement by the Licensor.\n\n     For the avoidance of doubt, this Section 6(b) does not affect any\n     right the Licensor may have to seek remedies for Your violations\n     of this Public License.\n\n  c. For the avoidance of doubt, the Licensor may also offer the\n     Licensed Material under separate terms or conditions or stop\n     distributing the Licensed Material at any time; however, doing so\n     will not terminate this Public License.\n\n  d. Sections 1, 5, 6, 7, and 8 survive termination of this Public\n     License.\n\n\nSection 7 -- Other Terms and Conditions.\n\n  a. The Licensor shall not be bound by any additional or different\n     terms or conditions communicated by You unless expressly agreed.\n\n  b. Any arrangements, understandings, or agreements regarding the\n     Licensed Material not stated herein are separate from and\n     independent of the terms and conditions of this Public License.\n\n\nSection 8 -- Interpretation.\n\n  a. For the avoidance of doubt, this Public License does not, and\n     shall not be interpreted to, reduce, limit, restrict, or impose\n     conditions on any use of the Licensed Material that could lawfully\n     be made without permission under this Public License.\n\n  b. To the extent possible, if any provision of this Public License is\n     deemed unenforceable, it shall be automatically reformed to the\n     minimum extent necessary to make it enforceable. If the provision\n     cannot be reformed, it shall be severed from this Public License\n     without affecting the enforceability of the remaining terms and\n     conditions.\n\n  c. No term or condition of this Public License will be waived and no\n     failure to comply consented to unless expressly agreed to by the\n     Licensor.\n\n  d. Nothing in this Public License constitutes or may be interpreted\n     as a limitation upon, or waiver of, any privileges and immunities\n     that apply to the Licensor or You, including from the legal\n     processes of any jurisdiction or authority.\n\n\n=======================================================================\n\nCreative Commons is not a party to its public\nlicenses. Notwithstanding, Creative Commons may elect to apply one of\nits public licenses to material it publishes and in those instances\nwill be considered the “Licensor.” The text of the Creative Commons\npublic licenses is dedicated to the public domain under the CC0 Public\nDomain Dedication. Except for the limited purpose of indicating that\nmaterial is shared under a Creative Commons public license or as\notherwise permitted by the Creative Commons policies published at\ncreativecommons.org/policies, Creative Commons does not authorize the\nuse of the trademark "Creative Commons" or any other trademark or logo\nof Creative Commons without its prior written consent including,\nwithout limitation, in connection with any unauthorized modifications\nto any of its public licenses or any other arrangements,\nunderstandings, or agreements concerning use of licensed material. For\nthe avoidance of doubt, this paragraph does not form part of the\npublic licenses.\n\nCreative Commons may be contacted at creativecommons.org.\n```\n'
+_ARTWORK_NOTICE = '# Third-party artwork notices\n\nThe report includes a fixed, offline catalog of product marks to help identify declared AI clients and connectors. Marks remain the property of their respective owners. Use of a mark does not imply endorsement, a verified service identity, a live connection, or a security assessment of the provider.\n\nNo artwork is fetched when collecting data, generating a report, or opening it. Only icons selected by the renderer\'s fixed client/provider enum catalog are included. Unknown connectors and providers without a bundled mark use a generic interface icon and an adjacent text label.\n\n## Artwork sources and transformations\n\n- **Palma**: the Palma wordmark is supplied by Palma AI from its application asset library (`static/images/PalmaLogoLightMode.png`).\n- **Existing Palma client artwork**: Codex/OpenAI, Claude (Code and Desktop), Cursor, Gemini CLI, VS Code, and Windsurf were supplied by Palma from its application asset library (`images/mcp-hosts/`). These are existing product-identification assets; their original brand and trademark rights remain with their owners. This notice does not assert a new open-source license for the marks.\n- **Dashboard Icons**: GitHub, Slack, Notion, Linear, Atlassian, Figma, Google Drive, and Google Chrome use [Homarr Labs Dashboard Icons](https://github.com/homarr-labs/dashboard-icons/tree/03e8f8e22da16ccddf5e14afa90711391357231e), pinned to commit `03e8f8e22da16ccddf5e14afa90711391357231e`. Existing connector files were copied from Palma\'s vendored `static/brand-icons/` catalog at that pin. The Chrome asset came from the same pinned upstream. The upstream Apache License 2.0 is reproduced below, including its attribution notice.\n- **Playwright**: the Playwright mark is from [Microsoft\'s Playwright documentation artwork](https://playwright.dev/img/playwright-logo.svg). The [documentation repository license](https://github.com/microsoft/playwright.dev/blob/main/LICENSE) is Creative Commons Attribution 4.0 International, reproduced below. Retrieved 10 September 2026; the source digest is recorded below.\n- **Generic interface icons**: the shared-client, custom connector, filesystem, browser, and documentation glyphs are code-native interface symbols authored for this report. Browserbase and Context7 use these generic symbols with their names; the glyphs are not presented as their brand marks.\n\nDevelopment-time SVG normalization removes titles and metadata, converts CSS fills to SVG presentation attributes, and namespaces internal IDs for safe embedding. Original path geometry and colors are preserved. The renderer stores the normalized symbols directly; it does not parse or accept SVG content from a snapshot.\n\n## Original source checksums\n\nPaths in this table are relative to Palma\'s application asset directory unless a public URL is shown. Checksums identify the original bytes before SVG normalization.\n\n| Catalog asset | Source | SHA-256 |\n| --- | --- | --- |\n| atlassian | `brand-icons/atlassian.svg` | `a8237d9afe82feb64291bdaad6d52174d1f693ea6d6900eaf78dad9c3a529a65` |\n| chrome | `https://raw.githubusercontent.com/homarr-labs/dashboard-icons/03e8f8e22da16ccddf5e14afa90711391357231e/svg/google-chrome.svg` | `4748547bb1d1cca359b67d3b164e57efb11eaeb41d2ac9cc3f97fccabfa05b0b` |\n| claude | `images/mcp-hosts/claude.svg` | `0010d8bd023d70c89bced1b9c26601ffeed0e5dbb312cd3d7d1a099b072317bd` |\n| codex | `images/mcp-hosts/codex.svg` | `4008e147d4715ea31a4281e746b65130edd886e5fd05b12021814cbc87e447d9` |\n| cursor | `images/mcp-hosts/cursor.svg` | `8235ce4a9d50961ebf8ed238841e0795a2a15ea65b7256c40a7d061742eb3d46` |\n| figma | `brand-icons/figma.svg` | `59f327ef3ae14b09c1c96ed5696f890c92efde2a5e6e52779e0515166385b6b9` |\n| gemini | `images/mcp-hosts/gemini.svg` | `cc4cfb30bd7ac48dc7ea4df873cfbc97c5f26ff97cac8920064b1b4f31afdaa1` |\n| github | `brand-icons/github.svg` | `cdfb82ff14c8c2484eacba9d211d86cd0c993c933855cad2b03633414fa10ddb` |\n| google-drive | `brand-icons/google-drive.svg` | `963477d7e4a0b0d8865dd7aec8e27d8fd9c3a4b4f2e5b81f9df8581f9f2eca11` |\n| linear | `brand-icons/linear.svg` | `586a989c79bcf2284193e3240f1d12cc5a2ad42fa00bd09c622dfbb95438bcd6` |\n| notion | `brand-icons/notion.svg` | `b98fea4bc3f3259c6907a40dae994c959c3240d7ee4b4afea144a555c638f6c2` |\n| playwright | `https://playwright.dev/img/playwright-logo.svg` | `6b0a4367bdeab10995bc239278f04c68c10e48adbec15e799e01909a0d66dcb9` |\n| slack | `brand-icons/slack.svg` | `62e556a75b94516fd8dcfa9c8ee4eae76268b4087ee927d91a5f2d3115d54118` |\n| vscode | `images/mcp-hosts/vscode.svg` | `27f78c66393a925b8702100d788a08427a971ac048c98843c448bf74a5f93b44` |\n| windsurf | `images/mcp-hosts/windsurf.svg` | `5870805d8313e7540b517bc9df7fc8a96bc16b8b7c07eeccb12920cddf818964` |\n\n## Dashboard Icons: Apache License 2.0\n\n```text\nApache License\n                           Version 2.0, January 2004\n                        http://www.apache.org/licenses/\n\n   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n\n   1. Definitions.\n\n      "License" shall mean the terms and conditions for use, reproduction,\n      and distribution as defined by Sections 1 through 9 of this document.\n\n      "Licensor" shall mean the copyright owner or entity authorized by\n      the copyright owner that is granting the License.\n\n      "Legal Entity" shall mean the union of the acting entity and all\n      other entities that control, are controlled by, or are under common\n      control with that entity. For the purposes of this definition,\n      "control" means (i) the power, direct or indirect, to cause the\n      direction or management of such entity, whether by contract or\n      otherwise, or (ii) ownership of fifty percent (50%) or more of the\n      outstanding shares, or (iii) beneficial ownership of such entity.\n\n      "You" (or "Your") shall mean an individual or Legal Entity\n      exercising permissions granted by this License.\n\n      "Source" form shall mean the preferred form for making modifications,\n      including but not limited to software source code, documentation\n      source, and configuration files.\n\n      "Object" form shall mean any form resulting from mechanical\n      transformation or translation of a Source form, including but\n      not limited to compiled object code, generated documentation,\n      and conversions to other media types.\n\n      "Work" shall mean the work of authorship, whether in Source or\n      Object form, made available under the License, as indicated by a\n      copyright notice that is included in or attached to the work\n      (an example is provided in the Appendix below).\n\n      "Derivative Works" shall mean any work, whether in Source or Object\n      form, that is based on (or derived from) the Work and for which the\n      editorial revisions, annotations, elaborations, or other modifications\n      represent, as a whole, an original work of authorship. For the purposes\n      of this License, Derivative Works shall not include works that remain\n      separable from, or merely link (or bind by name) to the interfaces of,\n      the Work and Derivative Works thereof.\n\n      "Contribution" shall mean any work of authorship, including\n      the original version of the Work and any modifications or additions\n      to that Work or Derivative Works thereof, that is intentionally\n      submitted to Licensor for inclusion in the Work by the copyright owner\n      or by an individual or Legal Entity authorized to submit on behalf of\n      the copyright owner. For the purposes of this definition, "submitted"\n      means any form of electronic, verbal, or written communication sent\n      to the Licensor or its representatives, including but not limited to\n      communication on electronic mailing lists, source code control systems,\n      and issue tracking systems that are managed by, or on behalf of, the\n      Licensor for the purpose of discussing and improving the Work, but\n      excluding communication that is conspicuously marked or otherwise\n      designated in writing by the copyright owner as "Not a Contribution."\n\n      "Contributor" shall mean Licensor and any individual or Legal Entity\n      on behalf of whom a Contribution has been received by Licensor and\n      subsequently incorporated within the Work.\n\n   2. Grant of Copyright License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      copyright license to reproduce, prepare Derivative Works of,\n      publicly display, publicly perform, sublicense, and distribute the\n      Work and such Derivative Works in Source or Object form.\n\n   3. Grant of Patent License. Subject to the terms and conditions of\n      this License, each Contributor hereby grants to You a perpetual,\n      worldwide, non-exclusive, no-charge, royalty-free, irrevocable\n      (except as stated in this section) patent license to make, have made,\n      use, offer to sell, sell, import, and otherwise transfer the Work,\n      where such license applies only to those patent claims licensable\n      by such Contributor that are necessarily infringed by their\n      Contribution(s) alone or by combination of their Contribution(s)\n      with the Work to which such Contribution(s) was submitted. If You\n      institute patent litigation against any entity (including a\n      cross-claim or counterclaim in a lawsuit) alleging that the Work\n      or a Contribution incorporated within the Work constitutes direct\n      or contributory patent infringement, then any patent licenses\n      granted to You under this License for that Work shall terminate\n      as of the date such litigation is filed.\n\n   4. Redistribution. You may reproduce and distribute copies of the\n      Work or Derivative Works thereof in any medium, with or without\n      modifications, and in Source or Object form, provided that You\n      meet the following conditions:\n\n      (a) You must give any other recipients of the Work or\n          Derivative Works a copy of this License; and\n\n      (b) You must cause any modified files to carry prominent notices\n          stating that You changed the files; and\n\n      (c) You must retain, in the Source form of any Derivative Works\n          that You distribute, all copyright, patent, trademark, and\n          attribution notices from the Source form of the Work,\n          excluding those notices that do not pertain to any part of\n          the Derivative Works; and\n\n      (d) If the Work includes a "NOTICE" text file as part of its\n          distribution, then any Derivative Works that You distribute must\n          include a readable copy of the attribution notices contained\n          within such NOTICE file, excluding those notices that do not\n          pertain to any part of the Derivative Works, in at least one\n          of the following places: within a NOTICE text file distributed\n          as part of the Derivative Works; within the Source form or\n          documentation, if provided along with the Derivative Works; or,\n          within a display generated by the Derivative Works, if and\n          wherever such third-party notices normally appear. The contents\n          of the NOTICE file are for informational purposes only and\n          do not modify the License. You may add Your own attribution\n          notices within Derivative Works that You distribute, alongside\n          or as an addendum to the NOTICE text from the Work, provided\n          that such additional attribution notices cannot be construed\n          as modifying the License.\n\n      You may add Your own copyright statement to Your modifications and\n      may provide additional or different license terms and conditions\n      for use, reproduction, or distribution of Your modifications, or\n      for any such Derivative Works as a whole, provided Your use,\n      reproduction, and distribution of the Work otherwise complies with\n      the conditions stated in this License.\n\n   5. Submission of Contributions. Unless You explicitly state otherwise,\n      any Contribution intentionally submitted for inclusion in the Work\n      by You to the Licensor shall be under the terms and conditions of\n      this License, without any additional terms or conditions.\n      Notwithstanding the above, nothing herein shall supersede or modify\n      the terms of any separate license agreement you may have executed\n      with Licensor regarding such Contributions.\n\n   6. Trademarks. This License does not grant permission to use the trade\n      names, trademarks, service marks, or product names of the Licensor,\n      except as required for reasonable and customary use in describing the\n      origin of the Work and reproducing the content of the NOTICE file.\n\n   7. Disclaimer of Warranty. Unless required by applicable law or\n      agreed to in writing, Licensor provides the Work (and each\n      Contributor provides its Contributions) on an "AS IS" BASIS,\n      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or\n      implied, including, without limitation, any warranties or conditions\n      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A\n      PARTICULAR PURPOSE. You are solely responsible for determining the\n      appropriateness of using or redistributing the Work and assume any\n      risks associated with Your exercise of permissions under this License.\n\n   8. Limitation of Liability. In no event and under no legal theory,\n      whether in tort (including negligence), contract, or otherwise,\n      unless required by applicable law (such as deliberate and grossly\n      negligent acts) or agreed to in writing, shall any Contributor be\n      liable to You for damages, including any direct, indirect, special,\n      incidental, or consequential damages of any character arising as a\n      result of this License or out of the use or inability to use the\n      Work (including but not limited to damages for loss of goodwill,\n      work stoppage, computer failure or malfunction, or any and all\n      other commercial damages or losses), even if such Contributor\n      has been advised of the possibility of such damages.\n\n   9. Accepting Warranty or Additional Liability. While redistributing\n      the Work or Derivative Works thereof, You may choose to offer,\n      and charge a fee for, acceptance of support, warranty, indemnity,\n      or other liability obligations and/or rights consistent with this\n      License. However, in accepting such obligations, You may act only\n      on Your own behalf and on Your sole responsibility, not on behalf\n      of any other Contributor, and only if You agree to indemnify,\n      defend, and hold each Contributor harmless for any liability\n      incurred by, or claims asserted against, such Contributor by reason\n      of your accepting any such warranty or additional liability.\n\n   END OF TERMS AND CONDITIONS\n\n   APPENDIX: How to apply the Apache License to your work.\n\n      To apply the Apache License to your work, attach the following\n      boilerplate notice, with the fields enclosed by brackets "[]"\n      replaced with your own identifying information. (Don\'t include\n      the brackets!)  The text should be enclosed in the appropriate\n      comment syntax for the file format. We also recommend that a\n      file or class name and description of purpose be included on the\n      same "printed page" as the copyright notice for easier\n      identification within third-party archives.\n\n   Copyright (c) 2024 Bjorn Lammers, Meier Lukas, Thomas Camlong and Homarr Labs\n\n   Licensed under the Apache License, Version 2.0 (the "License");\n   you may not use this file except in compliance with the License.\n   You may obtain a copy of the License at\n\n       http://www.apache.org/licenses/LICENSE-2.0\n\n   Unless required by applicable law or agreed to in writing, software\n   distributed under the License is distributed on an "AS IS" BASIS,\n   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n   See the License for the specific language governing permissions and\n   limitations under the License.\n```\n\n## Playwright documentation: Creative Commons Attribution 4.0 International\n\n```text\nAttribution 4.0 International\n\n=======================================================================\n\nCreative Commons Corporation ("Creative Commons") is not a law firm and\ndoes not provide legal services or legal advice. Distribution of\nCreative Commons public licenses does not create a lawyer-client or\nother relationship. Creative Commons makes its licenses and related\ninformation available on an "as-is" basis. Creative Commons gives no\nwarranties regarding its licenses, any material licensed under their\nterms and conditions, or any related information. Creative Commons\ndisclaims all liability for damages resulting from their use to the\nfullest extent possible.\n\nUsing Creative Commons Public Licenses\n\nCreative Commons public licenses provide a standard set of terms and\nconditions that creators and other rights holders may use to share\noriginal works of authorship and other material subject to copyright\nand certain other rights specified in the public license below. The\nfollowing considerations are for informational purposes only, are not\nexhaustive, and do not form part of our licenses.\n\n     Considerations for licensors: Our public licenses are\n     intended for use by those authorized to give the public\n     permission to use material in ways otherwise restricted by\n     copyright and certain other rights. Our licenses are\n     irrevocable. Licensors should read and understand the terms\n     and conditions of the license they choose before applying it.\n     Licensors should also secure all rights necessary before\n     applying our licenses so that the public can reuse the\n     material as expected. Licensors should clearly mark any\n     material not subject to the license. This includes other CC-\n     licensed material, or material used under an exception or\n     limitation to copyright. More considerations for licensors:\n\twiki.creativecommons.org/Considerations_for_licensors\n\n     Considerations for the public: By using one of our public\n     licenses, a licensor grants the public permission to use the\n     licensed material under specified terms and conditions. If\n     the licensor\'s permission is not necessary for any reason--for\n     example, because of any applicable exception or limitation to\n     copyright--then that use is not regulated by the license. Our\n     licenses grant only permissions under copyright and certain\n     other rights that a licensor has authority to grant. Use of\n     the licensed material may still be restricted for other\n     reasons, including because others have copyright or other\n     rights in the material. A licensor may make special requests,\n     such as asking that all changes be marked or described.\n     Although not required by our licenses, you are encouraged to\n     respect those requests where reasonable. More_considerations\n     for the public: \n\twiki.creativecommons.org/Considerations_for_licensees\n\n=======================================================================\n\nCreative Commons Attribution 4.0 International Public License\n\nBy exercising the Licensed Rights (defined below), You accept and agree\nto be bound by the terms and conditions of this Creative Commons\nAttribution 4.0 International Public License ("Public License"). To the\nextent this Public License may be interpreted as a contract, You are\ngranted the Licensed Rights in consideration of Your acceptance of\nthese terms and conditions, and the Licensor grants You such rights in\nconsideration of benefits the Licensor receives from making the\nLicensed Material available under these terms and conditions.\n\n\nSection 1 -- Definitions.\n\n  a. Adapted Material means material subject to Copyright and Similar\n     Rights that is derived from or based upon the Licensed Material\n     and in which the Licensed Material is translated, altered,\n     arranged, transformed, or otherwise modified in a manner requiring\n     permission under the Copyright and Similar Rights held by the\n     Licensor. For purposes of this Public License, where the Licensed\n     Material is a musical work, performance, or sound recording,\n     Adapted Material is always produced where the Licensed Material is\n     synched in timed relation with a moving image.\n\n  b. Adapter\'s License means the license You apply to Your Copyright\n     and Similar Rights in Your contributions to Adapted Material in\n     accordance with the terms and conditions of this Public License.\n\n  c. Copyright and Similar Rights means copyright and/or similar rights\n     closely related to copyright including, without limitation,\n     performance, broadcast, sound recording, and Sui Generis Database\n     Rights, without regard to how the rights are labeled or\n     categorized. For purposes of this Public License, the rights\n     specified in Section 2(b)(1)-(2) are not Copyright and Similar\n     Rights.\n\n  d. Effective Technological Measures means those measures that, in the\n     absence of proper authority, may not be circumvented under laws\n     fulfilling obligations under Article 11 of the WIPO Copyright\n     Treaty adopted on December 20, 1996, and/or similar international\n     agreements.\n\n  e. Exceptions and Limitations means fair use, fair dealing, and/or\n     any other exception or limitation to Copyright and Similar Rights\n     that applies to Your use of the Licensed Material.\n\n  f. Licensed Material means the artistic or literary work, database,\n     or other material to which the Licensor applied this Public\n     License.\n\n  g. Licensed Rights means the rights granted to You subject to the\n     terms and conditions of this Public License, which are limited to\n     all Copyright and Similar Rights that apply to Your use of the\n     Licensed Material and that the Licensor has authority to license.\n\n  h. Licensor means the individual(s) or entity(ies) granting rights\n     under this Public License.\n\n  i. Share means to provide material to the public by any means or\n     process that requires permission under the Licensed Rights, such\n     as reproduction, public display, public performance, distribution,\n     dissemination, communication, or importation, and to make material\n     available to the public including in ways that members of the\n     public may access the material from a place and at a time\n     individually chosen by them.\n\n  j. Sui Generis Database Rights means rights other than copyright\n     resulting from Directive 96/9/EC of the European Parliament and of\n     the Council of 11 March 1996 on the legal protection of databases,\n     as amended and/or succeeded, as well as other essentially\n     equivalent rights anywhere in the world.\n\n  k. You means the individual or entity exercising the Licensed Rights\n     under this Public License. Your has a corresponding meaning.\n\n\nSection 2 -- Scope.\n\n  a. License grant.\n\n       1. Subject to the terms and conditions of this Public License,\n          the Licensor hereby grants You a worldwide, royalty-free,\n          non-sublicensable, non-exclusive, irrevocable license to\n          exercise the Licensed Rights in the Licensed Material to:\n\n            a. reproduce and Share the Licensed Material, in whole or\n               in part; and\n\n            b. produce, reproduce, and Share Adapted Material.\n\n       2. Exceptions and Limitations. For the avoidance of doubt, where\n          Exceptions and Limitations apply to Your use, this Public\n          License does not apply, and You do not need to comply with\n          its terms and conditions.\n\n       3. Term. The term of this Public License is specified in Section\n          6(a).\n\n       4. Media and formats; technical modifications allowed. The\n          Licensor authorizes You to exercise the Licensed Rights in\n          all media and formats whether now known or hereafter created,\n          and to make technical modifications necessary to do so. The\n          Licensor waives and/or agrees not to assert any right or\n          authority to forbid You from making technical modifications\n          necessary to exercise the Licensed Rights, including\n          technical modifications necessary to circumvent Effective\n          Technological Measures. For purposes of this Public License,\n          simply making modifications authorized by this Section 2(a)\n          (4) never produces Adapted Material.\n\n       5. Downstream recipients.\n\n            a. Offer from the Licensor -- Licensed Material. Every\n               recipient of the Licensed Material automatically\n               receives an offer from the Licensor to exercise the\n               Licensed Rights under the terms and conditions of this\n               Public License.\n\n            b. No downstream restrictions. You may not offer or impose\n               any additional or different terms or conditions on, or\n               apply any Effective Technological Measures to, the\n               Licensed Material if doing so restricts exercise of the\n               Licensed Rights by any recipient of the Licensed\n               Material.\n\n       6. No endorsement. Nothing in this Public License constitutes or\n          may be construed as permission to assert or imply that You\n          are, or that Your use of the Licensed Material is, connected\n          with, or sponsored, endorsed, or granted official status by,\n          the Licensor or others designated to receive attribution as\n          provided in Section 3(a)(1)(A)(i).\n\n  b. Other rights.\n\n       1. Moral rights, such as the right of integrity, are not\n          licensed under this Public License, nor are publicity,\n          privacy, and/or other similar personality rights; however, to\n          the extent possible, the Licensor waives and/or agrees not to\n          assert any such rights held by the Licensor to the limited\n          extent necessary to allow You to exercise the Licensed\n          Rights, but not otherwise.\n\n       2. Patent and trademark rights are not licensed under this\n          Public License.\n\n       3. To the extent possible, the Licensor waives any right to\n          collect royalties from You for the exercise of the Licensed\n          Rights, whether directly or through a collecting society\n          under any voluntary or waivable statutory or compulsory\n          licensing scheme. In all other cases the Licensor expressly\n          reserves any right to collect such royalties.\n\n\nSection 3 -- License Conditions.\n\nYour exercise of the Licensed Rights is expressly made subject to the\nfollowing conditions.\n\n  a. Attribution.\n\n       1. If You Share the Licensed Material (including in modified\n          form), You must:\n\n            a. retain the following if it is supplied by the Licensor\n               with the Licensed Material:\n\n                 i. identification of the creator(s) of the Licensed\n                    Material and any others designated to receive\n                    attribution, in any reasonable manner requested by\n                    the Licensor (including by pseudonym if\n                    designated);\n\n                ii. a copyright notice;\n\n               iii. a notice that refers to this Public License;\n\n                iv. a notice that refers to the disclaimer of\n                    warranties;\n\n                 v. a URI or hyperlink to the Licensed Material to the\n                    extent reasonably practicable;\n\n            b. indicate if You modified the Licensed Material and\n               retain an indication of any previous modifications; and\n\n            c. indicate the Licensed Material is licensed under this\n               Public License, and include the text of, or the URI or\n               hyperlink to, this Public License.\n\n       2. You may satisfy the conditions in Section 3(a)(1) in any\n          reasonable manner based on the medium, means, and context in\n          which You Share the Licensed Material. For example, it may be\n          reasonable to satisfy the conditions by providing a URI or\n          hyperlink to a resource that includes the required\n          information.\n\n       3. If requested by the Licensor, You must remove any of the\n          information required by Section 3(a)(1)(A) to the extent\n          reasonably practicable.\n\n       4. If You Share Adapted Material You produce, the Adapter\'s\n          License You apply must not prevent recipients of the Adapted\n          Material from complying with this Public License.\n\n\nSection 4 -- Sui Generis Database Rights.\n\nWhere the Licensed Rights include Sui Generis Database Rights that\napply to Your use of the Licensed Material:\n\n  a. for the avoidance of doubt, Section 2(a)(1) grants You the right\n     to extract, reuse, reproduce, and Share all or a substantial\n     portion of the contents of the database;\n\n  b. if You include all or a substantial portion of the database\n     contents in a database in which You have Sui Generis Database\n     Rights, then the database in which You have Sui Generis Database\n     Rights (but not its individual contents) is Adapted Material; and\n\n  c. You must comply with the conditions in Section 3(a) if You Share\n     all or a substantial portion of the contents of the database.\n\nFor the avoidance of doubt, this Section 4 supplements and does not\nreplace Your obligations under this Public License where the Licensed\nRights include other Copyright and Similar Rights.\n\n\nSection 5 -- Disclaimer of Warranties and Limitation of Liability.\n\n  a. UNLESS OTHERWISE SEPARATELY UNDERTAKEN BY THE LICENSOR, TO THE\n     EXTENT POSSIBLE, THE LICENSOR OFFERS THE LICENSED MATERIAL AS-IS\n     AND AS-AVAILABLE, AND MAKES NO REPRESENTATIONS OR WARRANTIES OF\n     ANY KIND CONCERNING THE LICENSED MATERIAL, WHETHER EXPRESS,\n     IMPLIED, STATUTORY, OR OTHER. THIS INCLUDES, WITHOUT LIMITATION,\n     WARRANTIES OF TITLE, MERCHANTABILITY, FITNESS FOR A PARTICULAR\n     PURPOSE, NON-INFRINGEMENT, ABSENCE OF LATENT OR OTHER DEFECTS,\n     ACCURACY, OR THE PRESENCE OR ABSENCE OF ERRORS, WHETHER OR NOT\n     KNOWN OR DISCOVERABLE. WHERE DISCLAIMERS OF WARRANTIES ARE NOT\n     ALLOWED IN FULL OR IN PART, THIS DISCLAIMER MAY NOT APPLY TO YOU.\n\n  b. TO THE EXTENT POSSIBLE, IN NO EVENT WILL THE LICENSOR BE LIABLE\n     TO YOU ON ANY LEGAL THEORY (INCLUDING, WITHOUT LIMITATION,\n     NEGLIGENCE) OR OTHERWISE FOR ANY DIRECT, SPECIAL, INDIRECT,\n     INCIDENTAL, CONSEQUENTIAL, PUNITIVE, EXEMPLARY, OR OTHER LOSSES,\n     COSTS, EXPENSES, OR DAMAGES ARISING OUT OF THIS PUBLIC LICENSE OR\n     USE OF THE LICENSED MATERIAL, EVEN IF THE LICENSOR HAS BEEN\n     ADVISED OF THE POSSIBILITY OF SUCH LOSSES, COSTS, EXPENSES, OR\n     DAMAGES. WHERE A LIMITATION OF LIABILITY IS NOT ALLOWED IN FULL OR\n     IN PART, THIS LIMITATION MAY NOT APPLY TO YOU.\n\n  c. The disclaimer of warranties and limitation of liability provided\n     above shall be interpreted in a manner that, to the extent\n     possible, most closely approximates an absolute disclaimer and\n     waiver of all liability.\n\n\nSection 6 -- Term and Termination.\n\n  a. This Public License applies for the term of the Copyright and\n     Similar Rights licensed here. However, if You fail to comply with\n     this Public License, then Your rights under this Public License\n     terminate automatically.\n\n  b. Where Your right to use the Licensed Material has terminated under\n     Section 6(a), it reinstates:\n\n       1. automatically as of the date the violation is cured, provided\n          it is cured within 30 days of Your discovery of the\n          violation; or\n\n       2. upon express reinstatement by the Licensor.\n\n     For the avoidance of doubt, this Section 6(b) does not affect any\n     right the Licensor may have to seek remedies for Your violations\n     of this Public License.\n\n  c. For the avoidance of doubt, the Licensor may also offer the\n     Licensed Material under separate terms or conditions or stop\n     distributing the Licensed Material at any time; however, doing so\n     will not terminate this Public License.\n\n  d. Sections 1, 5, 6, 7, and 8 survive termination of this Public\n     License.\n\n\nSection 7 -- Other Terms and Conditions.\n\n  a. The Licensor shall not be bound by any additional or different\n     terms or conditions communicated by You unless expressly agreed.\n\n  b. Any arrangements, understandings, or agreements regarding the\n     Licensed Material not stated herein are separate from and\n     independent of the terms and conditions of this Public License.\n\n\nSection 8 -- Interpretation.\n\n  a. For the avoidance of doubt, this Public License does not, and\n     shall not be interpreted to, reduce, limit, restrict, or impose\n     conditions on any use of the Licensed Material that could lawfully\n     be made without permission under this Public License.\n\n  b. To the extent possible, if any provision of this Public License is\n     deemed unenforceable, it shall be automatically reformed to the\n     minimum extent necessary to make it enforceable. If the provision\n     cannot be reformed, it shall be severed from this Public License\n     without affecting the enforceability of the remaining terms and\n     conditions.\n\n  c. No term or condition of this Public License will be waived and no\n     failure to comply consented to unless expressly agreed to by the\n     Licensor.\n\n  d. Nothing in this Public License constitutes or may be interpreted\n     as a limitation upon, or waiver of, any privileges and immunities\n     that apply to the Licensor or You, including from the legal\n     processes of any jurisdiction or authority.\n\n\n=======================================================================\n\nCreative Commons is not a party to its public\nlicenses. Notwithstanding, Creative Commons may elect to apply one of\nits public licenses to material it publishes and in those instances\nwill be considered the “Licensor.” The text of the Creative Commons\npublic licenses is dedicated to the public domain under the CC0 Public\nDomain Dedication. Except for the limited purpose of indicating that\nmaterial is shared under a Creative Commons public license or as\notherwise permitted by the Creative Commons policies published at\ncreativecommons.org/policies, Creative Commons does not authorize the\nuse of the trademark "Creative Commons" or any other trademark or logo\nof Creative Commons without its prior written consent including,\nwithout limitation, in connection with any unauthorized modifications\nto any of its public licenses or any other arrangements,\nunderstandings, or agreements concerning use of licensed material. For\nthe avoidance of doubt, this paragraph does not form part of the\npublic licenses.\n\nCreative Commons may be contacted at creativecommons.org.\n```\n'
 
 
 _BRAND_ASSETS.update(EXTRA_BRAND_ASSETS)
@@ -100,8 +105,13 @@ def _text(value: object) -> str:
     return str(value)
 
 
+# Documentation links come only from the bundled rules, never from snapshot text.
+_KNOWN_REFERENCES = frozenset(url for urls in PUBLIC_REFERENCES.values() for url in urls)
+
+
 def _e(value: object) -> str:
-    return html.escape(_text(value), quote=True)
+    # Hidden characters in scanned names could reorder text or carry unseen instructions.
+    return html.escape(visible(_text(value)), quote=True)
 
 
 def _records(value: object) -> list[dict]:
@@ -218,15 +228,331 @@ def _brand_sprite(observations: list[dict]) -> str:
     return f'<svg class="brand-sprite" width="0" height="0" aria-hidden="true" focusable="false"><defs>{symbols}</defs></svg>' if symbols else ""
 
 
+_KIND_LABELS = {"client": "AI client", "mcp": "Connector", "skill": "Skill", "plugin": "Plugin",
+                "agent": "Agent", "setting": "Setting", "hook": "Hook"}
+_KIND_PLURALS = {"mcp": ("connector", "connectors"), "skill": ("skill", "skills"), "plugin": ("plugin", "plugins"),
+                 "agent": ("agent", "agents"), "hook": ("hook", "hooks"), "setting": ("setting", "settings")}
+_KIND_ORDER = ("mcp", "skill", "plugin", "agent", "hook", "setting")
+_EVIDENCE_VISIBLE = 20
+_EVIDENCE_LIMIT = 200
+_LOCATIONS_LIMIT = 100
+# Folders and files that name an AI configuration location. The shareable report keeps the
+# last such segment and the file name, and drops every folder around them.
+_SHARE_MARKERS = frozenset({".claude", ".claude.json", ".mcp.json", ".cursor", ".vscode", ".gemini", ".codex",
+                            ".agents", ".github", ".opencode", "opencode.json", "opencode.jsonc", ".continue", ".kiro",
+                            ".windsurf", ".roo", ".cline", ".codeium", ".aider.conf.yml", ".copilot", ".openclaw",
+                            ".lmstudio", ".local", ".config", ".mozilla", "Library", "AppData", "Applications",
+                            "etc", "Program Files", "ProgramData"})
+# Scanner-generated labels rather than filesystem paths; they name no folder of the user's.
+_PSEUDO_LOCATIONS = ("system:", "machine:", "installation:", "managed:", "managed-cache:", "session:", "user:",
+                     "override:", "collection:", "scope:")
+_PATH_LIKE = re.compile(r"[\\/]|://")
+# Names that are network addresses or email addresses identify organisations and people.
+_NETWORK_NAME = re.compile(r"(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}|\d{1,3}(?:\.\d{1,3}){3}|[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}|[^\s@]+@[^\s@]+\.[^\s@]+")
+# File names the shareable report keeps; any other file shows only its extension.
+_SHARE_FILES = frozenset({"settings.json", "settings.local.json", "mcp.json", "mcp_config.json", "mcp-config.json", "mcp_settings.json",
+                          "cline_mcp_settings.json", "claude_desktop_config.json", "config.toml", "config.json", "config.jsonc",
+                          "config.yaml", "config.yml", "cli-config.json", "cli.json", "hooks.json", "plugin.json", "marketplace.json",
+                          "installed_plugins.json", "known_marketplaces.json", "skill.md", "agents.md", "claude.md", "gemini.md",
+                          "extensions.json", "manifest.json", "trustedfolders.json", ".codex-global-state.json", "managed-settings.json",
+                          "managed-mcp.json", "remote-settings.json", "system-defaults.json", "state.vscdb", "info.plist",
+                          "package.json", "openclaw.json", "exec-approvals.json", "codex-package.json", "gemini-extension.json",
+                          "codex", "claude", "cursor", "cursor-agent", "gemini", "code", "code-insiders", "windsurf", "ollama",
+                          "opencode", "copilot", "aider", "kiro", "goose", "antigravity", "chatgpt", "openclaw"})
+_CLIENT_ID = re.compile(r"[a-z0-9][a-z0-9.-]{0,40}")
+# A path or web address left in finding text after its known locations are reduced.
+_ADDRESS = re.compile(r"(?<![\w.])(?:~|[A-Za-z]:)?[\\/][^\s,;]*|\b[A-Za-z][A-Za-z0-9+.-]*://\S*")
+
+
+def _share_location(value: object) -> str:
+    """A location for the shareable report: its AI configuration folder and file name only.
+
+    ``~/.claude/settings.json`` stays as it is; ``~/code/app/.cursor/mcp.json`` becomes
+    ``project/.cursor/mcp.json``; anything between the configuration folder and the file
+    becomes an ellipsis. Applying it twice gives the same result.
+    """
+    text = _text(value).replace("\\", "/")
+    if text.startswith(_PSEUDO_LOCATIONS):
+        return text
+    parts = [part for part in text.split("/") if part]
+    markers = [index for index, part in enumerate(parts) if part in _SHARE_MARKERS]
+    if not markers:
+        return "location withheld"
+    start = markers[-1]
+    tail = parts[start:] if len(parts) - start <= 2 else [parts[start], "\u2026", parts[-1]]
+    if len(tail) > 1:
+        # A file name can itself name a project or client.
+        base, hashmark, fragment = tail[-1].partition("#")
+        suffix = "." + base.rsplit(".", 1)[1] if "." in base.strip(".") and re.fullmatch(r"[A-Za-z0-9]{1,8}", base.rsplit(".", 1)[1]) else ""
+        if base.lower().removesuffix(".exe") not in _SHARE_FILES and base not in _SHARE_MARKERS:
+            tail[-1] = "(name withheld)" + suffix + hashmark + fragment
+    if start == 1 and parts[0] == "~":
+        prefix = "~/"
+    elif start == 1 and re.fullmatch(r"[A-Za-z]:", parts[0]):
+        prefix = parts[0] + "/"
+    elif start == 0 and text.startswith("/"):
+        prefix = "/"
+    else:
+        prefix = "project/"
+    return prefix + "/".join(tail)
+
+
+def _shareable(snapshot: dict) -> dict:
+    """The snapshot as the shareable summary shows it: nothing names a folder or an address.
+
+    Locations are reduced by ``_share_location``. Every other string an observation or
+    evidence line carries is withheld when it is a path or web address, and a client id
+    outside the scanner's vocabulary becomes "unknown". Finding text keeps its reduced
+    locations and loses any other path or address. The scope label is dropped.
+    """
+    data = copy.deepcopy(snapshot)
+    replacements = {}
+
+    def location(value):
+        if isinstance(value, str):
+            replacements[value] = _share_location(value)
+            return replacements[value]
+        return value
+
+    def withheld(value, label="value withheld"):
+        if isinstance(value, str):
+            if _PATH_LIKE.search(value):
+                return replacements.setdefault(value, label)
+            return value
+        if isinstance(value, list):
+            return [withheld(entry) for entry in value]
+        if isinstance(value, dict):
+            return {key: withheld(entry) for key, entry in value.items()}
+        return value
+
+    def client(value):
+        return value if isinstance(value, str) and _CLIENT_ID.fullmatch(value) else "unknown"
+
+    def name(value):
+        if isinstance(value, str) and "@" in value and "." not in value.split("@", 1)[1]:
+            replacements.setdefault(value, value.split("@", 1)[0])
+            value = value.split("@", 1)[0]  # A plugin id without its marketplace.
+        if isinstance(value, str) and _NETWORK_NAME.fullmatch(value):
+            return replacements.setdefault(value, "Name withheld")
+        return withheld(value, "Name withheld")
+
+    def prose(text):
+        if not isinstance(text, str):
+            return text
+        kept = []
+        for original in sorted(replacements, key=len, reverse=True):
+            if original in text:
+                text = text.replace(original, f"\x00{len(kept)}\x00")
+                kept.append(replacements[original])
+        text = _ADDRESS.sub("location withheld", text)
+        return re.sub("\x00(\\d+)\x00", lambda match: kept[int(match.group(1))], text)
+
+    if isinstance(data.get("scope"), dict):
+        data["scope"].pop("label", None)
+    for item in _records(data.get("observations")):
+        details = item.get("details") if isinstance(item.get("details"), dict) else {}
+        locations = details.pop("locations", None)
+        value = details.get("value")
+        if details.get("interpretation") == "inventory-only" and isinstance(value, (int, float)) and not isinstance(value, bool):
+            details["value"] = "value withheld"  # An untyped number can be a code, id or account number.
+        item["details"] = withheld(details)
+        if isinstance(locations, list):
+            item["details"]["locations"] = list(dict.fromkeys(location(entry) for entry in locations if isinstance(entry, str)))
+        item["name"] = name(item.get("name"))
+        item["location"], item["client"] = location(item.get("location")), client(item.get("client"))
+    for finding in _records(data.get("findings")):
+        finding["clients"] = [client(value) for value in finding["clients"]] if isinstance(finding.get("clients"), list) else []
+        for entry in _records(finding.get("evidence")):
+            entry["key"], entry["value"] = name(entry.get("key")), withheld(entry.get("value"))
+            entry["location"] = location(entry.get("location"))
+    for source in _records(data.get("sources")):
+        source["location"], source["client"] = location(source.get("location")), client(source.get("client"))
+    for finding in _records(data.get("findings")):
+        for key in ("title", "summary", "impact", "recommendation", "ratingReason"):
+            if key in finding:
+                finding[key] = prose(finding[key])
+    return data
+
+
+def _client_anchor(value: object) -> str:
+    return "inventory-" + hashlib.sha256(_text(value).casefold().encode("utf-8")).hexdigest()[:12]
+
+
+def _plural(count: int, singular: str, plural: str) -> str:
+    return f"{count:,} {singular if count == 1 else plural}"
+
+
+def _fact(label: str, tone: str = "") -> str:
+    return f'<span class="fact{" fact-" + tone if tone else ""}">{_e(label)}</span>'
+
+
+def _value_text(value: object) -> str:
+    """A typed setting value as plain text; summaries become short phrases, never JSON."""
+    if isinstance(value, dict):
+        phrases = []
+        for key, item in sorted(value.items()):
+            if item is True:
+                phrases.append(_label(key).lower())
+            elif isinstance(item, (int, float, str)) and not isinstance(item, bool):
+                phrases.append(f"{_label(key).lower()} {item}")
+        return ", ".join(phrases) or "summary recorded"
+    if isinstance(value, list):
+        return _plural(len(value), "entry", "entries")
+    return _text(value)
+
+
+def _setting_fact(key: object, value: object) -> str:
+    return f'<code class="fact fact-setting">{_e(key)} = {_e(_value_text(value))}</code>'
+
+
+def _count(value: object) -> int:
+    return value if type(value) is int and value > 0 else 0
+
+
+def _facts(item: dict) -> list[str]:
+    """Typed facts worth reading at a glance; the complete record stays in snapshot.json."""
+    details = item.get("details") if isinstance(item.get("details"), dict) else {}
+    kind, facts = item.get("kind"), []
+    add = lambda label, tone="": facts.append(_fact(label, tone))
+    if kind == "client":
+        versions = [value for value in details.get("versions", []) if isinstance(value, str)] if isinstance(details.get("versions"), list) else []
+        version = details.get("version")
+        if versions:
+            add("Versions " + ", ".join(versions))
+        elif isinstance(version, str) and version and version != "not-inspected":
+            add("Version " + version)
+        if details.get("installationState") == "installed" or details.get("activation") == "installed":
+            add("Installed")
+        if details.get("processObserved") is True or details.get("activation") == "running":
+            add("Running")
+        if _count(details.get("projectCount")):
+            add("Used in " + _plural(details["projectCount"], "project", "projects"))
+        modes = details.get("authModes") if isinstance(details.get("authModes"), list) else []
+        for mode in modes:
+            if isinstance(mode, str) and mode != "unknown":
+                add({"api_key": "Signs in with an API key", "vendor_login": "Vendor account sign-in",
+                     "cloud_provider": "Cloud provider sign-in", "enterprise_identity": "Enterprise identity"}.get(mode, _label(mode)))
+    elif kind == "mcp":
+        if details.get("governedBy") == "palma-gateway":
+            add("Through Palma gateway", "good")
+        if details.get("endpointScope") == "loopback":
+            add("Loopback endpoint")
+        elif details.get("execution") == "local" or details.get("transport") in ("stdio", "sdk"):
+            add("Runs locally")
+        elif details.get("execution") == "remote":
+            add("Remote service")
+        else:
+            add("Transport not recognized")
+        if details.get("cleartextTransport") is True:
+            add("Unencrypted connection", "risk")
+        capability = details.get("capability") or (details.get("toolFamily") if details.get("toolFamily") in ("computer", "browser") else None)
+        approval = details.get("autoApproval")
+        if capability in ("computer", "browser"):
+            add("Controls screen, keyboard and mouse" if capability == "computer" else "Controls a web browser", "risk")
+            # System policy configures the connector; it still acts as the signed-in user.
+            alias = details.get("accountAlias", "~")
+            if alias == "system":
+                add("Set by system policy")
+            add("Acts as that account" if isinstance(alias, str) and alias.startswith("user-") else "Acts as you")
+            add({"all": "No approval before tool use", "none": "Asks before tool use"}.get(approval, "Approval setting not recorded"), "risk" if approval == "all" else "")
+        elif approval == "all":
+            add("No approval before tool use", "risk")
+        if details.get("inlineCredentialPresent") is True or _count(details.get("literalCredentialCount")):
+            add("Credential stored in the file", "risk")
+        auth = {"bearer_header": "Fixed secret", "static_header": "Fixed secret", "oauth_declared": "OAuth sign-in",
+                "environment_reference": "Secret from environment"}.get(details.get("auth"))
+        if auth:
+            add(auth)
+        if details.get("unversionedPackage") is True:
+            add("Unpinned package version")
+        if details.get("configurationIssue"):
+            add("Unsupported configuration", "risk")
+    elif kind == "skill":
+        if details.get("provenance") == "version-controlled":
+            add("In version control")
+        elif details.get("context") == "package" or details.get("parentId"):
+            add("From a plugin")
+        elif details.get("origin") == "project" or details.get("context") == "project":
+            add("Project skill")
+        elif details.get("origin") == "user":
+            add("Your skills folder")
+        if _count(details.get("filesHashed")):
+            add(_plural(details["filesHashed"], "file", "files"))
+        if "digest" in details and not details.get("digest"):
+            add("Contents not fully read")
+    elif kind == "agent":
+        if _count(details.get("toolCount")):
+            add(_plural(details["toolCount"], "tool", "tools"))
+        if details.get("delegation") == "remote":
+            add("Delegates to a remote agent", "risk")
+    elif kind == "plugin":
+        if isinstance(details.get("version"), str) and details["version"]:
+            add("Version " + details["version"])
+        if details.get("installationState") == "cached":
+            add("Cached, not installed")
+        if details.get("origin") == "local":
+            add("Installed outside a marketplace", "risk")
+        if details.get("broadHostAccess") is True:
+            add("Access to all websites", "risk")
+    elif kind == "hook":
+        events = [str(event) for event in details.get("events", []) if isinstance(event, str)] if isinstance(details.get("events"), list) else []
+        if events:
+            add("Runs on " + ", ".join(events[:4]) + (f" and {len(events) - 4} more" if len(events) > 4 else ""))
+        counts = details.get("typeCounts") if isinstance(details.get("typeCounts"), dict) else {}
+        for handler, (singular, plural) in (("command", ("command handler", "command handlers")), ("http", ("web request handler", "web request handlers")),
+                                            ("prompt", ("prompt handler", "prompt handlers")), ("agent", ("agent handler", "agent handlers")),
+                                            ("configuredLocations", ("hook folder", "hook folders"))):
+            if _count(counts.get(handler)):
+                add(_plural(counts[handler], singular, plural))
+    elif kind == "setting":
+        key = details.get("key") or details.get("nativeKey")
+        if isinstance(key, str) and key and "value" in details:
+            facts.append(_setting_fact(key, details["value"]))
+    return facts
+
+
+def _state_chip(item: dict) -> str:
+    if item.get("kind") == "client":
+        return ""
+    state = _enum(item.get("enabled"), ("enabled", "disabled", "unknown"), "unknown")
+    details = item.get("details") if isinstance(item.get("details"), dict) else {}
+    label = _observed_state(details, state)
+    return f'<span class="state state-{state}">{_e(label)}</span>' if label else ""
+
+
+def _where(item: dict, share: bool, *, list_places: bool = True) -> str:
+    """The location, and every other place the same declaration appears.
+
+    The inventory lists the places; evidence rows only count them, so a declaration
+    copied into many folders is listed once per report.
+    """
+    details = item.get("details") if isinstance(item.get("details"), dict) else {}
+    location = item.get("location", "Location not recorded")
+    html = f'<code class="inventory-path">{_e(_share_location(location) if share else location)}</code>'
+    others = [entry for entry in details.get("locations", []) if isinstance(entry, str)] if isinstance(details.get("locations"), list) else []
+    total = details.get("locationCount") if _count(details.get("locationCount")) else len(others)
+    copies = _count(details.get("copyCount"))
+    if total > 1 and (share or not list_places):
+        html += f'<span class="location-count">Declared in {total:,} places</span>'
+    elif total > 1:
+        rows = "".join(f"<li><code>{_e(entry)}</code></li>" for entry in others[:_LOCATIONS_LIMIT])
+        if total > min(len(others), _LOCATIONS_LIMIT):
+            rows += f'<li class="muted">{total - min(len(others), _LOCATIONS_LIMIT):,} more not listed</li>'
+        html += f'<details class="locations"><summary>Declared in {total:,} places{_icon("chevron", "disclosure-icon")}</summary><ul>{rows}</ul></details>'
+    elif copies > 1:
+        html += f'<span class="location-count">Declared {copies:,} times in this file</span>'
+    return html
+
+
 def _client_overview(observations: list[dict]) -> str:
     clients = {}
     for item in observations:
         if item.get("kind") == "client":
             name, icon = _client_details(item.get("client", item.get("name", "Unknown client")))
-            clients.setdefault(name, icon)
+            clients.setdefault(name, (icon, item.get("client", item.get("name", "Unknown client"))))
     if not clients:
         return ""
-    items = "".join(f'<li><a href="#inventory-client">{_brand_icon(icon)}<span>{_e(name)}</span></a></li>' for name, icon in sorted(clients.items(), key=lambda pair: pair[0].casefold()))
+    items = "".join(f'<li><a href="#{_client_anchor(key)}">{_brand_icon(icon)}<span>{_e(name)}</span></a></li>' for name, (icon, key) in sorted(clients.items(), key=lambda pair: pair[0].casefold()))
     return f'<div class="client-overview" aria-label="AI clients observed in this snapshot"><span>Clients observed</span><ul>{items}</ul></div>'
 
 
@@ -335,7 +661,7 @@ def _access_overview(observations: list[dict]) -> str:
     mcps = [item for item in observations if item.get("kind") == "mcp"]
     if not mcps:
         return ""
-    reaches = (("local", "Local process"), ("loopback", "Loopback HTTP endpoint"),
+    reaches = (("local", "Local process"), ("loopback", "Loopback HTTP endpoint"), ("gateway", "Through Palma gateway"),
                ("remote", "Remote endpoint"), ("unknown", "Reach unknown"))
     counts = Counter()
     disabled = 0
@@ -349,6 +675,8 @@ def _access_overview(observations: list[dict]) -> str:
             reach = "local"
         elif details.get("endpointScope") == "loopback":
             reach = "loopback"
+        elif details.get("governedBy") == "palma-gateway":
+            reach = "gateway"
         elif details.get("execution") == "remote":
             reach = "remote"
         else:
@@ -360,7 +688,7 @@ def _access_overview(observations: list[dict]) -> str:
         width = round(220 * counts[reach] / maximum, 2)
         rows.append(f'<div class="access-chart-row" data-reach="{reach}"><span>{label}</span><svg viewBox="0 0 220 6" class="access-bar" aria-hidden="true"><rect width="220" height="6" rx="3" class="bar-track"/><rect width="{width}" height="6" rx="3" class="reach-{reach}"/></svg><strong>{counts[reach]}</strong></div>')
     disabled_note = f'<p class="access-state-note">{disabled} {"disabled entry is" if disabled == 1 else "disabled entries are"} excluded from these bars.</p>' if disabled else ""
-    return f'<section class="access-overview" aria-labelledby="access-title"><div><p class="eyebrow">Access footprint</p><div class="access-heading"><h2 id="access-title">Where MCP access can reach</h2><a href="#inventory-mcp">Inspect configurations{_icon("arrow")}</a></div><div class="access-chart" aria-label="MCP configurations by access reach, excluding disabled entries">{"".join(rows)}</div></div><div class="access-note"><span class="access-note-icon">{_icon("connector")}</span><h3>Configured access, in context</h3><p>These counts describe configuration, not running processes or live connections. Browser and computer-control capabilities appear in findings when the scan identifies a relevant pattern.</p>{disabled_note}</div></section>'
+    return f'<section class="access-overview" aria-labelledby="access-title"><div><p class="eyebrow">Access footprint</p><div class="access-heading"><h2 id="access-title">Where MCP access can reach</h2><a href="#inventory">Inspect configurations{_icon("arrow")}</a></div><div class="access-chart" aria-label="MCP configurations by access reach, excluding disabled entries">{"".join(rows)}</div></div><div class="access-note"><span class="access-note-icon">{_icon("connector")}</span><h3>Configured access, in context</h3><p>These counts describe configuration, not running processes or live connections. Browser and computer-control capabilities appear in findings when the scan identifies a relevant pattern.</p>{disabled_note}</div></section>'
 
 
 def _team_teaser(booking_link: str) -> str:
@@ -370,29 +698,69 @@ def _team_teaser(booking_link: str) -> str:
     return f'''<aside class="team-teaser" aria-labelledby="team-title"><div class="team-main"><div class="team-copy"><p class="eyebrow">The next perspective</p><h2 id="team-title">See the bigger picture<br>across your team.</h2><p>Bring individual scans into an aggregated Palma view to understand shared AI tools, repeated exposure, and governance priorities across people and devices.</p></div>{diagram}</div><div class="team-benefits"><div>{_icon("shared")}<h3>Find the common ground</h3><p>See which AI clients, skills, and connectors appear across your team.</p></div><div>{_icon("connector")}<h3>Spot recurring exposure</h3><p>Connect permission and configuration patterns that repeat across endpoints.</p></div><div>{_icon("arrow")}<h3>Decide where to start</h3><p>Compare access patterns and focus your next governance steps together.</p></div></div><div class="team-conversation">{invitation}<p class="offering-note">A separate Palma offering. This report does not create an aggregated view or send any results.</p></div></aside>'''
 
 
-def _evidence(finding: dict, source_anchors: dict[str, str], observations: dict[str, dict]) -> str:
+def _entry_facts(entry: dict) -> list[str]:
+    """Facts from a finding's evidence line when no observation describes it."""
+    value = entry.get("value")
+    facts = []
+    if isinstance(value, dict):
+        if _count(value.get("sizeBytes")):
+            facts.append(_fact(f"{value['sizeBytes']:,} bytes", "risk"))
+        for key, label in (("limitBytes", "read limit"), ("reviewThresholdBytes", "review threshold")):
+            if _count(value.get(key)):
+                facts.append(_fact(f"{label} {value[key]:,} bytes"))
+        for key in ("issueKind", "reason"):
+            if isinstance(value.get(key), str) and value[key]:
+                facts.append(_fact(_label(value[key])))
+        if "value" in value:
+            facts.insert(0, _setting_fact(entry.get("key", "setting"), value["value"]))
+    elif value is not None:
+        facts.append(_setting_fact(entry.get("key", "setting"), value))
+    return facts
+
+
+def _evidence_row(observation: dict | None, entry: dict | None, share: bool) -> str:
+    if observation:
+        facts = _facts(observation)
+        if entry and observation.get("kind") == "setting" and not any("fact-setting" in fact for fact in facts):
+            facts = _entry_facts(entry)[:1] + facts
+        identity = _observation_identity(observation)
+        client = _client_identity(observation["client"]) if observation.get("client") else ""
+        return f'<li class="evidence-row"><div class="evidence-identity">{identity}{client}</div><div class="fact-list">{_state_chip(observation)}{"".join(facts)}</div><div class="evidence-where">{_where(observation, share, list_places=False)}</div></li>'
+    location = entry.get("location", "Location not recorded")
+    return f'<li class="evidence-row"><div class="evidence-identity"><strong>{_e(_label(entry.get("key", "Evidence")))}</strong></div><div class="fact-list">{"".join(_entry_facts(entry))}</div><div class="evidence-where"><code class="inventory-path">{_e(_share_location(location) if share else location)}</code></div></li>'
+
+
+def _evidence(finding: dict, observations: dict[str, dict], share: bool) -> str:
     evidence = _records(finding.get("evidence"))
-    rows = []
-    for item in evidence:
-        source_id = _text(item.get("sourceId", ""))
-        location = _e(item.get("location", "Location not recorded"))
-        if source_id in source_anchors:
-            location = f'<a href="#{source_anchors[source_id]}" class="source-link">{location}</a>'
-        rows.append(f'<tr role="row"><td role="cell"><code>{location}</code></td><td role="cell"><code>{_e(item.get("key", "Observation"))}</code></td><td role="cell"><pre>{_e(item.get("value"))}</pre></td></tr>')
-    evidence_table = ('<div class="table-scroll"><table class="evidence-table" role="table"><caption class="sr-only">Sanitized evidence for this finding</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Source</th><th scope="col" role="columnheader">Setting / evidence</th><th scope="col" role="columnheader">Observed value</th></tr></thead><tbody role="rowgroup">' + "".join(rows) + '</tbody></table></div>') if rows else '<p class="muted">No evidence lines were recorded for this finding.</p>'
-    affected = []
-    for observation_id in finding.get("observationIds", []) if isinstance(finding.get("observationIds"), list) else []:
-        observation = observations.get(_text(observation_id))
-        if observation:
-            state = _enum(observation.get("enabled"), ("enabled", "disabled", "unknown"), "unknown")
-            details = observation.get("details") if isinstance(observation.get("details"), dict) else {}
-            state_label = _observed_state(details, state)
-            state_html = f'<span>{_e(state_label)}</span>' if state_label else ""
-            affected.append(f'<li><div>{_observation_identity(observation)}</div><span class="affected-context">{_client_identity(observation.get("client", "Client not recorded"))}{state_html}</span></li>')
-    affected_html = '<div class="affected"><h4>Related configurations</h4><ul>' + "".join(affected) + '</ul></div>' if affected else ""
+    identities = [_text(value) for value in finding.get("observationIds", [])] if isinstance(finding.get("observationIds"), list) else []
+    rows, used = [], set()
+    unused_by_source = {}
+    for position, item in enumerate(evidence):
+        unused_by_source.setdefault(_text(item.get("sourceId")), []).append(position)
+    for index, identity in enumerate(identities):
+        observation = observations.get(identity)
+        if observation is None:
+            continue
+        # The evidence line in the same position, else the next unused line for the same source.
+        position = index if index < len(evidence) and index not in used and evidence[index].get("sourceId") == observation.get("sourceId") else None
+        candidates = unused_by_source.get(_text(observation.get("sourceId")), [])
+        while position is None and candidates:
+            candidate = candidates.pop(0)
+            position = None if candidate in used else candidate
+        if position is not None:
+            used.add(position)
+        rows.append(_evidence_row(observation, evidence[position] if position is not None else None, share))
+    rows.extend(_evidence_row(None, entry, share) for position, entry in enumerate(evidence) if position not in used)
+    shown = "".join(rows[:_EVIDENCE_VISIBLE])
+    rest = rows[_EVIDENCE_VISIBLE:_EVIDENCE_LIMIT]
+    shown_all = f"Show all {len(rows):,}" if len(rows) <= _EVIDENCE_LIMIT else f"Show {_EVIDENCE_LIMIT:,} of {len(rows):,}"
+    more = f'<details class="evidence-more"><summary>{shown_all}{_icon("chevron", "disclosure-icon")}</summary><ul class="evidence-list">{"".join(rest)}</ul></details>' if rest else ""
+    if len(rows) > _EVIDENCE_LIMIT:
+        more += f'<p class="muted evidence-omitted">{len(rows) - _EVIDENCE_LIMIT:,} more {"are not shown in this summary" if share else "are listed in snapshot.json"}.</p>'
+    evidence_html = f'<ul class="evidence-list">{shown}</ul>{more}' if rows else '<p class="muted">No evidence lines were recorded for this finding.</p>'
     links = []
     for value in finding.get("references", []) if isinstance(finding.get("references"), list) else []:
-        url = _safe_https(value)
+        url = _safe_https(value) if isinstance(value, str) and value in _KNOWN_REFERENCES else None
         if url:
             host = urlsplit(url).hostname or "Reference"
             links.append(f'<a href="{_e(url)}" rel="noreferrer noopener" target="_blank">{_e(host)}{_icon("external")}<span class="sr-only"> (opens in a new tab)</span></a>')
@@ -406,16 +774,19 @@ def _evidence(finding: dict, source_anchors: dict[str, str], observations: dict[
         extent += f'<span>{distinct} distinct</span>'
     rating_reason = finding.get("ratingReason")
     rating = f'<div class="impact rating-reason"><h4>Priority rationale</h4><p>{_e(rating_reason)}</p></div>' if isinstance(rating_reason, str) and rating_reason else ""
-    return f'<details class="finding-evidence"><summary><span>Why it matters &amp; evidence</span><span class="evidence-count">{len(evidence)} {"line" if len(evidence) == 1 else "lines"}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="evidence-content"><div class="impact"><h4>Potential impact</h4><p>{_e(finding.get("impact", "Assess this configuration against your intended access boundaries."))}</p></div>{rating}<div class="evidence-meta">{extent}<span>{confidence.capitalize()} confidence in the match</span><span>{evidence_type.capitalize()} evidence</span><span>Rule <code>{_e(finding.get("ruleId", "Not recorded"))}</code></span></div>{evidence_table}{affected_html}{references}</div></details>'
+    count = _plural(len(rows), "item", "items")
+    return f'<details class="finding-evidence"><summary><span>Evidence</span><span class="evidence-count">{count}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="evidence-content">{evidence_html}{rating}<div class="evidence-meta">{extent}<span>{confidence.capitalize()} confidence in the match</span><span>{evidence_type.capitalize()} evidence</span><span>Rule <code>{_e(finding.get("ruleId", "Not recorded"))}</code></span></div>{references}</div></details>'
 
 
-def _findings_section(findings: list[tuple[str, dict]], counts: Counter, source_anchors: dict[str, str], observations: dict[str, dict]) -> str:
+def _findings_section(findings: list[tuple[str, dict]], counts: Counter, observations: dict[str, dict], share: bool) -> str:
     cards = []
     for anchor, finding in findings:
         severity = _enum(finding.get("severity"), _SEVERITIES, "info")
         client_labels = "".join(_client_identity(client) for client in _finding_clients(finding, observations))
         clients_html = f'<span class="finding-clients">{client_labels}</span>' if client_labels else ""
-        cards.append(f'<article class="finding" id="{anchor}" data-severity="{severity}" aria-labelledby="{anchor}-title"><div class="finding-topline">{_badge(severity)}<span>{_e(_label(finding.get("category", "Configuration")))}</span>{clients_html}</div><h3 id="{anchor}-title">{_e(finding.get("title", "Review this observation"))}</h3><p class="finding-summary">{_e(finding.get("summary", "Review the available evidence for this configuration."))}</p><div class="next-step">{_icon("arrow")}<div><h4>Next step</h4><p>{_e(finding.get("recommendation", "Review this configuration and confirm that its access is intentional."))}</p></div></div>{_evidence(finding, source_anchors, observations)}</article>')
+        impact = finding.get("impact")
+        impact_html = f'<div class="finding-impact"><h4>Why it matters</h4><p>{_e(impact)}</p></div>' if isinstance(impact, str) and impact else ""
+        cards.append(f'<article class="finding" id="{anchor}" data-severity="{severity}" aria-labelledby="{anchor}-title"><div class="finding-topline">{_badge(severity)}<span>{_e(_label(finding.get("category", "Configuration")))}</span>{clients_html}</div><h3 id="{anchor}-title">{_e(finding.get("title", "Review this observation"))}</h3><p class="finding-summary">{_e(finding.get("summary", "Review the available evidence for this configuration."))}</p>{impact_html}<div class="next-step">{_icon("arrow")}<div><h4>Next step</h4><p>{_e(finding.get("recommendation", "Review this configuration and confirm that its access is intentional."))}</p></div></div>{_evidence(finding, observations, share)}</article>')
     filters = '<button type="button" class="filter-button" data-filter="all" aria-pressed="true">All <span>' + str(len(findings)) + '</span></button>'
     for severity in _SEVERITIES:
         filters += f'<button type="button" class="filter-button" data-filter="{severity}" aria-pressed="false">{_SEVERITY_NAMES[severity]} <span>{counts[severity]}</span></button>'
@@ -424,39 +795,47 @@ def _findings_section(findings: list[tuple[str, dict]], counts: Counter, source_
     return f'<section class="report-section" id="findings" aria-labelledby="findings-title"><div class="section-heading"><div><p class="eyebrow">01 / Findings</p><h2 id="findings-title">Your findings</h2><p>The configuration, the potential impact, and what you can do next.</p></div><span class="section-count">{len(findings):02d}</span></div>{toolbar}<div id="findings-list">{"".join(cards) if cards else empty}</div><div id="no-results" class="empty-state" hidden><div><h3>No findings match this view</h3><p>Try another priority or a different search term.</p><button class="text-button" type="button" id="clear-filters">Clear filters</button></div></div><p class="section-note">Severity describes potential impact. Confidence describes the evidence match. Neither establishes that a capability was used or that a compromise occurred.</p></section>'
 
 
-def _inventory(observations: list[dict]) -> str:
-    groups = []
-    kind_icons = {"client": "app", "mcp": "connector", "skill": "book", "plugin": "folder",
-                  "agent": "shared", "hook": "arrow", "setting": "lock"}
-    kinds = list(_KINDS)
-    known = {kind for kind, _ in kinds}
-    unknown = [item for item in observations if item.get("kind") not in known]
-    if unknown:
-        kinds.append(("other", "Other observations"))
-    for kind, title in kinds:
-        items = unknown if kind == "other" else [item for item in observations if item.get("kind") == kind]
-        if not items:
-            continue
+def _inventory(observations: list[dict], findings: list[tuple[str, dict]], share: bool) -> str:
+    """Distinct tools and declarations grouped by client, collapsed until needed."""
+    linked = {}
+    for anchor, finding in findings:
+        for identity in finding.get("observationIds", []) if isinstance(finding.get("observationIds"), list) else []:
+            linked.setdefault(_text(identity), []).append((anchor, _enum(finding.get("severity"), _SEVERITIES, "info")))
+    groups_by_client = {}
+    for item in observations:
+        groups_by_client.setdefault(_text(item.get("client") or "unknown"), []).append(item)
+    groups, total = [], 0
+    for client in sorted(groups_by_client, key=lambda value: (_client_details(value)[0].casefold(), value)):
+        items = groups_by_client[client]
+        name, icon = _client_details(client)
+        client_rows = [item for item in items if item.get("kind") == "client"]
+        members = sorted((item for item in items if item.get("kind") != "client"), key=lambda record: (
+            _KIND_ORDER.index(record.get("kind")) if record.get("kind") in _KIND_ORDER else len(_KIND_ORDER),
+            _text(record.get("name", "")).casefold(), _text(record.get("location", "")), _text(record.get("id", ""))))
+        breakdown = " · ".join(_plural(sum(item.get("kind") == kind for item in members), *_KIND_PLURALS[kind]) for kind in _KIND_ORDER if any(item.get("kind") == kind for item in members))
+        # Older or partial snapshots can hold several rows for one client; show their facts once.
+        client_facts = "".join(dict.fromkeys(fact for row in client_rows for fact in _facts(row)))
+        related = {anchor for item in items for anchor, _ in linked.get(_text(item.get("id", "")), [])}
+        findings_note = f'<span class="inventory-findings">{_plural(len(related), "finding", "findings")}</span>' if related else ""
         rows = []
-        for item in sorted(items, key=lambda record: (_text(record.get("name", "")).casefold(), _text(record.get("client", "")).casefold(), _text(record.get("location", "")).casefold(), _text(record.get("id", "")))):
-            state = _enum(item.get("enabled"), ("enabled", "disabled", "unknown"), "unknown")
+        for item in members:
+            matches = linked.get(_text(item.get("id", "")), [])
+            finding_link = ""
+            if matches:
+                worst = min(matches, key=lambda pair: _SEVERITIES.index(pair[1]))
+                finding_link = f'<a class="fact fact-finding fact-{worst[1]}" href="#{worst[0]}">{_plural(len(matches), "finding", "findings")}</a>'
             details = item.get("details") if isinstance(item.get("details"), dict) else {}
-            metadata = "".join(f'<div><dt>{_e(_label(key))}</dt><dd><pre>{_e(value)}</pre></dd></div>' for key, value in sorted(details.items())
-                               if value is not None and value != "unknown" and value != "" and value != [] and value != {})
-            location = _e(item.get("location", "Location not recorded"))
-            source = f'<div><dt>Location</dt><dd><code>{location}</code></dd></div>'
-            metadata_html = f'<details class="inventory-metadata"><summary><code class="inventory-path" title="{location}">{location}</code><span class="inventory-detail-label">Details</span>{_icon("chevron", "disclosure-icon")}</summary><dl class="metadata-list">{source}{metadata}</dl></details>'
-            state_label = _observed_state(details, state)
-            state_html = f'<span class="state state-{state}">{_e(state_label)}</span>' if state_label else ""
-            rows.append(f'<tr class="inventory-row" role="row"><th scope="row" role="rowheader"><span class="inventory-item-name">{_observation_identity(item)}</span>{state_html}</th><td role="cell">{_client_identity(item.get("client", "Not recorded"))}{_observation_context(details)}</td><td role="cell">{metadata_html}</td></tr>')
-        clients = len({_text(item.get("client", "")) for item in items if item.get("client")})
-        category_note = (f'{clients} {"client" if clients == 1 else "clients"}' if kind != "client" and clients
-                         else "Installations and configurations")
-        groups.append(f'<details class="inventory-group" id="inventory-{kind}"><summary><span class="inventory-group-icon">{_icon(kind_icons.get(kind, "info"))}</span><span class="inventory-kind"><strong>{title}</strong><span>{category_note}</span></span><span class="inventory-count" data-total="{len(items)}">{len(items)}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="table-scroll"><table class="inventory-table" role="table"><caption class="sr-only">{title} observed in this snapshot</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Name</th><th scope="col" role="columnheader">Client &amp; context</th><th scope="col" role="columnheader">Location &amp; evidence</th></tr></thead><tbody role="rowgroup">{"".join(rows)}</tbody></table></div></details>')
-    toolbar = f'<div class="inventory-toolbar js-only"><label class="search-field">{_icon("search")}<span class="sr-only">Search inventory by name, client, or location</span><input id="inventory-search" type="search" placeholder="Find a skill, connector, client, or location" autocomplete="off" spellcheck="false"></label><p id="inventory-search-status" role="status" aria-live="polite">{len(observations)} items</p><button class="text-button" type="button" id="clear-inventory-search" hidden>Clear search</button></div>' if observations else ""
+            kind_label = _KIND_LABELS.get(_text(item.get("kind")), "Observation")
+            rows.append(f'<li class="inventory-row"><div class="inventory-item-name">{_observation_identity(item)}<span class="inventory-kind-label">{_e(kind_label)}</span></div><div class="fact-list">{_state_chip(item)}{"".join(_facts(item))}{finding_link}</div><div class="inventory-where">{_observation_context(details)}{_where(item, share)}</div></li>')
+        total += len(rows)
+        body = f'<ul class="inventory-rows">{"".join(rows)}</ul>' if rows else '<p class="inventory-empty">No connectors, skills, plugins, agents, hooks or settings were recorded for this client.</p>'
+        if not rows:
+            body += '<div class="inventory-client-location">' + "".join(_where(row, share) for row in client_rows) + '</div>'
+        groups.append(f'<details class="inventory-group" id="{_client_anchor(client)}"><summary><span class="inventory-group-icon">{_brand_icon(icon)}</span><span class="inventory-kind"><strong>{_e(name)}</strong><span>{breakdown or "Installation and configuration"}</span></span><span class="fact-list inventory-client-facts">{client_facts}{findings_note}</span><span class="inventory-count" data-total="{len(rows)}">{len(rows)}</span>{_icon("chevron", "disclosure-icon")}</summary>{body}</details>')
+    toolbar = f'<div class="inventory-toolbar js-only"><label class="search-field">{_icon("search")}<span class="sr-only">Search inventory by name, client, or location</span><input id="inventory-search" type="search" placeholder="Find a skill, connector, client, or location" autocomplete="off" spellcheck="false"></label><p id="inventory-search-status" role="status" aria-live="polite">{total} items</p><button class="text-button" type="button" id="clear-inventory-search" hidden>Clear search</button></div>' if observations else ""
     empty = '<div class="empty-state"><p>No inventory observations were recorded.</p></div>'
     no_matches = '<div class="empty-state" id="inventory-no-results" hidden><p>No inventory matches this search. Try a tool name, client, or location.</p></div>'
-    return f'<section class="report-section" id="inventory" aria-labelledby="inventory-title"><div class="section-heading"><div><p class="eyebrow">02 / Inventory</p><h2 id="inventory-title">What’s in your AI environment</h2><p>Find your tools by name, see where they live, and open the evidence when you need it.</p></div><span class="section-count">{len(observations):02d}</span></div>{toolbar}<div class="inventory-list">{"".join(groups) if groups else empty}</div>{no_matches}</section>'
+    return f'<section class="report-section" id="inventory" aria-labelledby="inventory-title"><div class="section-heading"><div><p class="eyebrow">02 / Inventory</p><h2 id="inventory-title">What’s in your AI environment</h2><p>Each tool and declaration appears once, grouped by the client that uses it. Open a client to see what it declares and where.</p></div><span class="section-count">{total:02d}</span></div>{toolbar}<div class="inventory-list">{"".join(groups) if groups else empty}</div>{no_matches}</section>'
 
 
 def _discovery_summary(snapshot: dict) -> str:
@@ -465,38 +844,80 @@ def _discovery_summary(snapshot: dict) -> str:
     if not discovery:
         return ""
     values = []
-    for key, label in (("localVolumes", "local volumes"), ("profilesAccessible", "accessible profiles"),
-                       ("projectsDiscovered", "AI projects"), ("directoriesVisited", "directories searched")):
+    for key, label in (("localVolumes", "local volumes"), ("projectsDiscovered", "AI projects"),
+                       ("directoriesVisited", "directories searched")):
         number = discovery.get(key)
         if isinstance(number, int) and not isinstance(number, bool) and number >= 0:
             values.append(f'<div><dt>{label}</dt><dd>{number:,}</dd></div>')
-    return '<dl class="discovery-summary" aria-label="Machine discovery coverage">' + "".join(values) + '</dl>'
+    excluded = discovery.get("excludedDirectories")
+    note = ('<p class="muted discovery-note">Folders that belong to other accounts, temporary folders and this scanner’s own folder were not searched for projects. To include a project there, scan it with <code>--workspace</code>.</p>'
+            if type(excluded) is int and excluded > 0 else "")
+    return '<dl class="discovery-summary" aria-label="Machine discovery coverage">' + "".join(values) + '</dl>' + note
 
 
-def _coverage(sources: list[dict], source_anchors: dict[str, str], snapshot: dict) -> str:
-    counts = Counter(_enum(item.get("status"), _SOURCE_STATES, "unknown") for item in sources)
-    total = len(sources)
-    segments = []
-    offset = 0.0
-    for state in _SOURCE_STATES:
-        width = round(1000 * counts[state] / total, 3) if total else 0
-        segments.append(f'<rect class="coverage-{state}" x="{offset}" y="0" width="{width}" height="12"/>')
-        offset += width
-    chart = '<svg class="coverage-chart" viewBox="0 0 1000 12" preserveAspectRatio="none" aria-hidden="true"><rect class="bar-track" width="1000" height="12"/>' + "".join(segments) + '</svg>'
-    legend = "".join(f'<div class="coverage-stat"><span class="coverage-dot coverage-{state}" aria-hidden="true"></span><strong>{counts[state]}</strong><span>{_SOURCE_NAMES[state]}</span></div>' for state in _SOURCE_STATES if state != "unknown" or counts[state])
-    rows = []
-    for index, source in enumerate(sources):
-        state = _enum(source.get("status"), _SOURCE_STATES, "unknown")
-        anchor = _anchor("source", index, source.get("id", ""))
-        reasons = source.get("reasons")
-        reasons = [reason for reason in reasons if isinstance(reason, str) and reason] if isinstance(reasons, list) else []
-        if source.get("reason"):
-            reasons.append(source["reason"])
-        reasons = list(dict.fromkeys(_text(reason) for reason in reasons)) or ["No additional detail"]
-        reason_html = "".join('<span class="source-reason">' + _e(_label(reason) if re.fullmatch(r"[a-z]+(?:_[a-z]+)+", reason) else reason) + '</span>' for reason in reasons)
-        rows.append(f'<tr id="{anchor}" role="row"><th scope="row" role="rowheader"><span>{_e(source.get("client", "Unknown client"))}</span><code class="inventory-location">{_e(source.get("location", "Location not recorded"))}</code></th><td role="cell">{_e(_label(source.get("scope", "Unknown")))}</td><td role="cell"><span class="source-status source-{state}">{_SOURCE_NAMES[state]}</span>{reason_html}</td></tr>')
-    table = f'<details class="sources-disclosure"><summary><span>Inspect all sources</span><span>{total} sources</span>{_icon("chevron", "disclosure-icon")}</summary><div class="table-scroll"><table class="sources-table" role="table"><caption class="sr-only">Source collection status and locations</caption><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Source</th><th scope="col" role="columnheader">Scope</th><th scope="col" role="columnheader">Collection result</th></tr></thead><tbody role="rowgroup">{"".join(rows)}</tbody></table></div></details>' if sources else '<p class="muted">No source records were included.</p>'
-    return f'<section class="report-section" id="coverage" aria-labelledby="coverage-title"><div class="section-heading"><div><p class="eyebrow">03 / Coverage</p><h2 id="coverage-title">Collection coverage</h2><p>A record of what was inspected.</p></div></div>{_discovery_summary(snapshot)}<div class="coverage-panel"><div class="coverage-title"><strong>{counts["collected"]}<span> / {total}</span></strong><p>sources collected<span>Configuration, installation, and system inventory sources</span></p></div>{chart}<div class="coverage-legend">{legend}</div>{table}</div></section>'
+# Causes of incomplete coverage, in reading order, with what the person can do about each.
+_CAUSES = (
+    ("denied", "Permission denied", "Grant read access to these locations, or run the scan from an account that can read them."),
+    ("interpret", "Could not be interpreted", "These files are malformed or use an unsupported format. Fix or remove them, then scan again."),
+    ("limit", "Over a size or scan limit", "Very large files and folders are skipped so the scan stays bounded."),
+    ("links", "Links not followed", "Symbolic links and junctions are never followed, so their targets were not read."),
+    ("scope", "Outside the scan scope", "These locations are outside the scanned account and folders."),
+    ("failed", "Could not be processed", "An unexpected problem stopped these sources; everything else was still collected."),
+    ("other", "Other problems", "Each source lists the recorded reason."),
+)
+
+
+def _reasons(source: dict) -> list[str]:
+    reasons = source.get("reasons")
+    reasons = [reason for reason in reasons if isinstance(reason, str) and reason] if isinstance(reasons, list) else []
+    if isinstance(source.get("reason"), str) and source["reason"]:
+        reasons.append(source["reason"])
+    return list(dict.fromkeys(reasons))
+
+
+def _cause(source: dict) -> str:
+    text = " ".join(_reasons(source)).lower()
+    if "permission" in text:
+        return "denied"
+    if any(word in text for word in ("adapter_error", "interpreted safely", "stopped unexpectedly")):
+        return "failed"
+    if any(word in text for word in ("size_limit", "manifest_limit", "count_limit", "time_limit", "budget")):
+        return "limit"
+    if any(word in text for word in ("symlink", "symbolic link", "reparse")):
+        return "links"
+    if any(word in text for word in ("outside_scope", "outside selected scope", "not in selected scope")):
+        return "scope"
+    if any(word in text for word in ("parse", "invalid", "unsupported", "unknown_schema", "shape", "malformed", "duplicate", "could not be interpreted")):
+        return "interpret"
+    return "other"
+
+
+def _coverage(sources: list[dict], snapshot: dict, share: bool) -> str:
+    """How much was read, and every source that was not, grouped by cause."""
+    coverage = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
+    inspected = coverage.get("sourcesInspected")
+    inspected = inspected if type(inspected) is int and inspected >= 0 else sum(item.get("status") == "collected" for item in sources)
+    problems = [item for item in sources if item.get("status") in {"error", "skipped"}]
+    if not sources and not inspected:
+        panel = '<p class="muted">No source records were included.</p>'
+    else:
+        causes = []
+        for key, label, advice in _CAUSES:
+            group = [item for item in problems if _cause(item) == key]
+            if not group:
+                continue
+            rows = ""
+            if not share:
+                for source in group[:500]:
+                    reasons = "".join('<span class="source-reason">' + _e(_label(reason) if re.fullmatch(r"[a-z]+(?:_[a-z]+)+", reason) else reason) + '</span>' for reason in _reasons(source))
+                    rows += f'<li><span class="coverage-client">{_e(_client_details(source.get("client", "unknown"))[0])}</span><code class="inventory-path">{_e(source.get("location", "Location not recorded"))}</code>{reasons}</li>'
+                if len(group) > 500:
+                    rows += f'<li class="muted">{len(group) - 500:,} more are listed in snapshot.json.</li>'
+            causes.append(f'<details class="coverage-cause"><summary><strong>{len(group):,}</strong><span>{label}</span>{_icon("chevron", "disclosure-icon")}</summary><div class="coverage-cause-body"><p>{advice}</p>{"<ul>" + rows + "</ul>" if rows else ""}</div></details>')
+        status = (f'<p class="coverage-summary">{_plural(len(problems), "source", "sources")} could not be fully read. Each is listed below by cause; everything else was collected.</p>'
+                  if problems else '<p class="coverage-summary">Every inspected source was read.</p>')
+        panel = f'<div class="coverage-title"><strong>{inspected:,}</strong><p>sources inspected<span>Configuration files, AI folders, installations and system inventories that were read.</span></p></div>{status}<div class="coverage-causes">{"".join(causes)}</div>'
+    return f'<section class="report-section" id="coverage" aria-labelledby="coverage-title"><div class="section-heading"><div><p class="eyebrow">03 / Coverage</p><h2 id="coverage-title">Collection coverage</h2><p>A record of what was inspected.</p></div></div>{_discovery_summary(snapshot)}<div class="coverage-panel">{panel}</div></section>'
 
 
 _JS = r"""
@@ -551,7 +972,15 @@ _JS = r"""
   cards.forEach(card => card.querySelector('.finding-evidence').addEventListener('toggle', syncExpansion));
   const inventoryGroups = Array.from(document.querySelectorAll('.inventory-group'));
   const inventoryRows = Array.from(document.querySelectorAll('.inventory-row'));
-  const inventoryText = new Map(inventoryRows.map(row => [row, row.textContent.toLocaleLowerCase()]));
+  const inventoryGroupText = new Map(inventoryGroups.map(group => [group,
+    Array.from(group.querySelectorAll('.inventory-kind strong, .inventory-client-facts, .inventory-client-location'))
+      .map(item => item.textContent).join(' ').toLocaleLowerCase()
+  ]));
+  // A row matches its client's name too, so "claude code" finds that client's items.
+  const inventoryText = new Map(inventoryRows.map(row => {
+    const client = row.closest('.inventory-group').querySelector('.inventory-kind strong');
+    return [row, `${client ? client.textContent : ''} ${row.textContent}`.toLocaleLowerCase()];
+  }));
   const inventorySearch = document.getElementById('inventory-search');
   const inventoryStatus = document.getElementById('inventory-search-status');
   const inventoryEmpty = document.getElementById('inventory-no-results');
@@ -568,15 +997,15 @@ _JS = r"""
     });
     inventoryGroups.forEach(group => {
       const matching = Array.from(group.querySelectorAll('.inventory-row')).filter(row => !row.hidden).length;
-      group.hidden = matching === 0;
-      if (query && matching) group.open = true;
+      group.hidden = Boolean(query) && matching === 0 && !inventoryGroupText.get(group).includes(query);
+      if (query && !group.hidden) group.open = true;
       const count = group.querySelector('.inventory-count');
       count.textContent = query ? `${matching} / ${count.dataset.total}` : count.dataset.total;
     });
     if (!query && inventoryQuery) inventoryOpenState.forEach(([group, open]) => { group.open = open; });
     inventoryQuery = query;
     if (inventoryStatus) inventoryStatus.textContent = query ? `${visible} of ${inventoryRows.length} items` : `${inventoryRows.length} items`;
-    if (inventoryEmpty) inventoryEmpty.hidden = visible > 0 || inventoryRows.length === 0;
+    if (inventoryEmpty) inventoryEmpty.hidden = !query || inventoryGroups.some(group => !group.hidden);
     if (inventoryClear) inventoryClear.hidden = !query;
   };
   if (inventorySearch) inventorySearch.addEventListener('input', updateInventory);
@@ -629,7 +1058,7 @@ _JS = r"""
 """
 
 
-def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = None) -> str:
+def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = None, share: bool = False) -> str:
     """Return a complete offline HTML report without reading files or using a network.
 
     ``snapshot`` must contain sanitized collection results. The renderer escapes all
@@ -637,22 +1066,26 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     a hash-based Content Security Policy. It does not evaluate configuration values.
     The optional booking link is navigation initiated by the reader, never a request
     made by report generation or loading. Identical inputs produce identical bytes.
+    ``share`` renders the shareable summary from ``_shareable``: locations keep only their AI
+    configuration folder and file name, and coverage lists counts instead of source locations.
     """
+    if share:
+        snapshot = _shareable(snapshot)
     sources = _records(snapshot.get("sources"))
     observations = _records(snapshot.get("observations"))
     findings_data = _records(snapshot.get("findings"))
     findings_data = sorted(findings_data, key=lambda item: (_SEVERITIES.index(_enum(item.get("severity"), _SEVERITIES, "info")), _text(item.get("title", "")).casefold(), _text(item.get("id", ""))))
-    findings = [(_anchor("finding", index, item.get("id", "")), item) for index, item in enumerate(findings_data)]
+    # Finding ids derive from local paths, so the shareable summary numbers its anchors instead.
+    findings = [(f"finding-{index + 1}" if share else _anchor("finding", index, item.get("id", "")), item) for index, item in enumerate(findings_data)]
     severity_counts = Counter(_enum(item.get("severity"), _SEVERITIES, "info") for item in findings_data)
-    source_anchors = {}
-    for index, source in enumerate(sources):
-        source_anchors.setdefault(_text(source.get("id", "")), _anchor("source", index, source.get("id", "")))
     observation_map = {_text(item.get("id", "")): item for item in observations}
     kind_counts = Counter(_text(item.get("kind", "other")) for item in observations)
-    collected = sum(item.get("status") == "collected" for item in sources)
+    coverage_record = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
+    inspected = coverage_record.get("sourcesInspected")
+    collected = inspected if type(inspected) is int and inspected >= 0 else sum(item.get("status") == "collected" for item in sources)
     scope = snapshot.get("scope") if isinstance(snapshot.get("scope"), dict) else {}
     scope_type = _text(scope.get("type", "Scope not recorded"))
-    scope_name = {"machine": "Machine-wide discovery", "copied-home": "Copied home", "current-user": "Current user", "user": "Current user", "endpoint": "Current user", "declared": "Current session"}.get(scope_type, _label(scope_type))
+    scope_name = {"machine": "Your account on this computer", "copied-home": "Copied home", "current-user": "Current user", "user": "Current user", "endpoint": "Current user", "declared": "Current session"}.get(scope_type, _label(scope_type))
     platform_name = {"macos": "macOS", "darwin": "macOS", "windows": "Windows", "linux": "Linux"}.get(_text(scope.get("platform")))
     if platform_name:
         scope_name += " · " + platform_name
@@ -663,37 +1096,41 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
         scope_name += " · Subsystem context"
     if environment.get("sandboxIndicators"):
         scope_name += " · Restricted process context"
-    profile_count = scope.get("profileCount", 0)
-    if scope_type == "machine" and isinstance(profile_count, int) and not isinstance(profile_count, bool) and profile_count > 0:
-        scope_name += f' · {profile_count} {"profile" if profile_count == 1 else "profiles"}'
     workspace_count = scope.get("workspaceCount", 0)
     if isinstance(workspace_count, int) and not isinstance(workspace_count, bool) and workspace_count > 0:
         scope_name += f' · {workspace_count} {"project" if workspace_count == 1 else "projects"}'
     declared = snapshot.get("mode") == "declared"
     banner = ""
+    if share:
+        banner = '<div class="scope-banner" role="note">' + _icon("lock") + '<strong>Shareable summary: file locations keep only their AI configuration folder and file name, without project or folder names. Tool, connector and skill names are included; names that are paths or web addresses are withheld.</strong></div>'
     if isinstance(scope.get("label"), str) and scope["label"].strip():
-        banner = '<div class="scope-banner" role="note">' + _icon("info") + '<strong>' + _e(scope["label"]) + '</strong></div>'
+        banner += '<div class="scope-banner" role="note">' + _icon("info") + '<strong>' + _e(scope["label"]) + '</strong></div>'
     if declared:
         banner += '<div class="mode-banner" role="note">' + _icon("info") + '<div><strong>Declared inventory — endpoint not scanned</strong>This report reflects what an AI agent declared about its session. Configuration and local files have not been independently verified.</div></div>'
     client_count = len({_client_details(item.get("client", ""))[0].casefold() for item in observations if item.get("kind") == "client"})
-    metrics_data = [(str(client_count), "AI clients observed", "#inventory-client", "app"), (str(kind_counts["mcp"]), "MCP configurations", "#inventory-mcp", "connector"), (str(kind_counts["skill"] + kind_counts["plugin"]), "Skills & plugins", "#inventory", "book"), (str(collected), "Sources inspected", "#coverage", "folder")]
-    metrics_data = [(number, label, "#inventory" if target in {"#inventory-client", "#inventory-mcp"} and not kind_counts[target.removeprefix("#inventory-")] else target, icon) for number, label, target, icon in metrics_data]
+    metrics_data = [(str(client_count), "AI clients observed", "#inventory", "app"), (str(kind_counts["mcp"]), "MCP configurations", "#inventory", "connector"), (str(kind_counts["skill"] + kind_counts["plugin"]), "Skills & plugins", "#inventory", "book"), (f"{collected:,}", "Sources inspected", "#coverage", "folder")]
     metrics = "".join(f'<a class="metric" href="{target}"><span class="metric-icon">{_icon(icon)}</span><span class="metric-number">{number}</span><span class="metric-label">{label}{_icon("arrow")}</span></a>' for number, label, target, icon in metrics_data)
     collector = snapshot.get("collector") if isinstance(snapshot.get("collector"), dict) else {}
-    booking = _safe_https(booking_url)
+    try:
+        booking = _safe_https(_booking_link(booking_url))
+    except ValueError:
+        booking = None
     booking_link = f'<a class="booking-link" href="{_e(booking)}" rel="noreferrer noopener" target="_blank">Talk to Palma{_icon("external")}<span class="sr-only"> (opens in a new tab)</span></a>' if booking else ""
     script_hash = base64.b64encode(hashlib.sha256(_JS.encode("utf-8")).digest()).decode("ascii")
     style_hash = base64.b64encode(hashlib.sha256(_CSS.encode("utf-8")).digest()).decode("ascii")
     policy = f"default-src 'none'; script-src 'sha256-{script_hash}'; style-src 'sha256-{style_hash}'; img-src data:; font-src data:; connect-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'none'"
-    return f'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{_e(policy)}"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light"><title>Palma · Personal AI access scan</title><style>{_CSS}</style></head>
-<body><a class="skip-link" href="#main">Skip to report</a>{_brand_sprite(observations)}<header class="site-header"><div class="shell header-inner"><a class="brand" href="#main" aria-label="Palma, back to report overview"><img src="data:image/png;base64,{_LOGO}" width="122" height="30" alt="palma.ai"><span class="brand-label">Personal AI<br>access scan</span></a><nav class="main-nav" aria-label="Report sections"><a href="#overview">Overview</a><a href="#findings">Findings</a><a href="#inventory">Inventory</a><a href="#coverage">Coverage</a><button class="print-button js-only" type="button" id="print-report" aria-label="Print report">{_icon("print")}<span>Print report</span></button></nav></div></header>
-<main class="shell" id="main"><div class="report-title"><div><p class="eyebrow">Your personal AI access report</p><h1>Your AI access, <span class="title-accent">in focus.</span></h1><p class="report-subtitle">Your AI tools, the access they have, and what needs attention.<br>Start with the priorities. Follow the evidence.</p></div><div class="report-meta"><span class="meta-label">Scan details</span><span>{_e(_date(snapshot.get("completedAt")))}</span><span>{_e(scope_name)}</span></div></div>{banner}
-{_overview(findings, severity_counts, observation_map)}<div class="metric-strip" aria-label="Inventory and coverage summary">{metrics}</div><p class="metric-context">Explore the names, clients, and configuration locations behind each count.</p>
+    title = "Palma · Shareable AI access summary" if share else "Palma · Personal AI access scan"
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{_e(policy)}"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light"><title>{title}</title><style>{_CSS}</style></head>
+<body><a class="skip-link" href="#main">Skip to report</a>{_brand_sprite(observations)}<header class="site-header"><div class="shell header-inner"><a class="brand" href="#main" aria-label="Palma, back to report overview"><img src="data:image/png;base64,{_LOGO}" width="122" height="30" alt="palma.ai"><span class="brand-label">Personal AI<br>access scan</span></a><nav class="main-nav" aria-label="Report sections"><a href="#main">Overview</a><a class="regulation-nav" href="#eu-ai-regulation">EU AI Act</a><a href="#findings">Findings</a><a href="#inventory">Inventory</a><a href="#coverage">Coverage</a><button class="print-button js-only" type="button" id="print-report" aria-label="Print report">{_icon("print")}<span>Print report</span></button></nav></div></header>
+<main class="shell" id="main"><div class="report-title"><div><p class="eyebrow">Your personal AI access report</p><h1>Your AI access, <span class="title-accent">in focus.</span></h1><p class="report-subtitle">Your AI tools, the access they have, and what needs attention.<br> Start with the priorities. Follow the evidence.</p></div><div class="report-meta"><span class="meta-label">Scan details</span><span>{_e(_date(snapshot.get("completedAt")))}</span><span>{_e(scope_name)}</span></div></div>{banner}
+{_overview(findings, severity_counts, observation_map)}
+{render_regulation_section(findings, observations, declared)}
+<div class="metric-strip" aria-label="Inventory and coverage summary">{metrics}</div><p class="metric-context">Explore the names, clients, and configuration locations behind each count.</p>
 {_client_overview(observations)}
 {_access_overview(observations)}
-{_findings_section(findings, severity_counts, source_anchors, observation_map)}
-{_inventory(observations)}
-{_coverage(sources, source_anchors, snapshot)}
+{_findings_section(findings, severity_counts, observation_map, share)}
+{_inventory(observations, findings, share)}
+{_coverage(sources, snapshot, share)}
 {_team_teaser(booking_link)}
-<footer class="report-footer"><div><div class="footer-brand">palma<span>.ai</span></div><p class="footer-privacy">Built for a clearer view of your AI access.</p></div><div class="footer-right"><p>{_e(collector.get("name", "Palma scan"))} · {_e(collector.get("version", "version not recorded"))}</p><p>Rules {_e(collector.get("rulesVersion", "not recorded"))} · Schema {_e(snapshot.get("schemaVersion", "not recorded"))}</p></div></footer>{_artwork_credits()}<div class="local-note local-note-end">{_icon("lock")}<div><strong>Local by design.</strong> <span>This report makes no network requests. You control any sharing.</span></div></div></main><script>{_JS}</script></body></html>'''
+<footer class="report-footer"><div><div class="footer-brand">palma<span>.ai</span></div><p class="footer-privacy">Built for a clearer view of your AI access.</p></div><div class="footer-right"><p>{_e(collector.get("name", "Palma scan"))} · {_e(collector.get("version", "version not recorded"))}</p><p>Rules {_e(collector.get("rulesVersion", "not recorded"))} · Schema {_e(snapshot.get("schemaVersion", "not recorded"))}</p></div></footer>{_artwork_credits()}<div class="local-note local-note-end">{_icon("lock")}<div><strong>Local by design.</strong> <span>This report makes no network requests. You control any sharing.</span></div></div></main><script>{_JS}</script></body></html>"""

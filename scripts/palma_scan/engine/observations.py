@@ -1,5 +1,7 @@
 """Build a referentially complete report with bounded source/observation slots."""
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import hashlib
 
 from .filesystem import ReadGap
 from .identity import fingerprint
@@ -10,6 +12,8 @@ NAMES = {"claude-code": "Claude Code", "claude-desktop": "Claude Desktop", "code
          "windsurf": "Windsurf", "cline": "Cline", "roo-code": "Roo Code", "unknown": "Unknown"}
 VARIANTS = {"claude-code": "cli", "claude-desktop": "desktop", "gemini-cli": "cli",
             "vscode": "ide", "windsurf": "ide", "roo-code": "extension"}
+# Fields of an existing client that a later document can change.
+CLIENT_STATE = ("variant", "version", "installationState", "authModes", "authEvidence")
 
 
 def iso_time(timestamp=None):
@@ -30,6 +34,10 @@ class ReportBuilder:
         self.mcp_documents = []
         self.component_parents = {}
         self.manifests_seen = 0
+        # SHA-256 of each file read, used only to recognize identical copies of a
+        # declaration in memory. Never exported: a digest of a small file that holds
+        # a secret could be tested against guesses.
+        self.content: dict[str, str] = {}
 
     def context_id(self, candidate):
         return fingerprint(self.namespace, candidate.family, candidate.context)
@@ -59,6 +67,7 @@ class ReportBuilder:
         dropped = [self.sources.pop(identity) for identity in list(self.sources) if identity not in known]
         for source in dropped:
             self.documents.pop(source["id"], None)
+            self.content.pop(source["id"], None)
         return dropped
 
     def probe_document(self, candidate):
@@ -82,6 +91,58 @@ class ReportBuilder:
         """Accept a probed document into the report exactly as `document()` would have."""
         self.redactor.learn(data)
         self.documents[source["id"]] = data
+
+    def checkpoint(self):
+        """Registry state before one unit of collection runs; see `rollback`.
+
+        Entries are appended, and removed only by the unit that added them, so registry
+        sizes mark what existed before. An existing client can still be changed by a later
+        document (sign-in modes, variant, installation), so those fields are saved too.
+        """
+        clients = {context: {key: list(client[key]) if isinstance(client[key], list) else client[key] for key in CLIENT_STATE}
+                   for context, client in self.clients.items()}
+        evidence = {context: set(values) for context, values in self.variant_evidence.items()}
+        return len(self.sources), len(self.observations), len(self.mcp_documents), clients, evidence
+
+    def rollback(self, checkpoint):
+        """Discard everything registered or changed since `checkpoint`.
+
+        An adapter that fails part-way leaves nothing behind: no probe-only source naming
+        an unrelated application, no partial evidence that looks complete, and no sign-in
+        claim from a document whose evidence was withdrawn.
+        """
+        sources, observations, mcp_documents, clients, evidence = checkpoint
+        for identity in list(self.sources)[sources:]:
+            del self.sources[identity]
+            self.documents.pop(identity, None)
+            self.candidates.pop(identity, None)
+            self.component_parents.pop(identity, None)
+            self.content.pop(identity, None)
+        for identity in list(self.observations)[observations:]:
+            del self.observations[identity]
+        self.clients = {context: client for context, client in self.clients.items() if client["id"] in self.observations}
+        for context, state in clients.items():
+            if context in self.clients:
+                self.clients[context].update(state)
+        self.variant_evidence = evidence
+        del self.mcp_documents[mcp_documents:]
+
+    @contextmanager
+    def isolated(self, candidate):
+        """Collect one unit completely or not at all.
+
+        An unanticipated shape or adapter defect discards what the unit registered and
+        records a gap on `candidate`, so its siblings stay collectable. The exception text
+        is not recorded; it can echo contents. Collection limits (ReadGap) propagate.
+        """
+        checkpoint = self.checkpoint()
+        try:
+            yield
+        except ReadGap:
+            raise
+        except Exception:
+            self.rollback(checkpoint)
+            self.gap(candidate, "adapter_error", "invalid")
 
     def gap(self, candidate, reason, status="skipped"):
         identity = fingerprint(self.namespace, "gap", candidate.family, str(candidate.path), reason)
@@ -113,6 +174,7 @@ class ReportBuilder:
         try:
             raw, info = self.files.read(candidate.path)
             self.file_metadata(candidate, source, info)
+            self.content[source["id"]] = hashlib.sha256(raw).hexdigest()
             return source, raw
         except ReadGap as error:
             source.update(status=error.status, reason=error.reason)
@@ -168,7 +230,8 @@ class ReportBuilder:
                   "kind": "client", "name": NAMES.get(candidate.family, candidate.family), "family": candidate.family,
                   "variant": variant, "version": version,
                   "installationState": "installed" if installed else "config_only",
-                  "authModes": ["unknown"], "authEvidence": "unknown"}
+                  "authModes": ["unknown"], "authEvidence": "unknown",
+                  "projectScoped": candidate.context.startswith("project:")}
         self.clients[context] = client
         self.observations[client["id"]] = client
         return client

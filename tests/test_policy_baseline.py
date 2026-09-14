@@ -70,9 +70,18 @@ class PolicyBaselineTests(unittest.TestCase):
         matches = load("matched-observation-ids.json")
         findings = governance.evaluate(fixture_snapshot(), {"gatewayOrigins": expected["gatewayOrigins"]})
         by_rule = {finding["ruleId"]: finding for finding in findings}
-        expected_ids = {item["id"] for item in expected["items"]}
+        # Documented divergence: a fixed secret written inline is reported once, under the
+        # Critical credential rule, so the fixture's overlapping declaration leaves the
+        # static-secret rule with no remaining match.
+        reported_under = {"mcp-static-secret-auth": "mcp-inline-credential"}
+        for rule_id, primary in reported_under.items():
+            self.assertTrue(set(matches[rule_id]) <= set(by_rule[primary]["observationIds"]))
+            self.assertNotIn(rule_id, by_rule)
+        expected_ids = {item["id"] for item in expected["items"]} - set(reported_under)
         self.assertTrue(expected_ids.issubset(by_rule))
         for item in expected["items"]:
+            if item["id"] in reported_under:
+                continue
             with self.subTest(rule=item["id"]):
                 finding = by_rule[item["id"]]
                 self.assertEqual(sorted(finding["observationIds"]), matches[item["id"]])
@@ -137,7 +146,10 @@ class PolicyBaselineTests(unittest.TestCase):
             "details": {"key": "experimental.fixture", "nativeKey": "experimental.fixture", "category": "experimental",
                         "value": True, "valueCollected": True, "effectiveState": "unknown", "context": "base"}})
         findings = {item["ruleId"]: item for item in governance.evaluate(snapshot)}
-        self.assertTrue({item["id"] for item in governance.catalog()["rules"]}.issubset(findings))
+        # The static-secret rule's only fixture match also stores its secret inline, so it
+        # is reported under the Critical credential rule instead of as a second finding.
+        self.assertTrue(({item["id"] for item in governance.catalog()["rules"]} - {"mcp-static-secret-auth"}).issubset(findings))
+        self.assertNotIn("mcp-static-secret-auth", findings)
         self.assertEqual(findings["experimental-enabled"]["severity"], "info")
         self.assertEqual(findings["experimental-enabled"]["observationIds"], ["experimental-fixture"])
 

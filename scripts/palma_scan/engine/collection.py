@@ -38,6 +38,11 @@ class CollectOptions:
     max_files: int = 100000
     max_seconds: float = 300
     max_manifests: int = 20000
+    # One limit for the whole collection, beside the per-source limits above.
+    max_total_seconds: float = 1800
+    # Native reads exclude other personal owners. Copied homes retain original owners.
+    account_uid: int | None = None
+    excluded_roots: Sequence[Path | str] = field(default_factory=tuple)
 
 
 def _validate_options(options):
@@ -49,8 +54,9 @@ def _validate_options(options):
             raise ValueError("invalid collection limit")
     if options.max_sources < 2:
         raise ValueError("invalid report limit")
-    if not isinstance(options.max_seconds, (int, float)) or not math.isfinite(options.max_seconds) or options.max_seconds <= 0:
-        raise ValueError("invalid time limit")
+    for limit in (options.max_seconds, options.max_total_seconds):
+        if not isinstance(limit, (int, float)) or isinstance(limit, bool) or not math.isfinite(limit) or limit <= 0:
+            raise ValueError("invalid time limit")
 
 
 HOST_OS = {"darwin": "macos", "win32": "windows", "linux": "linux"}
@@ -83,7 +89,8 @@ class Collection:
         roots.extend(installation_roots(self.pending))
         roots.extend(candidate.path for candidate in self.pending if candidate.format == "directory")
         exact_files = [candidate.path for candidate in self.pending if candidate.format != "directory"]
-        self.files = SafeFiles(roots, Budget(options, time.monotonic()), exact_files)
+        self.files = SafeFiles(roots, Budget(options, time.monotonic()), exact_files, account_uid=options.account_uid, excluded_roots=options.excluded_roots)
+        self.deadline = time.monotonic() + options.max_total_seconds
         self.builder = ReportBuilder(self.files, Redactor(), options, namespace)
         self.processed = set()
         self.initial_workspaces = set(self.workspaces)
@@ -115,6 +122,9 @@ class Collection:
 
     def _process(self, candidates):
         for candidate in candidates:
+            if time.monotonic() >= self.deadline:
+                self.builder.limit_reason = "time_limit"  # Reported once as a collection limit.
+                return
             key = (candidate.family, str(candidate.path), candidate.role, candidate.context)
             if key in self.processed:
                 continue
@@ -123,12 +133,13 @@ class Collection:
                 # A large cache must not exhaust independent configuration sources.
                 self.files.budget = Budget(self.options, time.monotonic())
                 self.builder.manifests_seen = 0
-                self._candidate(candidate)
+                # Each candidate is an adapter failure boundary.
+                with self.builder.isolated(candidate):
+                    self._candidate(candidate)
             except ReadGap as error:
                 self.builder.gap(candidate, error.reason, error.status)
                 if error.reason in {"count_limit", "time_limit"}:
                     self.builder.limit_reason = error.reason
-                    continue
 
     def _candidate(self, candidate):
         handlers = {"skills": scan_skills, "agents": scan_agents, "plugins": scan_plugins,

@@ -14,6 +14,8 @@ import stat
 import time
 from urllib.parse import urlsplit
 
+from .dedup import content_digest
+
 # Primary documentation and schemas checked when adding these adapters. These
 # URLs are references for report readers, never collection or upload endpoints.
 SOURCE_REFERENCES = {
@@ -330,11 +332,21 @@ def _reference(value):
     return value
 
 
+class NormalizedConnection(dict):
+    """Parser view retaining the original declaration's transient identity.
+
+    An attribute cannot be supplied by a JSON key. It never enters exported evidence.
+    """
+    def __init__(self, entry):
+        super().__init__(entry)
+        self.content_digest = content_digest(entry)
+
+
 def _normalize_connection(entry, client, *, v2=False):
     """Normalize documented field aliases without resolving or running them."""
     if not isinstance(entry, dict):
         return entry
-    result = dict(entry)
+    result = NormalizedConnection(entry)
     if client == "opencode":
         if entry.get("type") == "local":
             result["type"] = "stdio"
@@ -412,7 +424,7 @@ def _credentials(collector, source, values, *, key="additionalCredentialStorage"
         references += reference_count
     if literal or references:
         counts = {"literalCredentialCount": literal, "credentialReferenceCount": references}
-        _record(collector, source, key, counts, context=context, extra=counts)
+        _record(collector, source, key, counts, context=context, extra=counts)["_content"] = content_digest(values)
 
 
 def _endpoint_summary(value):
@@ -495,10 +507,11 @@ def _opencode(collector, source, data):
             agent_id = "agent-" + _opaque(name)
             disabled_key = "disable" if version == "v1" else "disabled"
             enabled = "disabled" if agent.get(disabled_key) is True else "unknown"
-            collector.observe(source, "agent", name,
-                              {"activation": "configured", "auditStatus": "not-assessed", "context": context,
-                               "itemId": agent_id, "schema": version, "declaration": collector.declaration(field, name)},
-                              enabled, "extra:" + field + ":" + agent_id)
+            item = collector.observe(source, "agent", name,
+                                     {"activation": "configured", "auditStatus": "not-assessed", "context": context,
+                                      "itemId": agent_id, "schema": version, "declaration": collector.declaration(field, name)},
+                                     enabled, "extra:" + field + ":" + agent_id)
+            item["_content"] = content_digest(agent)
             key = "permission" if version == "v1" else "permissions"
             if key in agent:
                 _opencode_permissions(collector, source, agent[key], version=version, context=context + ":" + version + ":" + agent_id, enabled=enabled)
@@ -823,6 +836,12 @@ def _read_extension_rows(raw, budget):
         connection.execute("PRAGMA trusted_schema=OFF")
         connection.execute("PRAGMA query_only=ON")
         connection.execute("PRAGMA temp_store=MEMORY")
+        connection.execute("PRAGMA cell_size_check=ON")
+        # The database file is untrusted: defensive mode and a value-size limit.
+        if hasattr(connection, "setconfig") and hasattr(sqlite3, "SQLITE_DBCONFIG_DEFENSIVE"):
+            connection.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)
+        if hasattr(connection, "setlimit"):
+            connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 64 * 1024 * 1024)
         if hasattr(connection, "enable_load_extension"):
             connection.enable_load_extension(False)
         connection.deserialize(raw)

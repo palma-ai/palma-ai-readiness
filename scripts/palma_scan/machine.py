@@ -19,6 +19,8 @@ import subprocess
 import sys
 import time
 
+from .engine.filesystem import AccountBoundary, ReadGap, open_unredirected, platform_path, PERSON_UID_MINIMUM, NOBODY_UIDS
+
 DEFAULT_DIRECTORY_LIMIT = 500_000
 DEFAULT_ENTRY_LIMIT = 5_000_000
 DEFAULT_SECONDS = 1800
@@ -44,11 +46,25 @@ PRUNE_NAMES = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycach
                ".cache", "Cache", "Caches", "cache", "CachedData", "Code Cache",
                "GPUCache", "Service Worker", ".Trash", ".Trashes", "$RECYCLE.BIN",
                "System Volume Information", ".Spotlight-V100", ".fseventsd",
-               ".DocumentRevisions-V100", "Backups.backupdb", ".timemachine"}
+               ".DocumentRevisions-V100", "Backups.backupdb", ".timemachine",
+               "com.apple.TimeMachine.localsnapshots", "FileHistory", "WindowsImageBackup",
+               # Cloud-synced folders download online-only files when they are listed or read.
+               "CloudStorage", "Mobile Documents"}
+SF_DATALESS = 0x40000000
 LOCAL_FS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "bcachefs",
             "overlay", "rootfs", "apfs", "hfs", "hfsplus", "ufs", "msdos", "vfat",
             "exfat", "ntfs", "ntfs3", "fuseblk", "jfs", "reiserfs", "squashfs"}
 NETWORK_FS = {"nfs", "nfs4", "cifs", "smbfs", "smb3", "sshfs", "fuse.sshfs", "afpfs", "davfs", "9p"}
+# Folders inside profile roots that are not a person's account.
+NON_ACCOUNT_PROFILE_NAMES = {"Shared", "Public", "Default", "Default User", "All Users", "defaultuser0", "linuxbrew"}
+NO_LOGIN_SHELLS = {"/usr/sbin/nologin", "/sbin/nologin", "/usr/bin/nologin", "/bin/false", "/usr/bin/false", "/bin/sync"}
+# Fixed OS temporary roots: transient agent sessions and scratch copies, not projects.
+# Explicit --workspace paths are still collected. Environment variables such as TMPDIR
+# are deliberately not consulted, so they cannot hide a directory from discovery.
+TEMPORARY_ROOTS = {"macos": ("/private/tmp", "/private/var/tmp", "/private/var/folders"),
+                   "linux": ("/tmp", "/var/tmp")}
+# This scanner's own folder: a development clone or extracted release is not user evidence.
+SCANNER_ROOT = Path(__file__).resolve().parents[2]
 AI_EXTENSION_NAME = re.compile(r"\b(?:ChatGPT|Claude|Copilot|Gemini|Ollama|Perplexity|Sider|Monica|Merlin|HARPA AI|MaxAI|AI assistant)\b", re.I)
 EXTENSION_PERMISSIONS = {"debugger", "nativeMessaging", "tabs", "scripting", "cookies",
                          "downloads", "clipboardRead", "clipboardWrite", "webRequest"}
@@ -58,17 +74,48 @@ def _id(*items):
     return hashlib.sha256("\x1f".join(map(str, items)).encode()).hexdigest()[:16]
 
 
-def _regular_metadata(path, parser="json"):
-    """Read only a selected bounded metadata document; never follow final links."""
-    path = Path(path)
-    for parent in [*reversed(path.parents), path]:
-        info = parent.lstat()
-        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-            raise ValueError("redirected metadata")
+def _identity(path):
+    """A directory entry's (device, inode), without following a final link; None if unknown."""
+    try:
+        info = Path(path).lstat()
+    except (OSError, ValueError):
+        return None
+    return (info.st_dev, info.st_ino) if info.st_ino else None
+
+
+def _linked_exclusions(path, homes, blocked):
+    """Record bounded link targets without opening their contents or nonlocal paths."""
+    targets = set()
+    for _ in range(16):
+        try:
+            info = path.lstat()
+            if not (stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400):
+                break
+            target = platform_path(Path(os.path.normpath(path.parent / os.readlink(path))))
+        except (OSError, ValueError):
+            break
+        if (target in targets or target.parent == target or any(home.is_relative_to(target) for home in homes)
+                or any(target.is_relative_to(item) for item in blocked)):
+            break
+        targets.add(target)
+        path = target
+    return targets
+
+
+def _open_unredirected(path, flags, boundary=None):
+    boundary = boundary or AccountBoundary(os.getuid() if hasattr(os, "getuid") else None)
+    return open_unredirected(platform_path(Path(path)), flags, boundary)
+
+
+def _regular_metadata(path, parser="json", *, boundary=None):
+    """Read only a selected bounded metadata document; never follow any link on its path."""
+    path = platform_path(Path(path))
+    boundary = boundary or AccountBoundary(os.getuid() if hasattr(os, "getuid") else None)
+    boundary.check_path(path)
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_METADATA_BYTES:
         raise ValueError("unsupported metadata file")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    fd = _open_unredirected(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0), boundary)
     with os.fdopen(fd, "rb") as stream:
         opened = os.fstat(stream.fileno())
         if not stat.S_ISREG(opened.st_mode) or (info.st_dev, info.st_ino) != (opened.st_dev, opened.st_ino):
@@ -79,8 +126,13 @@ def _regular_metadata(path, parser="json"):
     if parser == "bytes":
         return raw
     if parser == "plist":
-        result = plistlib.loads(raw)
-        _validate_metadata(result)
+        try:
+            result = plistlib.loads(raw)
+            _validate_metadata(result)
+        except Exception as error:
+            # plistlib raises ExpatError, AttributeError, LookupError or
+            # IndexError for malformed documents; callers handle ValueError.
+            raise ValueError("unsupported metadata document") from error
         return result
     return _json_metadata(raw)
 
@@ -95,9 +147,12 @@ def _json_metadata(raw):
                 raise ValueError("duplicate metadata key")
             result[key] = value
         return result
-    result = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique,
-                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite metadata")))
-    _validate_metadata(result)
+    try:
+        result = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite metadata")))
+        _validate_metadata(result)
+    except Exception as error:
+        raise ValueError("unsupported metadata document") from error
     return result
 
 
@@ -117,9 +172,13 @@ def _validate_metadata(result):
 def _system_command(command):
     """Allow only exact read-only OS inventory commands, never user PATH."""
     command = tuple(map(str, command))
-    allowed = {("/bin/ps", "-eo", "comm="), ("/bin/ps", "-axo", "comm="),
-               ("/sbin/mount",), ("/usr/bin/dscl", ".", "-list", "/Users", "NFSHomeDirectory")}
-    windows = os.name == "nt" and command == (str(_windows_system_directory() / "tasklist.exe"), "/FO", "CSV", "/NH")
+    allowed = {("/sbin/mount",), ("/usr/bin/dscl", ".", "-list", "/Users", "NFSHomeDirectory")}
+    if hasattr(os, "getuid"):
+        # Process names of this account only.
+        uid = str(os.getuid())
+        allowed |= {("/bin/ps", "-x", "-U", uid, "-o", "comm="), ("/bin/ps", "-U", uid, "-o", "comm=")}
+    windows = os.name == "nt" and command == (str(_windows_system_directory() / "tasklist.exe"), "/FO", "CSV", "/NH",
+                                              "/FI", "USERNAME eq " + _windows_user())
     if command not in allowed and not windows:
         raise ValueError("unsupported OS inventory command")
     first = command[0]
@@ -133,6 +192,14 @@ def _system_command(command):
     if result.returncode or len(result.stdout) > MAX_OS_OUTPUT_BYTES:
         raise ValueError("OS inventory unavailable or oversized")
     return result.stdout.decode("utf-8", "replace")
+
+
+def _windows_user():
+    """This account for tasklist's USERNAME filter, with its domain; a wildcard is refused."""
+    name, domain = os.environ.get("USERNAME", ""), os.environ.get("USERDOMAIN", "")
+    if not name or any(character in name + domain for character in '*"?\\'):
+        raise ValueError("unsupported account name")
+    return domain + "\\" + name if domain else name
 
 
 def _windows_system_directory():
@@ -194,8 +261,20 @@ def _mounts(os_name):
     return list(dict.fromkeys(roots)), set(blocked), network_count
 
 
+def _current_home(os_name):
+    """The signed-in account's home, from a lookup of this account alone, never enumeration.
+
+    Directory-service accounts (LDAP, Active Directory) are missing from local account files.
+    """
+    if os_name == "windows":
+        return Path(os.environ["USERPROFILE"]) if os.environ.get("USERPROFILE") else None
+    import pwd
+    return Path(pwd.getpwuid(os.getuid()).pw_dir)
+
+
 def _profile_metadata(os_name):
-    profiles, roots, current = [], [], None
+    """Every person's account home, wherever it is, and the folders that hold account homes."""
+    profiles, roots = [], []
     if os_name == "windows":
         import winreg
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList") as key:
@@ -207,13 +286,16 @@ def _profile_metadata(os_name):
             count = winreg.QueryInfoKey(key)[0]
             for index in range(count):
                 try:
-                    with winreg.OpenKey(key, winreg.EnumKey(key, index)) as profile:
+                    name = winreg.EnumKey(key, index)
+                    # Local and domain (S-1-5-21) and Microsoft Entra (S-1-12-1) accounts are
+                    # people, on any drive; system and service profiles use other identifiers.
+                    if not name.startswith(("S-1-5-21-", "S-1-12-1-")):
+                        continue
+                    with winreg.OpenKey(key, name) as profile:
                         value = winreg.QueryValueEx(profile, "ProfileImagePath")[0]
                     profiles.append(Path(os.path.expandvars(value)))
                 except OSError:
                     continue
-        # USERPROFILE is a discovery hint, never evidence of unrestricted access.
-        current = Path(os.environ["USERPROFILE"]) if os.environ.get("USERPROFILE") else None
     elif os_name == "linux":
         # Read the local account database, not NSS/LDAP enumeration.
         with open("/etc/passwd", "rb") as stream:
@@ -224,23 +306,24 @@ def _profile_metadata(os_name):
             fields = line.split(":")
             if len(fields) != 7 or not fields[2].isdigit():
                 continue
-            uid, path = int(fields[2]), Path(fields[5])
-            if uid == os.getuid():
-                current = path
-            if (uid == 0 or uid >= 500) and path.is_absolute() and path.parent != path and str(path) not in {"/nonexistent", "/var/empty", "/dev/null"}:
+            uid, path, shell = int(fields[2]), Path(fields[5]), fields[6].strip()
+            # People, not service accounts: regular UIDs with a login shell.
+            person = uid >= PERSON_UID_MINIMUM["linux"] and uid not in NOBODY_UIDS and shell not in NO_LOGIN_SHELLS
+            if person and path.is_absolute() and path.parent != path and str(path) not in {"/nonexistent", "/var/empty", "/dev/null"}:
                 profiles.append(path)
         roots = [Path("/home")]
     else:
-        import pwd
-        current = Path(pwd.getpwuid(os.getuid()).pw_dir)
         for line in _system_command(["/usr/bin/dscl", ".", "-list", "/Users", "NFSHomeDirectory"]).splitlines():
             fields = line.split(None, 1)
             if len(fields) == 2:
-                path = Path(fields[1])
-                if path.is_absolute() and path.parent != path and str(path) not in {"/var/empty", "/nonexistent", "/dev/null"}:
+                name, path = fields[0], Path(fields[1].strip())
+                # Daemon accounts (_www, root, nobody) and tool prefixes are not people; a
+                # person's home can be relocated outside /Users.
+                person = not name.startswith("_") and name not in {"root", "daemon", "nobody"}
+                if person and path.is_absolute() and path.parent != path and path.name not in NON_ACCOUNT_PROFILE_NAMES and str(path) not in {"/var/empty", "/dev/null"}:
                     profiles.append(path)
         roots = [Path("/Users")]
-    return current, profiles, roots
+    return profiles, roots
 
 
 def _layout():
@@ -257,7 +340,11 @@ def _layout():
         layout["gaps"].append("Local volume metadata could not be fully read; unknown cross-device paths are skipped.")
         layout["roots"] = [Path(_windows_system_directory().anchor)] if os_name == "windows" else [Path("/")]
     try:
-        layout["currentHome"], layout["profiles"], layout["profileRoots"] = _profile_metadata(os_name)
+        layout["currentHome"] = _current_home(os_name)
+    except (OSError, KeyError, ImportError):
+        layout["currentHome"] = None  # Reported by the profile step.
+    try:
+        layout["profiles"], layout["profileRoots"] = _profile_metadata(os_name)
     except (OSError, ValueError, ImportError, subprocess.SubprocessError):
         layout["gaps"].append("Operating-system user-profile metadata could not be completely enumerated.")
         layout["profileRoots"] = [Path("/Users")] if os_name == "macos" else [Path("/home"), Path("/root")] if os_name == "linux" else [Path(_windows_system_directory().anchor) / "Users"]
@@ -273,15 +360,34 @@ class _Discovery:
         self.directory_limit, self.entry_limit = directory_limit, entry_limit
         self.seconds = seconds
         self.deadline = time.monotonic() + seconds
+        # Other accounts' homes; None until the profile step identifies them.
+        self.accounts = None
+        self.uid = os.getuid() if hasattr(os, "getuid") else None
         if layout.get("gaps"):
             source = self.source("operating-system-discovery-metadata")
             for reason in layout["gaps"]:
                 self.gap(source, reason, "error")
 
     def source(self, label):
-        item = {"id": "src-" + _id("machine", label), "client": "machine", "scope": "machine", "location": "machine:" + label, "status": "collected", "reason": "read-only discovery completed"}
-        self.sources.append(item)
+        identity = "src-" + _id("machine", label)
+        item = next((source for source in self.sources if source["id"] == identity), None)
+        if item is None:
+            item = {"id": identity, "client": "machine", "scope": "machine", "location": "machine:" + label, "status": "collected", "reason": "read-only discovery completed"}
+            self.sources.append(item)
         return item
+
+    def step(self, label, run, fallback=None):
+        """Run one discovery step; an unexpected failure is a gap, not a lost scan.
+
+        Expected OS and filesystem errors are handled inside each step. Anything
+        else (an unanticipated metadata shape or a defect) ends only this step:
+        evidence it already recorded is kept and its source reports the failure.
+        """
+        try:
+            return run()
+        except Exception:
+            self.gap(self.source(label), "This discovery step stopped unexpectedly; its results are incomplete.", "error")
+            return fallback
 
     def gap(self, source, reason, status="skipped"):
         reasons = source.setdefault("reasons", [])
@@ -318,62 +424,125 @@ class _Discovery:
         item = {"id": "obs-" + _id(source["id"], client, kind, len(self.observations)), "kind": kind, "client": client, "name": client if kind == "client" else "AI-related browser extension", "sourceId": source["id"], "location": source["location"], "enabled": "unknown", "details": details}
         self.observations.append(item)
 
+    @property
+    def boundary(self):
+        roots = tuple(item["root"] for item in self.accounts or ())
+        blocked = tuple(sorted(self.layout.get("blockedMounts", ())))
+        home = self.layout.get("currentHome")
+        key = (roots, blocked, home, self.uid, self.layout.get("os"))
+        if getattr(self, "_boundary_key", None) != key:
+            excluded = set(roots) | set(blocked)
+            for root in roots:
+                excluded.update(_linked_exclusions(root, {home} if home else set(), blocked))
+            self._account_boundary = AccountBoundary(self.uid, self.layout.get("os"), excluded)
+            self._boundary_key = key
+        return self._account_boundary
+
     def children(self, path, source):
         try:
+            boundary = self.boundary
+            boundary.check_path(path)
             if any(path == blocked or blocked in path.parents for blocked in self.layout.get("blockedMounts", set())):
                 return []
             info = path.lstat()
             if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
                 self.counts["symlinksSkipped"] += 1
                 return []
-            with os.scandir(path) as entries:
-                result = []
-                for item in entries:
-                    result.append(Path(item.path))
-                    if len(result) > 100_000:
-                        self.gap(source, "A discovery directory exceeded its 100,000-entry budget.")
-                        self.counts["truncated"] = True
-                        break
-                return sorted(result)
+            # List the folder that was checked, through a handle opened without following a
+            # final link and compared by identity, so a folder swapped in between is never listed.
+            listed = path
+            if os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW"):
+                listed = _open_unredirected(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, boundary)
+                opened = os.fstat(listed)
+                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    os.close(listed)
+                    raise ValueError("directory changed while opening")
+            try:
+                with os.scandir(listed) as entries:
+                    result = []
+                    for item in entries:
+                        result.append(path / item.name)
+                        if len(result) > 100_000:
+                            self.gap(source, "A discovery directory exceeded its 100,000-entry budget.")
+                            self.counts["truncated"] = True
+                            break
+            finally:
+                if listed is not path:
+                    os.close(listed)
+            return sorted(result)
+        except ReadGap:
+            return []
         except FileNotFoundError:
             return []
         except (OSError, ValueError) as error:
             self.error(source, error, path)
             return []
 
+    def other_person(self, info):
+        """Whether a directory is owned by another person's account (POSIX ownership)."""
+        return AccountBoundary(self.uid, self.layout.get("os")).other_person(info)
+
+    def usable_marker(self, path):
+        """An AI marker this account owns, or a system account does; another person's is not."""
+        try:
+            return not self.other_person(path.lstat())
+        except OSError:
+            return False
+
     def profiles(self):
+        """Return the scanning account's profile; no other account is opened.
+
+        Other accounts' home directories are recorded first, so project discovery can
+        skip them and their paths can be scrubbed, even when this account's own home
+        cannot be opened.
+        """
         source = self.source("local-user-profiles")
         paths = set(self.layout.get("profiles", []))
         current = self.layout.get("currentHome")
-        if current:
-            paths.add(current)
         for parent in self.layout.get("profileRoots", []):
-            paths.update(self.children(parent, source))
-        result = []
-        for path in sorted(paths, key=str):
-            if not path.is_absolute() or path.parent == path:
-                continue
-            if str(path).startswith("\\\\") or any(path == blocked or blocked in path.parents for blocked in self.layout.get("blockedMounts", set())):
-                self.gap(source, "A profile on a nonlocal or excluded filesystem was not opened.")
-                continue
-            try:
-                info = path.lstat()
-                if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-                    self.counts["symlinksSkipped"] += 1
-                    continue
-                if not stat.S_ISDIR(info.st_mode):
-                    continue
-                self.counts["profilesDiscovered"] += 1
-                with os.scandir(path):
+            paths.update(child for child in self.children(parent, source)
+                         if child.name not in NON_ACCOUNT_PROFILE_NAMES and not child.name.startswith("."))
+        # Another spelling of this account's home (letter case, a Windows short name) is the
+        # same directory, not another account.
+        own = _identity(current) if current else None
+        others = sorted((path for path in paths if path != current and path.is_absolute() and path.parent != path
+                         and (own is None or _identity(path) != own)), key=str)
+        # Aliases are stable ordinals, never names: ~ for this account, user-N for others.
+        self.accounts = [{"root": path, "alias": "user-" + str(index)} for index, path in enumerate(others, 1)]
+        self.counts["profilesExcluded"] = len(others)
+        if not current or not current.is_absolute() or current.parent == current:
+            self.gap(source, "The current account's home directory could not be determined.", "error")
+            return []
+        if str(current).startswith("\\\\") or any(current == blocked or blocked in current.parents for blocked in self.layout.get("blockedMounts", set())):
+            self.gap(source, "The current account's profile is on a nonlocal or excluded filesystem and was not opened.")
+            return []
+        try:
+            info = current.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                self.counts["symlinksSkipped"] += 1
+                return []
+            if not stat.S_ISDIR(info.st_mode):
+                return []
+            self.counts["profilesDiscovered"] += 1
+            boundary = self.boundary
+            boundary.check_path(current)
+            if os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY"):
+                fd = _open_unredirected(current, os.O_RDONLY | os.O_DIRECTORY, boundary)
+                try:
+                    with os.scandir(fd):
+                        pass
+                finally:
+                    os.close(fd)
+            else:
+                with os.scandir(current):
                     pass
-                alias = "~" if path == current else "user-" + str(len(result) + 1)
-                result.append({"root": path, "alias": alias})
-                self.counts["profilesAccessible"] += 1
-            except FileNotFoundError:
-                continue
-            except OSError as error:
-                self.error(source, error, path)
-        return result
+        except FileNotFoundError:
+            return []
+        except (OSError, ReadGap) as error:
+            self.error(source, error, current)
+            return []
+        self.counts["profilesAccessible"] += 1
+        return [{"root": current, "alias": "~"}]
 
     def projects(self, profiles, explicit):
         source = self.source("local-volume-project-discovery")
@@ -383,9 +552,48 @@ class _Discovery:
         blocked = self.layout.get("blockedMounts", set())
         self.counts["networkMountsSkipped"] = self.layout.get("networkMountCount", 0)
         self.counts["nonLocalMountsSkipped"] = len(blocked)
+        self.counts["excludedDirectories"] = 0
         profiles_set = {item["root"] for item in profiles}
         projects = {Path(item).absolute() for item in explicit}
-        seen, queue = set(), deque((root, 0, None) for root in roots)
+        if self.accounts is None:
+            # Other accounts' homes cannot be told apart from projects, so none is searched.
+            self.gap(source, "Other accounts on this computer could not be identified, so local drives were not searched for projects.", "error")
+            self.counts["projectsDiscovered"] = len(projects)
+            return sorted(projects, key=str)
+        # Other accounts' homes, OS temporary folders and this scanner's own folder are
+        # never traversed. Directory identity is compared too, so a firmlink or bind mount
+        # of an excluded folder stays excluded; this account's own home never is.
+        excluded = set(self.boundary.excluded)
+        excluded.update(Path(path) for path in TEMPORARY_ROOTS.get(self.layout.get("os"), ()))
+        if self.layout.get("os") == "windows":
+            excluded.update(item["root"] / "AppData/Local/Temp" for item in profiles)
+        excluded.add(SCANNER_ROOT)
+        homes = profiles_set | ({self.layout["currentHome"]} if self.layout.get("currentHome") else set())
+
+        for path in list(excluded):
+            excluded.update(_linked_exclusions(path, homes, blocked))
+        excluded -= profiles_set
+        excluded_identities = set(map(_identity, excluded)) - set(map(_identity, profiles_set)) - {None}
+
+        def outside_scope(root):
+            # A volume mounted inside an excluded folder, or a backup, is not searched either.
+            if any(part in PRUNE_NAMES for part in root.parts):
+                return True
+            for folder in (root, *root.parents):
+                if folder in profiles_set:
+                    return False
+                if folder in excluded or _identity(folder) in excluded_identities:
+                    return True
+            return False
+
+        other_names = {item["root"].name.casefold() for item in self.accounts} - {home.name.casefold() for home in homes}
+        queue = deque()
+        for root in roots:
+            if root not in profiles_set and outside_scope(root):
+                self.counts["excludedDirectories"] += 1
+            else:
+                queue.append((root, 0, None))
+        seen = set()
         while queue:
             if self.counts["directoriesVisited"] >= self.directory_limit or self.counts["entriesVisited"] >= self.entry_limit or time.monotonic() >= self.deadline:
                 self.counts["truncated"] = True
@@ -408,14 +616,22 @@ class _Discovery:
                 if identity in seen:
                     continue
                 seen.add(identity)
+                if directory in excluded or identity in excluded_identities or self.other_person(info):
+                    self.counts["excludedDirectories"] += 1
+                    continue
                 self.counts["directoriesVisited"] += 1
                 children = self.children(directory, source)
                 self.counts["entriesVisited"] += len(children)
-                if directory not in profiles_set and directory.parent != directory and any(child.name in PROJECT_MARKERS for child in children):
+                if directory not in profiles_set and directory.parent != directory and any(child.name in PROJECT_MARKERS and self.usable_marker(child) for child in children):
                     projects.add(directory)
                 for child in children:
                     if child.name in PRUNE_NAMES or child.suffix.lower() == ".app":
                         self.counts["prunedDirectories"] += 1
+                        continue
+                    # A copy of another account's home, such as D:\Backup\Users\alice, on a disk
+                    # that records no owner.
+                    if child.name.casefold() in other_names and directory.name.casefold() in {"users", "home"}:
+                        self.counts["excludedDirectories"] += 1
                         continue
                     # Native OS binary/system trees have dedicated inventories.
                     if directory.parent == directory and child.name in {"proc", "sys", "dev", "run", "bin", "sbin", "lib", "lib64", "usr", "System", "Windows"}:
@@ -423,6 +639,9 @@ class _Discovery:
                         continue
                     try:
                         child_info = child.lstat()
+                        if (getattr(child_info, "st_flags", 0) or 0) & SF_DATALESS:
+                            self.counts["prunedDirectories"] += 1  # Online-only: listing it would download it.
+                            continue
                         if stat.S_ISDIR(child_info.st_mode) and not getattr(child_info, "st_file_attributes", 0) & 0x400:
                             if depth >= 128:
                                 self.counts["truncated"] = True
@@ -439,12 +658,16 @@ class _Discovery:
         return sorted(projects, key=str)
 
     def processes(self):
+        """Names of AI apps this account is running; other accounts' processes are not listed."""
         source = self.source("running-process-names")
         os_name = self.layout["os"]
         try:
-            command = [_windows_system_directory() / "tasklist.exe", "/FO", "CSV", "/NH"] if os_name == "windows" else ["/bin/ps", "-axo" if os_name == "macos" else "-eo", "comm="]
             if os_name not in {"windows", "macos", "linux"}:
                 raise ValueError("unsupported OS")
+            if os_name == "windows":
+                command = [_windows_system_directory() / "tasklist.exe", "/FO", "CSV", "/NH", "/FI", "USERNAME eq " + _windows_user()]
+            else:
+                command = ["/bin/ps", *(["-x"] if os_name == "macos" else []), "-U", str(os.getuid()), "-o", "comm="]
             text = _system_command(command)
             names = [row[0] for row in csv.reader(io.StringIO(text)) if row] if os_name == "windows" else text.splitlines()
             found = set()
@@ -456,7 +679,7 @@ class _Discovery:
                     found.add(EXECUTABLES[name])
             for client in sorted(found):
                 self.indicator(source, client, "running", "operating-system-process-name")
-        except (OSError, ValueError, subprocess.SubprocessError):
+        except (OSError, KeyError, ValueError, subprocess.SubprocessError):
             self.gap(source, "The fixed operating-system process inventory could not be read; running AI processes remain unverified.", "error")
 
     def services(self, profiles):
@@ -493,7 +716,7 @@ class _Discovery:
                     if path.suffix != ".plist":
                         continue
                     try:
-                        data = _regular_metadata(path, "plist")
+                        data = _regular_metadata(path, "plist", boundary=self.boundary)
                         if not isinstance(data, dict):
                             continue
                         program = data.get("Program")
@@ -530,7 +753,7 @@ class _Discovery:
                                 source["metadata"] = {"manifestsInspected": inspected, "aiNameHints": candidates}
                                 return
                             try:
-                                data = _regular_metadata(version / "manifest.json")
+                                data = _regular_metadata(version / "manifest.json", boundary=self.boundary)
                                 if not isinstance(data, dict):
                                     continue
                                 inspected += 1
@@ -541,7 +764,7 @@ class _Discovery:
                                 if isinstance(name, str) and re.fullmatch(r"__MSG_[A-Za-z0-9_]{1,128}__", name):
                                     locale = data.get("default_locale")
                                     if isinstance(locale, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", locale):
-                                        messages = _regular_metadata(version / "_locales" / locale / "messages.json")
+                                        messages = _regular_metadata(version / "_locales" / locale / "messages.json", boundary=self.boundary)
                                         message = messages.get(name[6:-2], {}) if isinstance(messages, dict) else {}
                                         name = message.get("message") if isinstance(message, dict) else None
                                 if not isinstance(name, str) or not AI_EXTENSION_NAME.search(name):
@@ -568,7 +791,7 @@ class _Discovery:
                         self.gap(source, "Browser metadata discovery reached its manifest/time budget.")
                         source["metadata"] = {"manifestsInspected": inspected, "aiNameHints": candidates}
                         return
-                    data = _regular_metadata(profile / "extensions.json")
+                    data = _regular_metadata(profile / "extensions.json", boundary=self.boundary)
                     addons = data.get("addons", []) if isinstance(data, dict) else []
                     if not isinstance(addons, list):
                         raise ValueError("unsupported extension metadata")
@@ -608,7 +831,8 @@ def _system_sources(os_name, discovery=None, *, environ=None):
         safe = pure is not None and pure.is_absolute() and pure.parent != pure and ".." not in pure.parts and len(value) <= 32768 and "\x00" not in value and not value.startswith(("\\\\", "//"))
         if safe and discovery:
             path = Path(value)
-            safe = not any(path == blocked or blocked in path.parents for blocked in discovery.layout.get("blockedMounts", set()))
+            outside = [*discovery.layout.get("blockedMounts", set()), *(item["root"] for item in discovery.accounts or ())]
+            safe = not any(path == folder or folder in path.parents for folder in outside)
         if safe:
             env[key] = value
         elif discovery:
@@ -641,7 +865,7 @@ def _system_sources(os_name, discovery=None, *, environ=None):
                 sources.append({"path": path, "client": "claude-code", "location": "system:claude-code/managed-settings.d/policy-" + str(ordinal) + ".json", "format": "json", "context": "managed"})
         if os_name == "macos":
             try:
-                data = _regular_metadata(Path("/Library/Managed Preferences/com.anthropic.claudecode.plist"), "plist")
+                data = _regular_metadata(Path("/Library/Managed Preferences/com.anthropic.claudecode.plist"), "plist", boundary=discovery.boundary)
                 if isinstance(data, dict):
                     sources.append({"data": data, "client": "claude-code", "location": "system:claude-code/managed-preferences", "format": "json", "context": "managed"})
             except FileNotFoundError:
@@ -691,33 +915,71 @@ def _environment(os_name):
     return {"visibility": "current-operating-system-context", "runtimeContext": "container" if containers else "unknown", "containerIndicators": containers, "subsystemIndicators": subsystems, "sandboxIndicators": sandbox, "isolation": "not-established"}
 
 
+def _account_names(os_name):
+    """The scanning account's login name, used only to scrub it from exported text."""
+    try:
+        if os_name == "windows":
+            return {os.environ["USERNAME"]} if os.environ.get("USERNAME") else set()
+        import pwd
+        return {pwd.getpwuid(os.getuid()).pw_name}
+    except (ImportError, KeyError, OSError):
+        return set()
+
+
+def identity_scrubber(current_home, others=(), names=()):
+    """Scrub home paths, and the signed-in account's name, from exported text.
+
+    This account's home and name are scrubbed even when its home could not be opened.
+    Other accounts are never opened, so only their home paths can appear; their bare
+    names are not rewritten, which could corrupt unrelated labels.
+    """
+    from .engine.redaction import IdentityScrubber
+    own = {"root": current_home or "", "alias": "~", "names": {*names, *([Path(current_home).name] if current_home else [])}}
+    return IdentityScrubber([own, *({"root": item["root"], "alias": item["alias"]} for item in others)])
+
+
 def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT, entry_limit=DEFAULT_ENTRY_LIMIT, seconds=DEFAULT_SECONDS):
-    """Discover local-machine scopes independently of CWD or a supplied home."""
+    """Discover the scanning account's AI evidence on this machine.
+
+    Scope: this account's profile, system and managed policy, installations, the AI
+    apps this account is running, and AI projects on local volumes outside folders
+    that belong to other accounts. Other accounts are never opened.
+    """
     from .collector import collect_scopes
+    from .dedup import merge_clients
     if any(type(value) is not int or value < 1 for value in (directory_limit, entry_limit, seconds)):
         raise ValueError("Machine discovery budgets must be positive integers.")
     started = datetime.now(timezone.utc).isoformat()
     layout = _layout()
     discovery = _Discovery(layout, directory_limit=directory_limit, entry_limit=entry_limit, seconds=seconds)
-    profiles = discovery.profiles()
-    discovery.processes()
+    # A failed profile step scans no profile: an unchecked home could be a network mount or a link.
+    profiles = discovery.step("local-user-profiles", discovery.profiles, [])
+    discovery.step("running-process-names", discovery.processes)
     # The retained baseline engine invoked by collect_scopes owns its richer
     # installation/MSIX/native-package/payload collectors; do not replace it
     # with name-only executable discovery here.
-    discovery.services(profiles)
-    discovery.browser_extensions(profiles)
-    systems = _system_sources(layout["os"], discovery)
-    projects = discovery.projects(profiles, workspaces or [])
+    discovery.step("services-and-startup-metadata", lambda: discovery.services(profiles))
+    discovery.step("browser-ai-extension-metadata", lambda: discovery.browser_extensions(profiles))
+    systems = discovery.step("managed-policy-metadata", lambda: _system_sources(layout["os"], discovery), [])
+    explicit = sorted(dict.fromkeys(Path(item).absolute() for item in workspaces or []), key=str)
+    projects = discovery.step("local-volume-project-discovery", lambda: discovery.projects(profiles, workspaces or []), explicit)
     environment = _environment(layout["os"])
     if environment["containerIndicators"]:
         source = discovery.source("runtime-context")
         discovery.gap(source, "Container indicators were observed; the outer host filesystem and processes are not verified.")
-    snapshot = collect_scopes(profiles, system_sources=systems, workspaces=projects, scope_type="machine", discovery_gaps=sorted(discovery.gaps), include_installations=True)
+    # Environment overrides and search paths must not lead into other accounts or network disks.
+    outside = discovery.boundary.excluded
+    snapshot = collect_scopes(profiles, system_sources=systems, workspaces=projects, scope_type="machine", discovery_gaps=sorted(discovery.gaps),
+                              include_installations=True, excluded_roots=outside)
     snapshot["startedAt"] = started
     snapshot["completedAt"] = datetime.now(timezone.utc).isoformat()
     snapshot["sources"].extend(discovery.sources)
-    snapshot["observations"].extend(discovery.observations)
+    snapshot["coverage"]["sourcesInspected"] = snapshot["coverage"].get("sourcesInspected", 0) + sum(item["status"] == "collected" for item in discovery.sources)
+    snapshot["observations"] = merge_clients(snapshot["observations"] + discovery.observations)
     snapshot["scope"].update(platform=layout["os"], profileCount=len(profiles), workspaceCount=len(projects), discovery=discovery.counts, environment=environment)
     if discovery.gaps or any(item["status"] in {"error", "skipped"} for item in discovery.sources):
         snapshot["status"] = "partial"
-    return snapshot
+    # Paths outside the scanned home (temporary folders, caches, other volumes) can
+    # still embed an account's home or name. Remove both from every exported string.
+    scrubber = identity_scrubber(layout.get("currentHome"), discovery.accounts or (), _account_names(layout["os"]))
+    return scrubber.scrub_snapshot(snapshot)

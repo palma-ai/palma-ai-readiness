@@ -1,5 +1,6 @@
 """Exercise the scanner against synthetic files; never inspect the real home."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -263,7 +264,9 @@ class CollectorTests(unittest.TestCase):
         for relative in ("Library/Application Support/Code/User/mcp.json", "AppData/Roaming/Code/User/mcp.json", ".config/Code/User/mcp.json"):
             self.put(relative, {"servers": {"demo": {"command": "node"}}})
         result = collect(self.home)
-        self.assertEqual(len(self.items(result, "mcp")), 3)
+        mcps = self.items(result, "mcp")
+        self.assertEqual(len(mcps), 1)
+        self.assertEqual(mcps[0]["details"]["locationCount"], 3)
 
     def test_environment_placeholders_and_windsurf_file_refs_are_not_literals(self):
         self.put(".codeium/windsurf/mcp_config.json", {"mcpServers": {"demo": {"command": "node", "env": {"API_KEY": "${file:/DO_NOT_READ}", "TOKEN": "$TOKEN", "PASSWORD": "<your-token>"}}}})
@@ -350,7 +353,9 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual({item["details"]["context"] for item in settings}, {"base"})
         self.assertEqual({item["details"]["accountAlias"] for item in settings}, {"~", "user-1"})
         self.assertEqual(len({item["id"] for item in settings}), 2)
-        self.assertEqual({item["location"] for item in settings}, {"~/.claude/settings.json", str(another / ".claude/settings.json")})
+        # Another account's home is its ordinal alias, never a path that names the person.
+        self.assertEqual({item["location"] for item in settings}, {"~/.claude/settings.json", "user-1/.claude/settings.json"})
+        self.assertNotIn("PRIVATE_OTHER_ACCOUNT", json.dumps(result))
         self.assertEqual(result["scope"]["profileCount"], 2)
 
     def test_machine_system_sources_have_managed_context_and_actionable_locations(self):
@@ -363,6 +368,38 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(result["sources"][0]["scope"], "system")
         self.assertEqual(result["sources"][0]["location"], str(path))
 
+    def test_a_gateway_address_beside_another_url_is_not_governed_and_each_client_reads_its_own_field(self):
+        self.put(".cursor/mcp.json", {"mcpServers": {
+            "decoy": {"type": "http", "httpUrl": "https://gateway.palma.ai/mcp", "url": "https://collector.example.test/mcp"},
+            "cursor-field": {"type": "http", "httpUrl": "http://collector.example.test/mcp", "url": "https://mcp.example.test/mcp"}}})
+        self.put(".gemini/settings.json", {"mcpServers": {"gemini-field": {"httpUrl": "https://mcp.example.test/mcp", "url": "http://collector.example.test/mcp"}}})
+        result = collect(self.home)
+        connectors = {item["name"]: item["details"] for item in self.items(result, "mcp")}
+        self.assertFalse([name for name, details in connectors.items() if details.get("governedBy")])
+        # Cursor reads url; Gemini CLI reads httpUrl before url.
+        self.assertIs(connectors["cursor-field"]["cleartextTransport"], False)
+        self.assertIs(connectors["gemini-field"]["cleartextTransport"], False)
+
+    def test_vscode_hook_folders_are_counted_not_named_in_the_row(self):
+        self.put(".vscode/settings.json", {"chat.hookFilesLocations": {"PRIVATE_HOOKS/hooks": True}}, self.base / "project")
+        result = collect(self.home, [self.base / "project"])
+        [hook] = [item for item in self.items(result, "hook") if item["client"] == "vscode"]
+        self.assertEqual(hook["name"], "Hook folders")
+        self.assertEqual(hook["details"]["typeCounts"]["configuredLocations"], 1)
+
+    def test_without_a_profile_project_files_are_not_labelled_as_the_home(self):
+        project = self.base / "opt/team-app"
+        path = self.put(".claude/settings.json", {"permissions": {"defaultMode": "bypassPermissions"}}, project)
+        # No home was opened, so no account environment or installation is attributed to one.
+        with patch.dict(os.environ, {"CODEX_HOME": str(self.base / "codex-home")}), \
+             patch("palma_scan.baseline.installed_client_candidates", return_value=[]), \
+             patch("palma_scan.baseline.installation_candidates", return_value=[]):
+            result = collect_scopes([], workspaces=[project], include_installations=True)
+        locations = {source["location"] for source in result["sources"]}
+        self.assertIn(path.as_posix(), locations)
+        self.assertFalse([location for location in locations if location.startswith("~")])
+        self.assertEqual(result["scope"]["profileCount"], 0)
+
     def test_machine_scope_can_scan_more_than_16_discovered_workspaces(self):
         roots = []
         for index in range(18):
@@ -371,7 +408,10 @@ class CollectorTests(unittest.TestCase):
             roots.append(root)
         result = collect_scopes([], workspaces=roots)
         self.assertEqual(result["scope"]["workspaceCount"], 18)
-        self.assertEqual(len(self.items(result, "setting")), 18)
+        settings = self.items(result, "setting")
+        self.assertEqual(len(settings), 1)
+        self.assertEqual(settings[0]["details"]["locationCount"], 18)
+        self.assertEqual(len(set(settings[0]["details"]["locations"])), 18)
 
     def test_targeted_plugin_layout_collects_packaged_skills_agents_and_mcp(self):
         relative = ".codex/plugins/cache/market/PRIVATE_PLUGIN/1.0.0"
