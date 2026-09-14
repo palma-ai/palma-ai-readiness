@@ -45,6 +45,31 @@ class CopiesTests(unittest.TestCase):
     def finding(self, snapshot, rule):
         return next(item for item in snapshot["findings"] if item["ruleId"] == rule)
 
+    def test_distinct_reference_targets_stay_separate_but_copies_still_merge(self):
+        for syntax in ("{env:TARGET_%s}", "{file:/private/target-%s}", "${{ secrets.TARGET_%s }}"):
+            with self.subTest(syntax=syntax):
+                for folder, target in (("one", "A"), ("copy", "A"), ("two", "B")):
+                    self.put(folder + "/opencode.json", {"mcp": {"tracker": {
+                        "type": "remote", "url": "https://mcp.example.test/mcp",
+                        "headers": {"Authorization": syntax % target}}}})
+                snapshot = self.scan([self.home / folder for folder in ("one", "copy", "two")])
+                connectors = self.kind(snapshot, "mcp")
+                self.assertEqual(len(connectors), 2)
+                self.assertEqual(sorted(item["details"].get("copyCount", 1) for item in connectors), [1, 2])
+                self.assertTrue(all(item["details"]["credentialReferenceCount"] == 1 for item in connectors))
+                exported = json.dumps(snapshot)
+                for raw in (syntax % "A", syntax % "B", "PALMA_UNRESOLVED"):
+                    self.assertNotIn(raw, exported)
+
+    def test_a_single_observed_version_survives_an_unversioned_installation(self):
+        for relative in (".local/bin/claude", ".local/share/claude/versions/2.1.10"):
+            self.put(relative, "Synthetic payload; never executed.")
+            (self.home / relative).chmod(0o700)
+        [client] = self.kind(self.scan([]), "client")
+        self.assertEqual(client["details"].get("version"), "2.1.10")
+        self.assertEqual(client["details"]["installationState"], "installed")
+        self.assertEqual(client["details"]["locationCount"], 2)
+
     def test_different_credentials_stay_separate_and_a_copied_credential_names_every_file(self):
         self.put("code/app-one/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-ONE-0000000000000000"}})
         self.put("code/app-two/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-TWO-0000000000000000"}})

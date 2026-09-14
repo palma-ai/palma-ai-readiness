@@ -36,6 +36,7 @@ class ReleaseTests(unittest.TestCase):
                                  "scripts/palma_scan/baseline.py", "scripts/palma_scan/machine.py", "scripts/palma_scan/dedup.py",
                                  "scripts/palma_scan/extra_clients.py", "scripts/palma_scan/brands_extra.py",
                                  "scripts/palma_scan/engine/collection.py",
+                                 "scripts/palma_scan/engine/git_provenance.py",
                                  "scripts/palma_scan/engine/adapters/plugin_components.py",
                                  "scripts/palma_scan/_vendor/json5/lib.py",
                                  "scripts/palma_scan/_vendor/yaml/loader.py",

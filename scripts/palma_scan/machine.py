@@ -19,6 +19,8 @@ import subprocess
 import sys
 import time
 
+from .engine.filesystem import AccountBoundary, ReadGap, open_unredirected, platform_path, PERSON_UID_MINIMUM, NOBODY_UIDS
+
 DEFAULT_DIRECTORY_LIMIT = 500_000
 DEFAULT_ENTRY_LIMIT = 5_000_000
 DEFAULT_SECONDS = 1800
@@ -56,11 +58,6 @@ NETWORK_FS = {"nfs", "nfs4", "cifs", "smbfs", "smb3", "sshfs", "fuse.sshfs", "af
 # Folders inside profile roots that are not a person's account.
 NON_ACCOUNT_PROFILE_NAMES = {"Shared", "Public", "Default", "Default User", "All Users", "defaultuser0", "linuxbrew"}
 NO_LOGIN_SHELLS = {"/usr/sbin/nologin", "/sbin/nologin", "/usr/bin/nologin", "/bin/false", "/usr/bin/false", "/bin/sync"}
-# Folders owned by another person's account are not opened wherever they are: a relocated,
-# mounted or linked home, a backup of one, or a folder they own elsewhere. Lower ids and
-# nobody are system accounts, which own shared locations such as /opt and /Volumes.
-PERSON_UID_MINIMUM = {"macos": 500, "linux": 1000}
-NOBODY_UIDS = {65534, 4294967294}
 # Fixed OS temporary roots: transient agent sessions and scratch copies, not projects.
 # Explicit --workspace paths are still collected. Environment variables such as TMPDIR
 # are deliberately not consulted, so they cannot hide a directory from discovery.
@@ -86,40 +83,39 @@ def _identity(path):
     return (info.st_dev, info.st_ino) if info.st_ino else None
 
 
-def _open_unredirected(path, flags):
-    """Open a path one component at a time from the filesystem root, following no link.
-
-    A folder checked earlier and swapped for a link afterwards is refused, not followed.
-    """
-    path = Path(path)
-    if os.open not in os.supports_dir_fd or not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
-        return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0))
-    parts = path.relative_to(path.anchor).parts
-    if not parts:
-        return os.open(path, flags | os.O_NOFOLLOW)
-    access = getattr(os, "O_PATH", getattr(os, "O_SEARCH", os.O_RDONLY)) | os.O_DIRECTORY | os.O_NOFOLLOW
-    directory = os.open(path.anchor, access)
-    try:
-        for part in parts[:-1]:
-            child = os.open(part, access, dir_fd=directory)
-            os.close(directory)
-            directory = child
-        return os.open(parts[-1], flags | os.O_NOFOLLOW, dir_fd=directory)
-    finally:
-        os.close(directory)
+def _linked_exclusions(path, homes, blocked):
+    """Record bounded link targets without opening their contents or nonlocal paths."""
+    targets = set()
+    for _ in range(16):
+        try:
+            info = path.lstat()
+            if not (stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400):
+                break
+            target = platform_path(Path(os.path.normpath(path.parent / os.readlink(path))))
+        except (OSError, ValueError):
+            break
+        if (target in targets or target.parent == target or any(home.is_relative_to(target) for home in homes)
+                or any(target.is_relative_to(item) for item in blocked)):
+            break
+        targets.add(target)
+        path = target
+    return targets
 
 
-def _regular_metadata(path, parser="json"):
+def _open_unredirected(path, flags, boundary=None):
+    boundary = boundary or AccountBoundary(os.getuid() if hasattr(os, "getuid") else None)
+    return open_unredirected(platform_path(Path(path)), flags, boundary)
+
+
+def _regular_metadata(path, parser="json", *, boundary=None):
     """Read only a selected bounded metadata document; never follow any link on its path."""
-    path = Path(path)
-    for parent in [*reversed(path.parents), path]:
-        info = parent.lstat()
-        if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-            raise ValueError("redirected metadata")
+    path = platform_path(Path(path))
+    boundary = boundary or AccountBoundary(os.getuid() if hasattr(os, "getuid") else None)
+    boundary.check_path(path)
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_METADATA_BYTES:
         raise ValueError("unsupported metadata file")
-    fd = _open_unredirected(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    fd = _open_unredirected(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0), boundary)
     with os.fdopen(fd, "rb") as stream:
         opened = os.fstat(stream.fileno())
         if not stat.S_ISREG(opened.st_mode) or (info.st_dev, info.st_ino) != (opened.st_dev, opened.st_ino):
@@ -428,8 +424,24 @@ class _Discovery:
         item = {"id": "obs-" + _id(source["id"], client, kind, len(self.observations)), "kind": kind, "client": client, "name": client if kind == "client" else "AI-related browser extension", "sourceId": source["id"], "location": source["location"], "enabled": "unknown", "details": details}
         self.observations.append(item)
 
+    @property
+    def boundary(self):
+        roots = tuple(item["root"] for item in self.accounts or ())
+        blocked = tuple(sorted(self.layout.get("blockedMounts", ())))
+        home = self.layout.get("currentHome")
+        key = (roots, blocked, home, self.uid, self.layout.get("os"))
+        if getattr(self, "_boundary_key", None) != key:
+            excluded = set(roots) | set(blocked)
+            for root in roots:
+                excluded.update(_linked_exclusions(root, {home} if home else set(), blocked))
+            self._account_boundary = AccountBoundary(self.uid, self.layout.get("os"), excluded)
+            self._boundary_key = key
+        return self._account_boundary
+
     def children(self, path, source):
         try:
+            boundary = self.boundary
+            boundary.check_path(path)
             if any(path == blocked or blocked in path.parents for blocked in self.layout.get("blockedMounts", set())):
                 return []
             info = path.lstat()
@@ -440,7 +452,7 @@ class _Discovery:
             # final link and compared by identity, so a folder swapped in between is never listed.
             listed = path
             if os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW"):
-                listed = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                listed = _open_unredirected(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, boundary)
                 opened = os.fstat(listed)
                 if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
                     os.close(listed)
@@ -458,6 +470,8 @@ class _Discovery:
                 if listed is not path:
                     os.close(listed)
             return sorted(result)
+        except ReadGap:
+            return []
         except FileNotFoundError:
             return []
         except (OSError, ValueError) as error:
@@ -466,10 +480,7 @@ class _Discovery:
 
     def other_person(self, info):
         """Whether a directory is owned by another person's account (POSIX ownership)."""
-        minimum = PERSON_UID_MINIMUM.get(self.layout.get("os"))
-        uid = getattr(info, "st_uid", None)
-        return (minimum is not None and self.uid is not None and uid is not None
-                and uid != self.uid and uid >= minimum and uid not in NOBODY_UIDS)
+        return AccountBoundary(self.uid, self.layout.get("os")).other_person(info)
 
     def usable_marker(self, path):
         """An AI marker this account owns, or a system account does; another person's is not."""
@@ -513,11 +524,21 @@ class _Discovery:
             if not stat.S_ISDIR(info.st_mode):
                 return []
             self.counts["profilesDiscovered"] += 1
-            with os.scandir(current):
-                pass
+            boundary = self.boundary
+            boundary.check_path(current)
+            if os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY"):
+                fd = _open_unredirected(current, os.O_RDONLY | os.O_DIRECTORY, boundary)
+                try:
+                    with os.scandir(fd):
+                        pass
+                finally:
+                    os.close(fd)
+            else:
+                with os.scandir(current):
+                    pass
         except FileNotFoundError:
             return []
-        except OSError as error:
+        except (OSError, ReadGap) as error:
             self.error(source, error, current)
             return []
         self.counts["profilesAccessible"] += 1
@@ -542,30 +563,15 @@ class _Discovery:
         # Other accounts' homes, OS temporary folders and this scanner's own folder are
         # never traversed. Directory identity is compared too, so a firmlink or bind mount
         # of an excluded folder stays excluded; this account's own home never is.
-        excluded = {item["root"] for item in self.accounts}
+        excluded = set(self.boundary.excluded)
         excluded.update(Path(path) for path in TEMPORARY_ROOTS.get(self.layout.get("os"), ()))
         if self.layout.get("os") == "windows":
             excluded.update(item["root"] / "AppData/Local/Temp" for item in profiles)
         excluded.add(SCANNER_ROOT)
         homes = profiles_set | ({self.layout["currentHome"]} if self.layout.get("currentHome") else set())
 
-        def link_target(path):
-            # A home that is a link or junction is excluded where it points, too. The target is
-            # computed without following the link; it never covers a volume or this account's
-            # home, and a nonlocal target is never looked up.
-            try:
-                info = path.lstat()
-                if not (stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400):
-                    return None
-                target = Path(os.path.normpath(path.parent / os.readlink(path)))
-            except (OSError, ValueError):
-                return None
-            if (target.parent == target or any(home.is_relative_to(target) for home in homes)
-                    or any(target == item or item in target.parents for item in blocked)):
-                return None
-            return target
-
-        excluded |= set(map(link_target, excluded)) - {None}
+        for path in list(excluded):
+            excluded.update(_linked_exclusions(path, homes, blocked))
         excluded -= profiles_set
         excluded_identities = set(map(_identity, excluded)) - set(map(_identity, profiles_set)) - {None}
 
@@ -710,7 +716,7 @@ class _Discovery:
                     if path.suffix != ".plist":
                         continue
                     try:
-                        data = _regular_metadata(path, "plist")
+                        data = _regular_metadata(path, "plist", boundary=self.boundary)
                         if not isinstance(data, dict):
                             continue
                         program = data.get("Program")
@@ -747,7 +753,7 @@ class _Discovery:
                                 source["metadata"] = {"manifestsInspected": inspected, "aiNameHints": candidates}
                                 return
                             try:
-                                data = _regular_metadata(version / "manifest.json")
+                                data = _regular_metadata(version / "manifest.json", boundary=self.boundary)
                                 if not isinstance(data, dict):
                                     continue
                                 inspected += 1
@@ -758,7 +764,7 @@ class _Discovery:
                                 if isinstance(name, str) and re.fullmatch(r"__MSG_[A-Za-z0-9_]{1,128}__", name):
                                     locale = data.get("default_locale")
                                     if isinstance(locale, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", locale):
-                                        messages = _regular_metadata(version / "_locales" / locale / "messages.json")
+                                        messages = _regular_metadata(version / "_locales" / locale / "messages.json", boundary=self.boundary)
                                         message = messages.get(name[6:-2], {}) if isinstance(messages, dict) else {}
                                         name = message.get("message") if isinstance(message, dict) else None
                                 if not isinstance(name, str) or not AI_EXTENSION_NAME.search(name):
@@ -785,7 +791,7 @@ class _Discovery:
                         self.gap(source, "Browser metadata discovery reached its manifest/time budget.")
                         source["metadata"] = {"manifestsInspected": inspected, "aiNameHints": candidates}
                         return
-                    data = _regular_metadata(profile / "extensions.json")
+                    data = _regular_metadata(profile / "extensions.json", boundary=self.boundary)
                     addons = data.get("addons", []) if isinstance(data, dict) else []
                     if not isinstance(addons, list):
                         raise ValueError("unsupported extension metadata")
@@ -859,7 +865,7 @@ def _system_sources(os_name, discovery=None, *, environ=None):
                 sources.append({"path": path, "client": "claude-code", "location": "system:claude-code/managed-settings.d/policy-" + str(ordinal) + ".json", "format": "json", "context": "managed"})
         if os_name == "macos":
             try:
-                data = _regular_metadata(Path("/Library/Managed Preferences/com.anthropic.claudecode.plist"), "plist")
+                data = _regular_metadata(Path("/Library/Managed Preferences/com.anthropic.claudecode.plist"), "plist", boundary=discovery.boundary)
                 if isinstance(data, dict):
                     sources.append({"data": data, "client": "claude-code", "location": "system:claude-code/managed-preferences", "format": "json", "context": "managed"})
             except FileNotFoundError:
@@ -962,7 +968,7 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
         source = discovery.source("runtime-context")
         discovery.gap(source, "Container indicators were observed; the outer host filesystem and processes are not verified.")
     # Environment overrides and search paths must not lead into other accounts or network disks.
-    outside = [*(item["root"] for item in discovery.accounts or ()), *layout.get("blockedMounts", set())]
+    outside = discovery.boundary.excluded
     snapshot = collect_scopes(profiles, system_sources=systems, workspaces=projects, scope_type="machine", discovery_gaps=sorted(discovery.gaps),
                               include_installations=True, excluded_roots=outside)
     snapshot["startedAt"] = started

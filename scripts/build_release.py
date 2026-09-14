@@ -21,7 +21,7 @@ def main():
                 "baseline", "extra_clients", "brands_extra", "governance", "report_theme", "report_font", "report_regulation")],
              "scripts/palma_scan/palma_catalog.json",
              *[f"scripts/palma_scan/engine/{name}.py" for name in
-               ("__init__", "collection", "filesystem", "identity", "observations", "paths",
+               ("__init__", "collection", "filesystem", "git_provenance", "identity", "observations", "paths",
                 "parsing", "redaction", "supplemental_paths", "version", "installations",
                 "installation_apps", "installation_codex", "installation_paths",
                 "installation_windows", "windows_editors", "windows_packages", "windows_products")],

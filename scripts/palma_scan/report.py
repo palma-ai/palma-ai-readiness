@@ -829,6 +829,8 @@ def _inventory(observations: list[dict], findings: list[tuple[str, dict]], share
             rows.append(f'<li class="inventory-row"><div class="inventory-item-name">{_observation_identity(item)}<span class="inventory-kind-label">{_e(kind_label)}</span></div><div class="fact-list">{_state_chip(item)}{"".join(_facts(item))}{finding_link}</div><div class="inventory-where">{_observation_context(details)}{_where(item, share)}</div></li>')
         total += len(rows)
         body = f'<ul class="inventory-rows">{"".join(rows)}</ul>' if rows else '<p class="inventory-empty">No connectors, skills, plugins, agents, hooks or settings were recorded for this client.</p>'
+        if not rows:
+            body += '<div class="inventory-client-location">' + "".join(_where(row, share) for row in client_rows) + '</div>'
         groups.append(f'<details class="inventory-group" id="{_client_anchor(client)}"><summary><span class="inventory-group-icon">{_brand_icon(icon)}</span><span class="inventory-kind"><strong>{_e(name)}</strong><span>{breakdown or "Installation and configuration"}</span></span><span class="fact-list inventory-client-facts">{client_facts}{findings_note}</span><span class="inventory-count" data-total="{len(rows)}">{len(rows)}</span>{_icon("chevron", "disclosure-icon")}</summary>{body}</details>')
     toolbar = f'<div class="inventory-toolbar js-only"><label class="search-field">{_icon("search")}<span class="sr-only">Search inventory by name, client, or location</span><input id="inventory-search" type="search" placeholder="Find a skill, connector, client, or location" autocomplete="off" spellcheck="false"></label><p id="inventory-search-status" role="status" aria-live="polite">{total} items</p><button class="text-button" type="button" id="clear-inventory-search" hidden>Clear search</button></div>' if observations else ""
     empty = '<div class="empty-state"><p>No inventory observations were recorded.</p></div>'
@@ -970,6 +972,10 @@ _JS = r"""
   cards.forEach(card => card.querySelector('.finding-evidence').addEventListener('toggle', syncExpansion));
   const inventoryGroups = Array.from(document.querySelectorAll('.inventory-group'));
   const inventoryRows = Array.from(document.querySelectorAll('.inventory-row'));
+  const inventoryGroupText = new Map(inventoryGroups.map(group => [group,
+    Array.from(group.querySelectorAll('.inventory-kind strong, .inventory-client-facts, .inventory-client-location'))
+      .map(item => item.textContent).join(' ').toLocaleLowerCase()
+  ]));
   // A row matches its client's name too, so "claude code" finds that client's items.
   const inventoryText = new Map(inventoryRows.map(row => {
     const client = row.closest('.inventory-group').querySelector('.inventory-kind strong');
@@ -991,15 +997,15 @@ _JS = r"""
     });
     inventoryGroups.forEach(group => {
       const matching = Array.from(group.querySelectorAll('.inventory-row')).filter(row => !row.hidden).length;
-      group.hidden = matching === 0;
-      if (query && matching) group.open = true;
+      group.hidden = Boolean(query) && matching === 0 && !inventoryGroupText.get(group).includes(query);
+      if (query && !group.hidden) group.open = true;
       const count = group.querySelector('.inventory-count');
       count.textContent = query ? `${matching} / ${count.dataset.total}` : count.dataset.total;
     });
     if (!query && inventoryQuery) inventoryOpenState.forEach(([group, open]) => { group.open = open; });
     inventoryQuery = query;
     if (inventoryStatus) inventoryStatus.textContent = query ? `${visible} of ${inventoryRows.length} items` : `${inventoryRows.length} items`;
-    if (inventoryEmpty) inventoryEmpty.hidden = visible > 0 || inventoryRows.length === 0;
+    if (inventoryEmpty) inventoryEmpty.hidden = !query || inventoryGroups.some(group => !group.hidden);
     if (inventoryClear) inventoryClear.hidden = !query;
   };
   if (inventorySearch) inventorySearch.addEventListener('input', updateInventory);

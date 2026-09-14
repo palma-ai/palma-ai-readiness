@@ -9,7 +9,6 @@ persistent device identity, network request, command execution or upload.
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
-import fnmatch
 import os
 from pathlib import Path
 import re
@@ -27,6 +26,7 @@ from .engine.parsing import validate_tree, ParseError
 from .engine.filesystem import SafeFiles, Budget, ReadGap
 from .engine.adapters.configs import collect_config, collect_cached_settings
 from .dedup import collapse_declarations
+from .engine.git_provenance import version_controlled as _version_controlled
 
 
 def _extra():
@@ -108,69 +108,6 @@ def _known_candidates(root, alias, workspace=False):
         candidate = replace(candidate, location=location, scope=scope if candidate.role != 'settings-cache' else 'managed', context=context)
         result.setdefault((candidate.family, candidate.path, candidate.role), candidate)
     return list(result.values())
-
-
-def _version_controlled(path, stop, files, repositories):
-    """Whether a project file is inside a git repository and not excluded by its .gitignore.
-
-    A repository is a .git folder holding HEAD, or a linked worktree's .git file. Reads go
-    through the collection's safe file access, and the search stops at the account home so
-    a dotfiles repository there does not mark every project. Only the repository's
-    top-level .gitignore is applied; anything unreadable counts as not version-controlled.
-    ``repositories`` caches each folder's ignore patterns, or None when it is no repository.
-    """
-    for parent in list(path.parents)[:16]:
-        if parent == stop or parent.parent == parent:
-            return False
-        if parent not in repositories:
-            repositories[parent] = _repository_patterns(parent, files)
-        if repositories[parent] is not None:
-            return repositories[parent] is not False and not _git_ignored(path.relative_to(parent).parts, repositories[parent])
-    return False
-
-
-MAX_GITIGNORE_RULES = 1000
-
-
-def _repository_patterns(folder, files):
-    """The folder's compiled .gitignore rules if it is a repository root, False if they cannot
-    be used (unreadable, or more rules than are checked), else None."""
-    try:
-        marker = files.info(folder / '.git')
-    except ReadGap:
-        return None
-    try:
-        if stat.S_ISDIR(marker.st_mode):
-            files.info(folder / '.git' / 'HEAD')
-        elif not files.read(folder / '.git')[0].startswith(b'gitdir: '):
-            return False
-    except ReadGap:
-        return False
-    try:
-        lines = files.read(folder / '.gitignore')[0].decode('utf-8', 'replace').splitlines()
-    except ReadGap as error:
-        return [] if error.reason == 'not_found' else False
-    rules = []
-    for line in lines:
-        pattern = line.strip()
-        if pattern and not pattern.startswith('#'):
-            negate = pattern.startswith('!')
-            pattern = pattern.removeprefix('!')
-            rules.append((negate, '/' in pattern.rstrip('/'), re.compile(fnmatch.translate(pattern.strip('/')))))
-    # Parsed once per repository; a huge ignore file counts as unknown rather than slowing the scan.
-    return rules if len(rules) <= MAX_GITIGNORE_RULES else False
-
-
-def _git_ignored(parts, rules):
-    """Whether .gitignore rules exclude a path or a folder above it; the last match decides."""
-    for depth in range(1, len(parts) + 1):
-        excluded = False
-        for negate, anchored, pattern in rules:
-            if pattern.match('/'.join(parts[:depth]) if anchored else parts[depth - 1]):
-                excluded = not negate
-        if excluded:
-            return True  # Git cannot re-include a file below an excluded folder.
-    return False
 
 
 def _safe_version(value):
@@ -457,7 +394,7 @@ def _add_editor_state(collection, alias):
     if helper is None:
         return
     options = replace(collection.options, max_file_bytes=64 * 1024 * 1024, max_total_bytes=128 * 1024 * 1024)
-    files = SafeFiles([collection.home], Budget(options, time.monotonic()), account_uid=options.account_uid)
+    files = SafeFiles([collection.home], Budget(options, time.monotonic()), account_uid=options.account_uid, excluded_roots=options.excluded_roots)
     from .collector import _id
     for record in helper(collection.home, files=files):
         relative = Path(record['relative'])
@@ -536,7 +473,7 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         candidates = list({(c.family, c.path, c.role, c.context): c for c in candidates}.values())
         # Dynamic project candidates from original state maps use these roots.
         options = CollectOptions(home=root, os_name=platform, environ=env, workspaces=assigned, discover_os_packages=machine, max_manifests=MAX_MANIFESTS,
-                                 account_uid=os.getuid() if machine and hasattr(os, 'getuid') else None)
+                                 account_uid=os.getuid() if machine and hasattr(os, 'getuid') else None, excluded_roots=excluded_roots)
         collection = _LocalCollection(options, ('local', alias), candidates)
         # Initial candidates already contain full workspace layouts. Original
         # state discovery may add further in-scope project roots while running.
@@ -554,7 +491,8 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
             context = entry.get('context', 'managed')
             candidate = Candidate(entry['client'], 'managed' if context == 'managed' else 'system', Path(entry.get('path', root / '.palma-in-memory' / str(index))), location, entry.get('format', 'json'), entry.get('role', 'config'), context)
             (memory if 'data' in entry else candidates).append((candidate, entry['data']) if 'data' in entry else candidate)
-        options = CollectOptions(home=root, os_name=platform, environ={}, max_manifests=MAX_MANIFESTS)
+        options = CollectOptions(home=root, os_name=platform, environ={}, max_manifests=MAX_MANIFESTS,
+                                 account_uid=os.getuid() if machine and hasattr(os, 'getuid') else None, excluded_roots=excluded_roots)
         collection = _LocalCollection(options, ('local', 'system'), candidates)
         collection.run()
         for candidate, data in memory:

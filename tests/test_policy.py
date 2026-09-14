@@ -24,6 +24,11 @@ class PolicyTests(unittest.TestCase):
         path.write_text(value if isinstance(value, str) else json.dumps(value), encoding="utf-8")
         return path
 
+    def repository(self, relative):
+        self.put(relative + "/.git/HEAD", "ref: refs/heads/main\n")
+        for name in ("objects", "refs"):
+            (self.home / relative / ".git" / name).mkdir()
+
     def scan(self, workspaces=()):
         snapshot = collect(self.home, list(workspaces), scope_type="copied-home")
         snapshot["findings"] = evaluate(snapshot)
@@ -112,13 +117,13 @@ class PolicyTests(unittest.TestCase):
             self.assertLess(len(finding["summary"]), 1000, finding["ruleId"])
 
     def test_version_control_needs_a_real_repository_that_does_not_ignore_the_skill(self):
-        self.put("code/kept/.git/HEAD", "ref: refs/heads/main\n")
+        self.repository("code/kept")
         self.put("code/kept/.gitignore", "# build output\n*.log\n/build\n")
         self.put("code/kept/.claude/skills/kept/SKILL.md", "---\nname: kept\n---\nSteps.")
-        self.put("code/ignored/.git/HEAD", "ref: refs/heads/main\n")
+        self.repository("code/ignored")
         self.put("code/ignored/.gitignore", "node_modules/\n.claude/\n")
         self.put("code/ignored/.claude/skills/ignored/SKILL.md", "---\nname: ignored\n---\nSteps.")
-        self.put("code/reincluded/.git/HEAD", "ref: refs/heads/main\n")
+        self.repository("code/reincluded")
         self.put("code/reincluded/.gitignore", ".claude/\n!.claude/skills/reincluded/SKILL.md\n")
         self.put("code/reincluded/.claude/skills/reincluded/SKILL.md", "---\nname: reincluded\n---\nSteps.")
         self.put("code/empty-marker/.git", "")
@@ -138,9 +143,12 @@ class PolicyTests(unittest.TestCase):
         self.assertIn("keyboard and mouse", finding["impact"])
 
     def test_version_controlled_project_skills_are_high_and_other_local_skills_stay_critical(self):
-        self.put("code/tracked/.git/HEAD", "ref: refs/heads/main\n")
+        self.repository("code/tracked")
         self.put("code/tracked/.claude/skills/release/SKILL.md", "---\nname: release\n---\nSteps.")
         self.put("code/worktree/.git", "gitdir: ../tracked/.git/worktrees/worktree\n")
+        self.put("code/tracked/.git/worktrees/worktree/HEAD", "ref: refs/heads/worktree\n")
+        self.put("code/tracked/.git/worktrees/worktree/commondir", "../..\n")
+        self.put("code/tracked/.git/worktrees/worktree/gitdir", str(self.home / "code/worktree/.git") + "\n")
         self.put("code/worktree/.claude/skills/deploy/SKILL.md", "---\nname: deploy\n---\nSteps.")
         self.put("code/untracked/.claude/skills/scratch/SKILL.md", "---\nname: scratch\n---\nSteps.")
         self.put(".claude/skills/downloaded/SKILL.md", "---\nname: downloaded\n---\nSteps.")

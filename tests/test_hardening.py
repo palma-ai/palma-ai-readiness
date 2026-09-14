@@ -261,6 +261,8 @@ class ScopeTests(Home):
 class CostTests(Home):
     def test_a_huge_gitignore_counts_as_unknown_rather_than_slowing_the_scan(self):
         self.put("code/app/.git/HEAD", "ref: refs/heads/main\n")
+        for name in ("objects", "refs"):
+            (self.home / "code/app/.git" / name).mkdir()
         self.put("code/app/.gitignore", "".join(f"generated-{index}/\n" for index in range(1_001)))
         self.put("code/app/.claude/skills/kept/SKILL.md", "---\nname: kept\n---\nSteps.")
         findings = [item for item in self.scan([self.home / "code/app"])["findings"] if item["ruleId"] == "skills-local-unreviewed"]

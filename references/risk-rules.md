@@ -12,7 +12,7 @@ The scan records **configuration declarations, installation metadata, and select
 
 Apply the defined rating policy; do not independently change it because the scan is personal, offline, or based on configuration:
 
-- **Critical:** local MCP, direct or unverified remote MCP, computer/browser capabilities, locally sourced skills requiring review (project skills inside a git repository keep the catalog's High when the repository has a real `.git` and its top-level `.gitignore` does not exclude them), potential configuration credentials, and configured hooks. These conditions need immediate governance attention without waiting for a demonstrated attack. The permission-only exceptions below are Low.
+- **Critical:** local MCP, direct or unverified remote MCP, computer/browser capabilities, locally sourced skills requiring review (project skills inside a git repository keep the catalog's High when the repository metadata is valid and checked repository ignore files do not exclude them), potential configuration credentials, and configured hooks. These conditions need immediate governance attention without waiting for a demonstrated attack. The permission-only exceptions below are Low.
 - **High:** actual sandbox-off, supported authentication and data-sharing concerns, side-loaded plugins, and oversized cached skill/plugin components that can waste agent context, tokens or usage. Size alone does not prove that a component was loaded or billed.
 - **Medium:** scoped catalog concerns such as unknown origin, absent content digests and unknown transport unless a specifically unsupported/malformed MCP shape is established.
 - **Low:** permission bypass, automatic or absent approval prompts, unrestricted folder grants, and specifically malformed/unsupported MCP shapes. Group and highlight these observations instead of discarding them. Original catalog ratings remain visible as `baselineSeverity`.
@@ -237,3 +237,14 @@ Match an exact parsed hostname using HTTPS and the default port or port 443. Rej
 The Browserbase source repository was archived in July 2026; identification does not imply ongoing maintenance. The reviewed vendor manifest identifies npm `@browserbasehq/mcp` and a separate OCI image `browserbasehq/mcp-server-browserbase`. Do not invent npm `@browserbasehq/mcp-server-browserbase` from the image/repository name. [Browserbase manifest](https://github.com/browserbase/mcp-server-browserbase/blob/main/server.json)
 
 Google Drive's `@modelcontextprotocol/server-gdrive` is documented in the [archived MCP reference servers](https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive), not as a current Google-maintained MCP package. It is excluded from the current official-provider package catalog. Self-hosted endpoints, enterprise hostnames, transport bridges, and other providers require separately verified additions; this catalog does not claim to recognize every integration.
+
+The project-skill provenance check validates `HEAD`, object/ref directories and linked
+worktree metadata, then applies repository and nested `.gitignore` files plus
+`.git/info/exclude`, including the repository's `core.ignoreCase` setting. It never
+executes Git or reads its index or objects. This is a
+repository indicator, not proof that a skill is tracked, committed or reviewed;
+global Git configuration and global ignore files are not evaluated. Unreadable or
+unsupported metadata and ignore syntax (including backslash escapes and POSIX
+character classes), configuration includes, Git extensions, relocated worktrees,
+or more than 1,000 applicable rules, leave provenance unknown
+and preserve the Critical rating.

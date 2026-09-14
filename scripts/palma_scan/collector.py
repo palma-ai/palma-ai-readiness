@@ -514,6 +514,7 @@ class _Collector:
                 self.observe(source, "setting", key, {"key": key, "value": value, "context": context}, "enabled", context + ":" + key)
 
     def mcps(self, source, entries, parent_disabled=False, context="base", map_key="mcpServers"):
+        from .extra_clients import NormalizedConnection
         self.redactor.learn(entries)
         source["classification"] = "mcp-configuration"
         source["componentKind"] = "mcp"
@@ -584,7 +585,7 @@ class _Collector:
             if type(entry.get("sandboxEnabled")) is bool:
                 details["sandboxConfigured"] = entry["sandboxEnabled"]
             item = self.observe(source, "mcp", display_name, details, enabled, context + ":" + item_id)
-            item["_content"] = content_digest(entry)
+            item["_content"] = entry.content_digest if isinstance(entry, NormalizedConnection) else content_digest(entry)
             if transport == "unknown" or (url is not None and endpoint["endpointScope"] == "unknown"):
                 source.setdefault("issueKind", "uninterpreted-mcp-transport")
                 self.gap(source, "an MCP transport or endpoint could not be interpreted", "error")

@@ -122,9 +122,10 @@ def merge_clients(observations):
         if "running" in activations:
             details["processObserved"] = True
         versions = sorted({version for item in items if isinstance(version := item.get("details", {}).get("version"), str)}, key=_version_key)
+        if versions:
+            details["version"] = versions[-1]
         if len(versions) > 1:
             details["versions"] = versions
-            details["version"] = versions[-1]
         modes = sorted({mode for item in items for mode in item.get("details", {}).get("authModes", []) if isinstance(mode, str)})
         if modes:
             details["authModes"] = [mode for mode in modes if mode != "unknown"] or ["unknown"]

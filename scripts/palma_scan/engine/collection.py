@@ -40,9 +40,9 @@ class CollectOptions:
     max_manifests: int = 20000
     # One limit for the whole collection, beside the per-source limits above.
     max_total_seconds: float = 1800
-    # In a machine scan, the scanning account: another account's file reached through a hard
-    # link is refused. None for copied homes, whose files keep their original owners.
+    # Native reads exclude other personal owners. Copied homes retain original owners.
     account_uid: int | None = None
+    excluded_roots: Sequence[Path | str] = field(default_factory=tuple)
 
 
 def _validate_options(options):
@@ -89,7 +89,7 @@ class Collection:
         roots.extend(installation_roots(self.pending))
         roots.extend(candidate.path for candidate in self.pending if candidate.format == "directory")
         exact_files = [candidate.path for candidate in self.pending if candidate.format != "directory"]
-        self.files = SafeFiles(roots, Budget(options, time.monotonic()), exact_files, account_uid=options.account_uid)
+        self.files = SafeFiles(roots, Budget(options, time.monotonic()), exact_files, account_uid=options.account_uid, excluded_roots=options.excluded_roots)
         self.deadline = time.monotonic() + options.max_total_seconds
         self.builder = ReportBuilder(self.files, Redactor(), options, namespace)
         self.processed = set()

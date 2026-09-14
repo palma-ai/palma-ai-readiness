@@ -332,11 +332,21 @@ def _reference(value):
     return value
 
 
+class NormalizedConnection(dict):
+    """Parser view retaining the original declaration's transient identity.
+
+    An attribute cannot be supplied by a JSON key. It never enters exported evidence.
+    """
+    def __init__(self, entry):
+        super().__init__(entry)
+        self.content_digest = content_digest(entry)
+
+
 def _normalize_connection(entry, client, *, v2=False):
     """Normalize documented field aliases without resolving or running them."""
     if not isinstance(entry, dict):
         return entry
-    result = dict(entry)
+    result = NormalizedConnection(entry)
     if client == "opencode":
         if entry.get("type") == "local":
             result["type"] = "stdio"

@@ -47,6 +47,8 @@ development installation of `jsdom`:
 
 ```bash
 NODE_PATH=/path/to/development/node_modules node tests/report-interactions.cjs /path/to/new-demo/report.html
+NODE_PATH=/path/to/development/node_modules node tests/report-interactions.cjs /path/to/new-demo/share.html
+PALMA_TEST_PYTHON=python3 NODE_PATH=/path/to/development/node_modules node tests/report-client-only.cjs
 ```
 
 Before publishing, inspect the generated report at desktop and mobile sizes and run
