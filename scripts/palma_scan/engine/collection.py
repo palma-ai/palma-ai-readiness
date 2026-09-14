@@ -129,6 +129,11 @@ class Collection:
                 if error.reason in {"count_limit", "time_limit"}:
                     self.builder.limit_reason = error.reason
                     continue
+            except Exception:
+                # One candidate is the adapter failure boundary: an unanticipated
+                # shape or adapter defect leaves the other sources collectable.
+                # The exception text is not recorded; it can echo file contents.
+                self.builder.gap(candidate, "adapter_error", "invalid")
 
     def _candidate(self, candidate):
         handlers = {"skills": scan_skills, "agents": scan_agents, "plugins": scan_plugins,

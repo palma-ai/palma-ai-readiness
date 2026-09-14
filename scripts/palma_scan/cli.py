@@ -134,6 +134,14 @@ def main(argv=None):
         message = str(error) if isinstance(error, ValueError) else "Could not read or write the requested local artifacts. Check paths and permissions."
         print(f"Palma: {message}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("Palma: interrupted before the command completed.", file=sys.stderr)
+        return 130
+    except Exception as error:
+        # Last resort: a traceback or exception text can echo local file contents.
+        # The exception class is enough to report a defect.
+        print(f"Palma: the command stopped because of an unexpected internal error ({type(error).__name__}).", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

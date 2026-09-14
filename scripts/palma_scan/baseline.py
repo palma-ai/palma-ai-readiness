@@ -6,6 +6,7 @@ Parsed documents remain in memory for the exact typed governance evaluator.
 Only sanitized v2 observations leave this bridge; there is no enrollment,
 persistent device identity, network request, command execution or upload.
 """
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 import os
@@ -174,6 +175,23 @@ def _source_location(collector, candidate, old, home, alias):
     return collector.display_text(location, maximum=4096)
 
 
+@contextmanager
+def _atomic_source(collector, source):
+    """Translate one source's evidence completely or not at all.
+
+    Extraction runs over untrusted local documents. An unanticipated shape or an
+    extractor defect must neither end the scan nor leave half-annotated records,
+    such as profile settings missing their applicability. The source keeps an
+    error status; the exception text is withheld because it can echo contents.
+    """
+    start = len(collector.observations)
+    try:
+        yield start
+    except Exception:
+        del collector.observations[start:]
+        collector.gap(source, 'evidence in this source could not be interpreted safely', 'error')
+
+
 def _merge(collector, collection, alias, workspaces):
     """Translate complete sanitized evidence and actionable local item labels."""
     from .collector import _id, SETTING_TYPES
@@ -208,42 +226,44 @@ def _merge(collector, collection, alias, workspaces):
         source, candidate = sources.get(identity), builder.candidates.get(identity)
         if not source or not candidate or candidate.role.startswith('installed-') or candidate.role in {'registry-probe', 'installation'}:
             continue
-        context = source['context']
-        start = len(collector.observations)
-        normalizer = getattr(extra, 'normalize_extra_data', None)
-        normalized = normalizer(source['client'], data) if normalizer else data
-        if candidate.role in {'agent', 'plugin', 'skill'} or candidate.scope == 'plugin':
-            # A package declaration is not a client settings file. Only its
-            # documented integration/hooks blocks and credential presence apply.
-            from .collector import _credential_counts
-            literal, references = _credential_counts(normalized)
-            if literal or references:
-                counts = {'literalCredentialCount': literal, 'credentialReferenceCount': references}
-                collector.observe(source, 'setting', 'Package credential storage', {'key': 'credentialStorage', 'value': counts, **counts}, discriminator='package-credentials')
-            collector.extensions(source, normalized, context)
-            key = 'mcp_servers' if 'mcp_servers' in normalized else 'mcpServers'
-            if key in normalized:
-                collector.mcps(source, normalized[key], context=context, map_key=key)
-        else:
-            collector.process_data(collection.home, source, normalized, context, candidate.path.name)
-        for item in collector.observations[start:]:
+        with _atomic_source(collector, source) as start:
+            context = source['context']
+            normalizer = getattr(extra, 'normalize_extra_data', None)
+            normalized = normalizer(source['client'], data) if normalizer else data
+            if candidate.role in {'agent', 'plugin', 'skill'} or candidate.scope == 'plugin':
+                # A package declaration is not a client settings file. Only its
+                # documented integration/hooks blocks and credential presence apply.
+                from .collector import _credential_counts
+                literal, references = _credential_counts(normalized)
+                if literal or references:
+                    counts = {'literalCredentialCount': literal, 'credentialReferenceCount': references}
+                    collector.observe(source, 'setting', 'Package credential storage', {'key': 'credentialStorage', 'value': counts, **counts}, discriminator='package-credentials')
+                collector.extensions(source, normalized, context)
+                key = 'mcp_servers' if 'mcp_servers' in normalized else 'mcpServers'
+                if key in normalized:
+                    collector.mcps(source, normalized[key], context=context, map_key=key)
+            else:
+                collector.process_data(collection.home, source, normalized, context, candidate.path.name)
+            for item in collector.observations[start:]:
+                if context == 'profile':
+                    item['details'].update(applicability='named profile selection not observed', profileId='profile-' + _id(candidate.context))
+                if identity in builder.component_parents and item['kind'] in {'hook', 'mcp'}:
+                    item['details']['parentId'] = 'obs-' + _id('engine', alias, builder.component_parents[identity])
+            declares_mcp = any(item['kind'] == 'mcp' for item in collector.observations[start:])
+            # The extension extractor adds typed summaries to the raw allowlisted
+            # extraction, never body text or arbitrary connection identifiers.
+            extractor = getattr(extra, 'extract_extra', None)
+            if extractor and candidate.role not in {'agent', 'plugin', 'skill'} and candidate.scope != 'plugin':
+                extractor(collector, source, data)
             if context == 'profile':
-                item['details'].update(applicability='named profile selection not observed', profileId='profile-' + _id(candidate.context))
-            if identity in builder.component_parents and item['kind'] in {'hook', 'mcp'}:
-                item['details']['parentId'] = 'obs-' + _id('engine', alias, builder.component_parents[identity])
-        if any(item['kind'] == 'mcp' for item in collector.observations[start:]):
-            processed_mcps.add((identity, candidate.context))
-        # The extension extractor adds typed summaries to the raw allowlisted
-        # extraction, never body text or arbitrary connection identifiers.
-        extractor = getattr(extra, 'extract_extra', None)
-        if extractor and candidate.role not in {'agent', 'plugin', 'skill'} and candidate.scope != 'plugin':
-            extractor(collector, source, data)
-        if context == 'profile':
-            for item in collector.observations[start:]:
-                item['details'].update(applicability='named profile selection not observed', profileId='profile-' + _id(candidate.context))
-        if candidate.format == 'sqlite':
-            for item in collector.observations[start:]:
-                item['details']['provenance'] = 'persisted-editor-extension-settings'
+                for item in collector.observations[start:]:
+                    item['details'].update(applicability='named profile selection not observed', profileId='profile-' + _id(candidate.context))
+            if candidate.format == 'sqlite':
+                for item in collector.observations[start:]:
+                    item['details']['provenance'] = 'persisted-editor-extension-settings'
+            # Recorded last: a rolled-back source must not suppress the engine's MCP pass below.
+            if declares_mcp:
+                processed_mcps.add((identity, candidate.context))
     for candidate, old_source, entries, parent_id in builder.mcp_documents:
         if (old_source['id'], candidate.context) in processed_mcps:
             if parent_id:
@@ -254,83 +274,84 @@ def _merge(collector, collection, alias, workspaces):
         source = sources.get(old_source['id'])
         if not source:
             continue
-        normalized = {}
-        for name, entry in entries.items():
-            if isinstance(entry, dict) and candidate.family == 'cline' and isinstance(entry.get('transport'), dict):
-                entry = {**entry, **entry['transport']}
-            normalized[name] = entry
-        context = 'package' if parent_id else _context(candidate)
-        source_view = dict(source, context=context)
-        start = len(collector.observations)
-        collector.mcps(source_view, normalized, context=context, map_key='mcpServers' if candidate.family != 'codex' else 'mcp_servers')
-        for item in collector.observations[start:]:
-            item['id'] = 'obs-' + _id(item['id'], candidate.context, parent_id)
-            item['details']['contextId'] = 'context-' + _id(candidate.context)
-            if parent_id:
-                item['details']['parentId'] = 'obs-' + _id('engine', alias, parent_id)
-        processed_mcps.add((old_source['id'], candidate.context))
+        with _atomic_source(collector, source) as start:
+            normalized = {}
+            for name, entry in entries.items():
+                if isinstance(entry, dict) and candidate.family == 'cline' and isinstance(entry.get('transport'), dict):
+                    entry = {**entry, **entry['transport']}
+                normalized[name] = entry
+            context = 'package' if parent_id else _context(candidate)
+            source_view = dict(source, context=context)
+            collector.mcps(source_view, normalized, context=context, map_key='mcpServers' if candidate.family != 'codex' else 'mcp_servers')
+            for item in collector.observations[start:]:
+                item['id'] = 'obs-' + _id(item['id'], candidate.context, parent_id)
+                item['details']['contextId'] = 'context-' + _id(candidate.context)
+                if parent_id:
+                    item['details']['parentId'] = 'obs-' + _id('engine', alias, parent_id)
+            processed_mcps.add((old_source['id'], candidate.context))
     typed_keys = {(item['sourceId'], item['details'].get('key')) for item in collector.observations if item['kind'] == 'setting'}
     hook_sources = {item['sourceId'] for item in collector.observations if item['kind'] == 'hook'}
     for old in builder.observations.values():
         source = sources.get(old.get('sourceId'))
         if not source:
             continue
-        kind = old['kind']
-        candidate = builder.candidates.get(old['sourceId'])
-        context = source['context']
-        details = {'context': context, 'accountAlias': source['accountAlias'], 'contextId': 'context-' + _id(old.get('contextId', ''))}
-        enabled = old.get('enabled', 'unknown')
-        name = kind.title()
-        if kind == 'client':
-            details.update(installationState=old.get('installationState', 'config_only'), activation='installed' if old.get('installationState') == 'installed' else 'present', variant=old.get('variant', 'unknown'), authModes=old.get('authModes', ['unknown']), authEvidence=old.get('authEvidence', 'unknown'))
-            version = _safe_version(old.get('version'))
-            if version:
-                details['version'] = version
-            name = source['client']
-        elif kind == 'mcp':
-            continue  # Exact sanitized facts above supersede the old MCP shape.
-        elif kind == 'setting':
-            key = old.get('nativeKey')
-            if not key or key == 'profiles' or (source['id'], key) in typed_keys or (not old.get('valueCollected') and any(identity == source['id'] and typed.startswith(key + '.') for identity, typed in typed_keys if isinstance(typed, str))):
+        with _atomic_source(collector, source):
+            kind = old['kind']
+            candidate = builder.candidates.get(old['sourceId'])
+            context = source['context']
+            details = {'context': context, 'accountAlias': source['accountAlias'], 'contextId': 'context-' + _id(old.get('contextId', ''))}
+            enabled = old.get('enabled', 'unknown')
+            name = kind.title()
+            if kind == 'client':
+                details.update(installationState=old.get('installationState', 'config_only'), activation='installed' if old.get('installationState') == 'installed' else 'present', variant=old.get('variant', 'unknown'), authModes=old.get('authModes', ['unknown']), authEvidence=old.get('authEvidence', 'unknown'))
+                version = _safe_version(old.get('version'))
+                if version:
+                    details['version'] = version
+                name = source['client']
+            elif kind == 'mcp':
+                continue  # Exact sanitized facts above supersede the old MCP shape.
+            elif kind == 'setting':
+                key = old.get('nativeKey')
+                if not key or key == 'profiles' or (source['id'], key) in typed_keys or (not old.get('valueCollected') and any(identity == source['id'] and typed.startswith(key + '.') for identity, typed in typed_keys if isinstance(typed, str))):
+                    continue
+                if key == 'hooks' and not old.get('valueCollected') and source['id'] in hook_sources:
+                    continue  # Typed hook evidence already represents this block.
+                # A recognized key with the wrong type is a gap, not fallback fact.
+                if key in SETTING_TYPES.get(source['client'], {}):
+                    continue
+                details.update(key=key, nativeKey=key, effectiveState=old.get('effectiveState', 'unknown'), value=old.get('value'), valueCollected=old.get('valueCollected', False), valueType=old.get('valueType', 'unknown'), category=old.get('category', 'other'), interpretation='inventory-only', declaredState=old.get('effectiveState', 'unknown'))
+                name = key
+            elif kind in {'skill', 'agent', 'plugin'}:
+                # Configured plugin declarations already have exact enabled flags.
+                if kind == 'plugin' and old.get('installationState') == 'config_only' and any(o['kind'] == 'plugin' and o['sourceId'] == source['id'] for o in collector.observations):
+                    continue
+                details.update(activation={'config_only': 'configured', 'cached': 'cached', 'installed': 'installed'}.get(old.get('installationState'), 'present'), auditStatus='not-assessed', origin=old.get('origin', 'unknown'))
+                if type(source.get('sizeBytes')) is int:
+                    details['manifestSizeBytes'] = source['sizeBytes']
+                if kind == 'plugin':
+                    details.update(artifactType=old.get('artifactType', 'plugin'), installationState=old.get('installationState', 'unknown'))
+                version = _safe_version(old.get('version'))
+                if version:
+                    details['version'] = version
+                if kind == 'skill':
+                    details.update(digest=old.get('digest'), digestAlgorithm=old.get('digestAlgorithm'), filesHashed=old.get('filesHashed', 0), manifestType='SKILL.md')
+                if kind == 'agent':
+                    details.update(toolCount=len(old.get('toolNames', [])), declaredToolCount=len(old.get('toolNames', [])), modelConfigured=bool(old.get('model')))
+                    data = builder.documents.get(old['sourceId'], {})
+                    if data.get('kind') == 'remote' and (isinstance(data.get('agent_card_url'), str) or isinstance(data.get('agent_card_json'), dict)):
+                        details['delegation'] = 'remote'
+                        details['activation'] = 'configured'
+                    details['declaredToolCategories'] = sorted({category for name in old.get('toolNames', []) for category, names in {'filesystem': {'Read', 'Write', 'Edit', 'Grep', 'Glob'}, 'execution': {'Bash', 'run_shell_command'}, 'browser': {'browser', 'browser_use', 'computer'}}.items() if name in names})
+                if old.get('parentId'):
+                    details['parentId'] = 'obs-' + _id('engine', alias, old['parentId'])
+                    details['context'] = 'package'
+                fallback = candidate.path.parent.name if candidate and kind == 'skill' else candidate.path.stem if candidate else kind.title()
+                name = old.get('name') or fallback
+                details['declaration'] = source['location']
+            else:
                 continue
-            if key == 'hooks' and not old.get('valueCollected') and source['id'] in hook_sources:
-                continue  # Typed hook evidence already represents this block.
-            # A recognized key with the wrong type is a gap, not fallback fact.
-            if key in SETTING_TYPES.get(source['client'], {}):
-                continue
-            details.update(key=key, nativeKey=key, effectiveState=old.get('effectiveState', 'unknown'), value=old.get('value'), valueCollected=old.get('valueCollected', False), valueType=old.get('valueType', 'unknown'), category=old.get('category', 'other'), interpretation='inventory-only', declaredState=old.get('effectiveState', 'unknown'))
-            name = key
-        elif kind in {'skill', 'agent', 'plugin'}:
-            # Configured plugin declarations already have exact enabled flags.
-            if kind == 'plugin' and old.get('installationState') == 'config_only' and any(o['kind'] == 'plugin' and o['sourceId'] == source['id'] for o in collector.observations):
-                continue
-            details.update(activation={'config_only': 'configured', 'cached': 'cached', 'installed': 'installed'}.get(old.get('installationState'), 'present'), auditStatus='not-assessed', origin=old.get('origin', 'unknown'))
-            if type(source.get('sizeBytes')) is int:
-                details['manifestSizeBytes'] = source['sizeBytes']
-            if kind == 'plugin':
-                details.update(artifactType=old.get('artifactType', 'plugin'), installationState=old.get('installationState', 'unknown'))
-            version = _safe_version(old.get('version'))
-            if version:
-                details['version'] = version
-            if kind == 'skill':
-                details.update(digest=old.get('digest'), digestAlgorithm=old.get('digestAlgorithm'), filesHashed=old.get('filesHashed', 0), manifestType='SKILL.md')
-            if kind == 'agent':
-                details.update(toolCount=len(old.get('toolNames', [])), declaredToolCount=len(old.get('toolNames', [])), modelConfigured=bool(old.get('model')))
-                data = builder.documents.get(old['sourceId'], {})
-                if data.get('kind') == 'remote' and (isinstance(data.get('agent_card_url'), str) or isinstance(data.get('agent_card_json'), dict)):
-                    details['delegation'] = 'remote'
-                    details['activation'] = 'configured'
-                details['declaredToolCategories'] = sorted({category for name in old.get('toolNames', []) for category, names in {'filesystem': {'Read', 'Write', 'Edit', 'Grep', 'Glob'}, 'execution': {'Bash', 'run_shell_command'}, 'browser': {'browser', 'browser_use', 'computer'}}.items() if name in names})
-            if old.get('parentId'):
-                details['parentId'] = 'obs-' + _id('engine', alias, old['parentId'])
-                details['context'] = 'package'
-            fallback = candidate.path.parent.name if candidate and kind == 'skill' else candidate.path.stem if candidate else kind.title()
-            name = old.get('name') or fallback
-            details['declaration'] = source['location']
-        else:
-            continue
-        item = collector.observe(source, kind, name, details, enabled, discriminator='engine:' + old['id'])
-        item['id'] = 'obs-' + _id('engine', alias, old['id'])
+            item = collector.observe(source, kind, name, details, enabled, discriminator='engine:' + old['id'])
+            item['id'] = 'obs-' + _id('engine', alias, old['id'])
 
 
 

@@ -65,4 +65,8 @@ but artifacts still describe your AI environment.
 
 Exit `0` means artifacts were generated. Actual coverage is recorded per source. Exit
 `2` means invalid input, a missing prerequisite, or a command/filesystem failure.
+Exit `130` means the command was interrupted before it completed.
+A malformed document or a failing adapter ends only that source: it is recorded as a
+read error and the scan continues with partial status. Error messages never repeat
+file contents.
 The scanner does not install software, upload evidence, or change configuration.

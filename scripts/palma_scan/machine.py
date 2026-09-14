@@ -79,8 +79,13 @@ def _regular_metadata(path, parser="json"):
     if parser == "bytes":
         return raw
     if parser == "plist":
-        result = plistlib.loads(raw)
-        _validate_metadata(result)
+        try:
+            result = plistlib.loads(raw)
+            _validate_metadata(result)
+        except Exception as error:
+            # plistlib raises ExpatError, AttributeError, LookupError or
+            # IndexError for malformed documents; callers handle ValueError.
+            raise ValueError("unsupported metadata document") from error
         return result
     return _json_metadata(raw)
 
@@ -95,9 +100,12 @@ def _json_metadata(raw):
                 raise ValueError("duplicate metadata key")
             result[key] = value
         return result
-    result = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique,
-                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite metadata")))
-    _validate_metadata(result)
+    try:
+        result = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique,
+                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite metadata")))
+        _validate_metadata(result)
+    except Exception as error:
+        raise ValueError("unsupported metadata document") from error
     return result
 
 
@@ -279,9 +287,25 @@ class _Discovery:
                 self.gap(source, reason, "error")
 
     def source(self, label):
-        item = {"id": "src-" + _id("machine", label), "client": "machine", "scope": "machine", "location": "machine:" + label, "status": "collected", "reason": "read-only discovery completed"}
-        self.sources.append(item)
+        identity = "src-" + _id("machine", label)
+        item = next((source for source in self.sources if source["id"] == identity), None)
+        if item is None:
+            item = {"id": identity, "client": "machine", "scope": "machine", "location": "machine:" + label, "status": "collected", "reason": "read-only discovery completed"}
+            self.sources.append(item)
         return item
+
+    def step(self, label, run, fallback=None):
+        """Run one discovery step; an unexpected failure is a gap, not a lost scan.
+
+        Expected OS and filesystem errors are handled inside each step. Anything
+        else (an unanticipated metadata shape or a defect) ends only this step:
+        evidence it already recorded is kept and its source reports the failure.
+        """
+        try:
+            return run()
+        except Exception:
+            self.gap(self.source(label), "This discovery step stopped unexpectedly; its results are incomplete.", "error")
+            return fallback
 
     def gap(self, source, reason, status="skipped"):
         reasons = source.setdefault("reasons", [])
@@ -699,15 +723,17 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
     started = datetime.now(timezone.utc).isoformat()
     layout = _layout()
     discovery = _Discovery(layout, directory_limit=directory_limit, entry_limit=entry_limit, seconds=seconds)
-    profiles = discovery.profiles()
-    discovery.processes()
+    current = [{"root": layout["currentHome"], "alias": "~"}] if layout.get("currentHome") else []
+    profiles = discovery.step("local-user-profiles", discovery.profiles, current)
+    discovery.step("running-process-names", discovery.processes)
     # The retained baseline engine invoked by collect_scopes owns its richer
     # installation/MSIX/native-package/payload collectors; do not replace it
     # with name-only executable discovery here.
-    discovery.services(profiles)
-    discovery.browser_extensions(profiles)
-    systems = _system_sources(layout["os"], discovery)
-    projects = discovery.projects(profiles, workspaces or [])
+    discovery.step("services-and-startup-metadata", lambda: discovery.services(profiles))
+    discovery.step("browser-ai-extension-metadata", lambda: discovery.browser_extensions(profiles))
+    systems = discovery.step("managed-policy-metadata", lambda: _system_sources(layout["os"], discovery), [])
+    explicit = sorted(dict.fromkeys(Path(item).absolute() for item in workspaces or []), key=str)
+    projects = discovery.step("local-volume-project-discovery", lambda: discovery.projects(profiles, workspaces or []), explicit)
     environment = _environment(layout["os"])
     if environment["containerIndicators"]:
         source = discovery.source("runtime-context")

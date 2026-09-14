@@ -79,5 +79,10 @@ def parse_document(raw: bytes, format_name: str) -> dict:
         if not isinstance(data, dict):
             raise ParseError("root must be an object")
         return data
-    except (ValueError, TypeError, UnicodeError, yaml.YAMLError, RecursionError, OverflowError) as error:
+    except Exception as error:
+        # One document is the failure boundary. Standard-library decoders raise
+        # more than ValueError on hostile input: a truncated XML plist raises
+        # ExpatError, a malformed <date> AttributeError, an unknown encoding
+        # LookupError, and an invalid YAML timestamp AttributeError. Each must
+        # become this document's parse error instead of ending the whole scan.
         raise ParseError("invalid bounded document") from error
