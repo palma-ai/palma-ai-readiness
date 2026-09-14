@@ -27,6 +27,10 @@ class MachineTests(unittest.TestCase):
                        "networkMountCount": 0, "profiles": [self.home, self.other],
                        "profileRoots": [self.volume / "home"], "currentHome": self.home,
                        "gaps": [], "mountIndexVerified": True}
+        # The fixture volume lives in the OS temporary folder, which discovery skips by design.
+        patcher = patch.object(machine, "TEMPORARY_ROOTS", {"macos": (), "linux": ()})
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.temp.cleanup()
@@ -415,6 +419,7 @@ class MachineTests(unittest.TestCase):
         self.assertEqual(blocked, {Path("/proc"), Path("/mnt/team")})
         self.assertEqual(network_count, 1)
 
+    @unittest.skipUnless(hasattr(os, "getuid"), "POSIX process inventory")
     def test_macos_mount_and_process_metadata_are_local_and_fixed(self):
         text = "/dev/disk1s1 on / (apfs, sealed, local, read-only)\n/dev/disk2s1 on /Volumes/Local Disk (apfs, local)\n//PRIVATE_SERVER/share on /Volumes/Remote (smbfs, nodev)\nmap auto_home on /System/Volumes/Data/home (autofs, automounted)\n"
         with patch.object(machine, "_system_command", return_value=text) as run:

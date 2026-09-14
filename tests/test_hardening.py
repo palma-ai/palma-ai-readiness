@@ -204,6 +204,10 @@ class ScopeTests(Home):
         volume = self.root / "volume"
         layout = {"os": "linux", "roots": [volume], "blockedMounts": set(), "networkMountCount": 0, "profiles": [],
                   "profileRoots": [], "currentHome": None, "gaps": [], "mountIndexVerified": True}
+        # The fixture volume lives in the OS temporary folder, which discovery skips by design.
+        patcher = patch.object(machine, "TEMPORARY_ROOTS", {"macos": (), "linux": ()})
+        patcher.start()
+        self.addCleanup(patcher.stop)
         discovery = machine._Discovery(layout)
         discovery.accounts = [{"root": volume / "home/alice", "alias": "user-1"}]
         return volume, discovery

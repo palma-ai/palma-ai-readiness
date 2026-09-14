@@ -43,16 +43,16 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual({p.name for p in output.iterdir()},
                              {"snapshot.json", "summary.json", "report.html", "share.html"})
-            self.assertNotIn(td, (output / "share.html").read_text())
+            self.assertNotIn(td, (output / "share.html").read_text(encoding="utf-8"))
             rebuilt_share = Path(td) / "share-rebuilt.html"
             result = self.invoke("report", "--run-dir", output, "--share", "--output", rebuilt_share)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((output / "share.html").read_bytes(), rebuilt_share.read_bytes())
             self.assertEqual(self.invoke("report", "--run-dir", output, "--share", "--output", rebuilt_share).returncode, 2, "never replaced")
-            snapshot = json.loads((output / "snapshot.json").read_text())
+            snapshot = json.loads((output / "snapshot.json").read_text(encoding="utf-8"))
             self.assertEqual(snapshot["scope"]["type"], "copied-home")
             self.assertEqual(snapshot["schemaVersion"], "2.0")
-            self.assertNotIn(td, (output / "snapshot.json").read_text())
+            self.assertNotIn(td, (output / "snapshot.json").read_text(encoding="utf-8"))
             first = (output / "report.html").read_bytes()
             rebuilt = Path(td) / "rebuilt.html"
             result = self.invoke("report", "--run-dir", output, "--output", rebuilt)

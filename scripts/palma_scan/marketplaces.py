@@ -7,7 +7,7 @@ import configparser
 from dataclasses import replace
 from functools import lru_cache
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 from urllib.parse import urlsplit
 
@@ -110,9 +110,17 @@ def _claude_sources(builder, root, market):
     return sources
 
 
+def _record_path(value):
+    """An installation record's absolute path as the recording client wrote it, on any host."""
+    if not isinstance(value, str):
+        return None
+    record = PureWindowsPath(value) if re.match(r'[A-Za-z]:[\\/]', value) or '\\' in value else PurePosixPath(value)
+    return record if record.is_absolute() and '..' not in record.parts else None
+
+
 def _installed(builder, root, market, plugin, directory):
-    """Claude's installation record names the cache directory; a home copied elsewhere keeps
-    the original absolute path, so its marketplace, plugin and version folders also match."""
+    """Claude's installation record names the cache directory. A home copied elsewhere keeps
+    the original absolute path, so the marketplace, plugin and version folders are compared."""
     for identity, data in builder.documents.items():
         candidate = builder.candidates[identity]
         if candidate.path != root / 'installed_plugins.json' or data.get('version') != 2:
@@ -121,9 +129,8 @@ def _installed(builder, root, market, plugin, directory):
         entries = plugins.get(plugin + '@' + market) if isinstance(plugins, dict) else None
         if isinstance(entries, list):
             for entry in entries:
-                path = entry.get('installPath') if isinstance(entry, dict) else None
-                if (isinstance(path, str) and Path(path).is_absolute() and '..' not in Path(path).parts
-                        and (Path(path) == directory or Path(path).parts[-3:] == directory.parts[-3:])):
+                record = _record_path(entry.get('installPath') if isinstance(entry, dict) else None)
+                if record is not None and record.parts[-3:] == directory.parts[-3:]:
                     return True
     return False
 

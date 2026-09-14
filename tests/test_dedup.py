@@ -61,6 +61,7 @@ class CopiesTests(unittest.TestCase):
                 for raw in (syntax % "A", syntax % "B", "PALMA_UNRESOLVED"):
                     self.assertNotIn(raw, exported)
 
+    @unittest.skipIf(os.name == "nt", "executable bits are POSIX metadata")
     def test_a_single_observed_version_survives_an_unversioned_installation(self):
         for relative in (".local/bin/claude", ".local/share/claude/versions/2.1.10"):
             self.put(relative, "Synthetic payload; never executed.")
