@@ -157,6 +157,16 @@ def _credential_value(value):
     return (1, 0)
 
 
+# Fields whose values _credential_counts inspects; their content tells credentials apart.
+_CREDENTIAL_FIELDS = ("env", "headers", "http_headers", "apiKey", "api_key", "bearerToken", "bearer_token", "accessToken",
+                      "bearer_token_env_var", "env_http_headers", "args")
+
+
+def credential_content(data):
+    """In-memory identity of a document's credential values: different secrets never merge."""
+    return content_digest({key: data[key] for key in _CREDENTIAL_FIELDS if key in data})
+
+
 def _credential_counts(data):
     literal = reference = 0
     for field in ("env", "headers", "http_headers"):
@@ -323,17 +333,26 @@ def _provider_metadata(entry):
 # Palma-operated MCP gateway hosts, for example gateway.palma.ai or a regional form such as
 # gateway.eu1.palma.ai. Only Palma controls names under palma.ai.
 PALMA_GATEWAY_HOST = re.compile(r"gateway(?:-[a-z0-9]+)?(?:\.[a-z0-9]+)?\.palma\.ai")
+URL_KEYS = ("httpUrl", "url", "serverUrl")
+
+
+def _url_keys(client):
+    """URL fields in the order the client reads them."""
+    return {"gemini-cli": ("httpUrl", "url"), "windsurf": ("serverUrl", "url")}.get(client, ("url", "serverUrl", "httpUrl"))
 
 
 def _palma_gateway(entry, transport):
     """Whether a remote connector is routed through a Palma-operated gateway.
 
-    Only an exact HTTPS host on the default port qualifies. Connector names, paths and
-    labels are ignored, and a gateway hosted on another domain is not recognized.
+    Only an exact HTTPS host on the default port qualifies, and every URL field in the
+    entry must name one: a gateway address beside another URL is not trusted, whichever
+    field the client reads. Connector names, paths and labels are ignored.
     """
-    if transport not in {"http", "sse", "websocket"}:
-        return False
-    url = next((entry.get(key) for key in ("httpUrl", "url", "serverUrl") if key in entry), None)
+    urls = [entry[key] for key in URL_KEYS if key in entry]
+    return transport in {"http", "sse", "websocket"} and bool(urls) and all(map(_gateway_url, urls))
+
+
+def _gateway_url(url):
     if not isinstance(url, str) or "\\" in url or any(ord(character) < 33 for character in url):
         return False
     try:
@@ -459,7 +478,8 @@ class _Collector:
         client = source["client"]
         literal, references = _credential_counts(data)
         if literal or references:
-            self.observe(source, "setting", "Configuration credential storage", {"key": "credentialStorage", "value": {"literalCredentialCount": literal, "credentialReferenceCount": references}, "literalCredentialCount": literal, "credentialReferenceCount": references, "context": context}, "enabled", context + ":credentials")
+            item = self.observe(source, "setting", "Configuration credential storage", {"key": "credentialStorage", "value": {"literalCredentialCount": literal, "credentialReferenceCount": references}, "literalCredentialCount": literal, "credentialReferenceCount": references, "context": context}, "enabled", context + ":credentials")
+            item["_content"] = credential_content(data)
         for key in ({"codex": ["sandbox_workspace_write.writable_roots"], "claude-code": ["permissions.additionalDirectories", "sandbox.excludedCommands"], "gemini-cli": ["tools.allowed", "tools.discoveryCommand", "tools.callCommand", "agents.browser.allowedDomains"], "cursor": ["permissions.allow", "permissions.deny", "terminalAllowlist", "mcpAllowlist"], "windsurf": ["windsurf.cascadeCommandsAllowList", "windsurf.cascadeCommandsDenyList"], "vscode": ["chat.tools.terminal.autoApprove"]}.get(client, [])):
             value = _get(data, key)
             if value is ABSENT:
@@ -523,7 +543,7 @@ class _Collector:
                     malformed = True
                     source["issueKind"] = "unsupported-mcp-shape"
                     self.gap(source, "an MCP field has an unsupported type", "error")
-            url = next((entry.get(key) for key in ("httpUrl", "url", "serverUrl") if key in entry), None)
+            url = next((entry.get(key) for key in _url_keys(source["client"]) if key in entry), None)
             endpoint = _endpoint(url)
             transport = entry.get("type")
             explicit_transport = "type" in entry
@@ -544,13 +564,15 @@ class _Collector:
                 family = "computer"
             from .engine.adapters.mcp import auth_metadata
             auth, _ = auth_metadata(entry)
+            # Whether the header used to sign in holds the secret itself, not a reference.
+            auth_inline = _credential_counts({key: entry[key] for key in ("headers", "http_headers") if key in entry})[0] > 0
             allow_key = "enabled_tools" if source["client"] == "codex" else "includeTools" if source["client"] == "gemini-cli" else None
             deny_key = "disabled_tools" if source["client"] == "codex" else "excludeTools" if source["client"] == "gemini-cli" else "disabledTools"
             allow = isinstance(entry.get(allow_key), list) if allow_key else False
             deny = isinstance(entry.get(deny_key), list)
             approval = "all" if source["client"] == "gemini-cli" and entry.get("trust") is True else "none" if source["client"] == "gemini-cli" and entry.get("trust") is False else "unknown"
             details = {"transport": transport, "execution": execution, **endpoint, "toolFamily": family, "literalCredentialCount": literal + endpoint["urlCredentialCount"], "credentialReferenceCount": references, "toolAllowlistConfigured": allow, "toolDenylistConfigured": deny, "autoApproval": approval, "unversionedPackage": unversioned, "activation": "configured", "auditStatus": "not-assessed", "context": context}
-            details.update(capability, auth=auth, inlineCredentialPresent=literal + endpoint["urlCredentialCount"] > 0)
+            details.update(capability, auth=auth, authSecretInline=auth_inline, inlineCredentialPresent=literal + endpoint["urlCredentialCount"] > 0)
             if malformed:
                 details["configurationIssue"] = "unsupported-mcp-shape"
             elif transport == "unknown" or (url is not None and endpoint["endpointScope"] == "unknown"):
@@ -588,7 +610,8 @@ class _Collector:
             if isinstance(hook_locations, dict) and hook_locations:
                 state = "disabled" if _get(data, "chat.useHooks") is False or all(value is False for value in hook_locations.values()) else "unknown"
                 names = [self.display_text(name) for name in sorted(hook_locations)]
-                item = self.observe(source, "hook", "Hooks: " + ", ".join(names), {"activation": "configured", "context": context, "auditStatus": "not-assessed", "configuredLocations": names, "typeCounts": {"configuredLocations": len(hook_locations)}}, state)
+                # Folder names stay in configuredLocations; the row name never carries a path.
+                item = self.observe(source, "hook", "Hook folders", {"activation": "configured", "context": context, "auditStatus": "not-assessed", "configuredLocations": names, "typeCounts": {"configuredLocations": len(hook_locations)}}, state)
                 item["_content"] = content_digest(hook_locations)
         hooks = data.get("hooks", {})
         if isinstance(hooks, dict) and hooks:

@@ -3,8 +3,9 @@ from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path
+import re
 
-RULES_VERSION = "2026-09-10.2"
+RULES_VERSION = "2026-09-14.1"
 INSTRUCTION_REVIEW_BYTES = 64 * 1024
 ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
 UPGRADES = {"mcp-network-direct", "skills-local-unreviewed", "hooks-declared"}
@@ -226,20 +227,51 @@ def _evidence(item):
             "key": details.get("nativeKey", details.get("key", item["name"])), "value": value}
 
 
+# Names come from scanned files. Inside a sentence they lose quotation marks, control and
+# invisible direction characters, so a name cannot close its quotation or reorder the text.
+_UNSAFE_PROSE = re.compile(r'[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff\u201c\u201d"]')
+PROSE_NAME_LIMIT = 60
+PROSE_LOCATION_LIMIT = 512
+
+
+def _join(parts):
+    return parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _prose_name(name):
+    """A declared name as it may appear in a summary, or None for a path or web address."""
+    text = " ".join(_UNSAFE_PROSE.sub("", str(name)).split())
+    if not text or re.search(r"[\\/]|://", text):
+        return None  # Shown with its evidence, never inside a sentence.
+    return text if len(text) <= PROSE_NAME_LIMIT else text[:PROSE_NAME_LIMIT - 1] + "\u2026"
+
+
 def _names(items, limit=3):
     # Quoted, so a name such as "browser" never reads as part of the sentence.
     names = sorted({item["name"] for item in items}, key=str.casefold)
-    listed = [f"\u201c{name}\u201d" for name in names[:limit]] + ([f"{len(names) - limit} more"] if len(names) > limit else [])
-    return listed[0] if len(listed) == 1 else ", ".join(listed[:-1]) + " and " + listed[-1]
+    listed = [f"\u201c{name}\u201d" for name in list(dict.fromkeys(filter(None, map(_prose_name, names))))[:limit]]
+    rest = len(names) - len(listed)
+    if not listed:
+        return f"{rest:,} {'connector' if rest == 1 else 'connectors'}"
+    return _join(listed + ([f"{rest:,} more"] if rest > 0 else []))
 
 
 def _files(items, limit=2):
-    files = sorted({item["location"] for item in items})
-    listed = files[:limit] + ([f"{len(files) - limit} other files"] if len(files) > limit else [])
-    return listed[0] if len(listed) == 1 else ", ".join(listed[:-1]) + " and " + listed[-1]
+    """The files a summary names; merged copies count, and very long paths are only counted."""
+    # The least nested file first: normally the main checkout rather than a copy.
+    files = sorted({location for item in items for location in [item["location"], *item.get("details", {}).get("locations", [])]},
+                   key=lambda location: (location.count("/"), len(location), location))
+    unlisted = sum(max(0, item.get("details", {}).get("locationCount", 0) - len(item.get("details", {}).get("locations", []))) for item in items)
+    named = [location for location in files if len(location) <= PROSE_LOCATION_LIMIT][:limit]
+    rest = len(files) + unlisted - len(named)
+    if not named:
+        return f"{rest:,} {'file' if rest == 1 else 'files'}"
+    return _join(named + ([f"{rest:,} other {'file' if rest == 1 else 'files'}"] if rest > 0 else []))
 
 
-def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, impact=None, recommendation=None, rating_reason=None):
+def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, text=None, impact=None, recommendation=None, rating_reason=None):
+    """One finding. ``summary`` is a template with {n}; ``text`` is a finished sentence that
+    names declarations, so nothing in a name is ever treated as a template."""
     items = sorted(items, key=lambda item: item["id"])
     extra_sources = sorted(extra_sources, key=lambda item: item["id"])
     ids = [item["id"] for item in items]
@@ -247,7 +279,9 @@ def _finding(spec, items, *, extra_sources=(), severity=None, summary=None, impa
     count = len(items) + len(extra_sources)
     sentence = summary or SUMMARIES.get(spec["id"], spec.get("headline", "{n} declarations require review."))
     sentence = sentence.replace("{n}", f"{count:,}").replace("{where}", "on this machine")
-    if count == 1:
+    if text is not None:
+        sentence = text
+    elif count == 1:
         for plural, singular in catalog()["singularPhrases"]:
             sentence = sentence.replace(plural, singular)
         for plural, singular in (
@@ -309,7 +343,7 @@ def _skill_findings(spec, items):
         findings.append(_finding(spec, local, severity="critical", recommendation=recommendation))
     if versioned:
         findings.append(_finding({**spec, "title": "Project skills in version control need a review record"}, versioned, severity="high",
-            summary="{n} project skill declarations are tracked in the project's version control. Their changes have history, but the installed version has no recorded review.",
+            summary="{n} project skill declarations are inside the project's git repository and not excluded by its .gitignore, so their changes can be reviewed like code. The installed version has no recorded review.",
             recommendation="Review the skill instructions and scripts through the repository's code review, and record the reviewed version before sensitive use.",
             rating_reason="Version-controlled project skills keep the catalog's High priority: their changes can be reviewed like code, but the installed version still needs a review record."))
     return findings
@@ -326,7 +360,10 @@ def evaluate(snapshot, params=None):
     observations = snapshot.get("observations", [])
     sources = snapshot.get("sources", [])
     malformed = {source["id"] for source in sources if source.get("issueKind") == "unsupported-mcp-shape"}
-    inline = {item["id"] for item in observations if item["kind"] == "mcp" and attributes(item)["inlineCredentialPresent"]}
+    # The sign-in secret itself is written in the file. Older snapshots only record that some
+    # credential is.
+    inline = {item["id"] for item in observations if item["kind"] == "mcp"
+              and item.get("details", {}).get("authSecretInline", attributes(item)["inlineCredentialPresent"]) is True}
     result = []
     for spec in catalog()["rules"]:
         items = [item for item in observations if item["kind"] == spec["kind"]
@@ -356,13 +393,13 @@ def evaluate(snapshot, params=None):
         elif spec["id"] in {"mcp-computer-use", "mcp-browser-automation"}:
             reach = "the screen, keyboard and mouse" if spec["id"] == "mcp-computer-use" else "a web browser"
             summary = f"{_names(items)} can control {reach} as you. Declared in {_files(items)}."
-        result.append(_finding(spec, items, severity=severity, summary=summary))
+        result.append(_finding(spec, items, severity=severity, text=summary))
 
     credentials = [item for item in observations if item["kind"] != "mcp" and _positive_count(item.get("details", {}).get("literalCredentialCount"))]
     if credentials:
         result.append(_finding({"id": "config-inline-credential", "kind": "setting", "area": "access", "severity": "critical",
             "title": "Potential credentials stored in configuration files", "action": "Replace literal secrets with supported secret references or credential storage. Review exposure and rotate affected credentials."}, credentials,
-            summary=f"Potential credentials are stored in plain text in {_files(credentials)}. Values are withheld from this report.",
+            text=f"Potential credentials are stored in plain text in {_files(credentials)}. Values are withheld from this report.",
             impact="If these values are working credentials, anyone who can read the files can use them as you: other processes, extensions and skills running under your account, and every backup, sync folder or repository that copies them. They keep working until they are rotated."))
     packaged_skills = [item for item in observations if item["kind"] == "skill" and attributes(item).get("origin") == "plugin"]
     if packaged_skills:

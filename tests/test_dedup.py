@@ -45,6 +45,30 @@ class CopiesTests(unittest.TestCase):
     def finding(self, snapshot, rule):
         return next(item for item in snapshot["findings"] if item["ruleId"] == rule)
 
+    def test_different_credentials_stay_separate_and_a_copied_credential_names_every_file(self):
+        self.put("code/app-one/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-ONE-0000000000000000"}})
+        self.put("code/app-two/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-TWO-0000000000000000"}})
+        for copy in ("code/mono", "code/mono/.claude/worktrees/copy"):
+            self.put(copy + "/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-MONO-000000000000000"}})
+        shared = {"mcpServers": {"tracker": {"type": "http", "url": "https://mcp.example.test/mcp", "headers": {"Authorization": "Bearer PRIVATE_SHARED_TOKEN_123456"}}}}
+        self.put("code/mono/.mcp.json", shared)
+        self.put("code/mono/.claude/worktrees/copy/.mcp.json", shared)
+        snapshot = self.scan([self.home / "code/app-one", self.home / "code/app-two", self.home / "code/mono", self.home / "code/mono/.claude/worktrees/copy"])
+        stored = self.finding(snapshot, "config-inline-credential")
+        self.assertEqual(stored["declarations"], 3, "two different secrets, and one secret copied into a worktree")
+        self.assertIn("~/code/mono/.claude/settings.json, ~/code/app-one/.claude/settings.json and 2 other files", stored["summary"])
+        inline = self.finding(snapshot, "mcp-inline-credential")
+        self.assertEqual(inline["declarations"], 1)
+        self.assertIn("~/code/mono/.mcp.json and ~/code/mono/.claude/worktrees/copy/.mcp.json", inline["summary"])
+
+    def test_a_copy_in_a_malformed_file_never_stands_in_for_a_well_formed_copy(self):
+        odd = {"type": "carrier-pigeon"}
+        self.put("a/.cursor/mcp.json", {"mcpServers": {"broken": "not-an-object", "odd": odd}})
+        self.put("code/b/.cursor/mcp.json", {"mcpServers": {"odd": odd}})
+        snapshot = self.scan([self.home / "a", self.home / "code/b"])
+        self.assertEqual(len([item for item in self.kind(snapshot, "mcp") if item["name"] == "odd"]), 2)
+        self.assertIn("mcp-unknown-transport", {item["ruleId"] for item in snapshot["findings"]})
+
     def test_worktree_copies_are_one_declaration_and_changed_copies_stay_separate(self):
         main = self.project("code/mono")
         copies = [self.project(f"code/mono/.claude/worktrees/copy-{index}") for index in range(3)]
@@ -90,6 +114,34 @@ class CopiesTests(unittest.TestCase):
         self.assertEqual(skills[0]["details"]["locationCount"], 2)
         identities = {item["id"] for item in snapshot["observations"]}
         self.assertIn(skills[0]["details"]["parentId"], identities)
+
+    def test_a_skill_keeps_its_plugin_when_identical_plugin_copies_merge(self):
+        for market in ("alpha", "beta"):
+            base = f".claude/plugins/cache/{market}/toolkit/1.0.0"
+            self.put(base + "/.claude-plugin/plugin.json", {"name": "toolkit", "version": "1.0.0"})
+            self.put(base + "/skills/helper/SKILL.md", "---\nname: helper\n---\nSame body.")
+        # The longer path's copy is merged away, so its extra skill must follow the kept plugin.
+        self.put(".claude/plugins/cache/alpha/toolkit/1.0.0/skills/extra/SKILL.md", "---\nname: extra\n---\nOnly in one copy.")
+        snapshot = self.scan([])
+        [plugin] = self.kind(snapshot, "plugin")
+        extra = next(item for item in self.kind(snapshot, "skill") if item["name"] == "extra")
+        self.assertEqual(extra["details"]["parentId"], plugin["id"])
+
+    def test_copies_that_differ_in_env_headers_args_hook_commands_or_agent_body_stay_separate(self):
+        variants = [({"env": {"MODE": "a"}}, "./check", "Check tests."), ({"env": {"MODE": "b"}}, "./check", "Check tests."),
+                    ({"headers": {"X-Team": "b"}}, "./check", "Check tests."), ({"args": ["--b"]}, "./check", "Check tests."),
+                    ({}, "./other", "Check tests."), ({}, "./check", "Check specs.")]
+        roots = []
+        for index, (extra, command, body) in enumerate(variants):
+            relative = f"code/app-{index}"
+            self.put(relative + "/.mcp.json", {"mcpServers": {"local": {"command": "node", **extra}}})
+            self.put(relative + "/.claude/settings.json", {"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": command}]}]}})
+            self.put(relative + "/.claude/agents/reviewer.md", "---\nname: reviewer\n---\n" + body)
+            roots.append(self.home / relative)
+        snapshot = self.scan(roots)
+        self.assertEqual(len(self.kind(snapshot, "mcp")), 5, "the two entries without extra fields are one declaration")
+        self.assertEqual(len(self.kind(snapshot, "hook")), 2)
+        self.assertEqual(len(self.kind(snapshot, "agent")), 2)
 
     def test_a_client_used_in_many_projects_is_one_row(self):
         projects = {}
@@ -160,11 +212,20 @@ class CollapseRulesTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["details"]["copyCount"], 3)
         self.assertNotIn("locations", result[0]["details"])
+        items = [self.observation(name, "state", "~/.claude.json") for name in ("p1", "p2")] + [self.observation("w", "s2", "~/code/app/.mcp.json")]
+        [merged] = collapse_declarations(items)
+        self.assertEqual((merged["details"]["copyCount"], merged["details"]["locationCount"]), (3, 2), "copies count declarations, locations count files")
 
     def test_skills_without_a_complete_digest_are_never_merged(self):
         skills = [{"id": name, "kind": "skill", "client": "codex", "name": "helper", "sourceId": name, "location": "~/" + name,
                    "enabled": "unknown", "details": {"digest": None}} for name in ("a", "b")]
         self.assertEqual(len(collapse_declarations(skills)), 2)
+
+    def test_credential_records_without_content_identity_are_never_merged(self):
+        records = [{"id": name, "kind": "setting", "client": "claude-code", "name": "Configuration credential storage", "sourceId": name,
+                    "location": f"~/{name}/.claude/settings.json", "enabled": "enabled",
+                    "details": {"key": "credentialStorage", "literalCredentialCount": 1}} for name in ("a", "b")]
+        self.assertEqual(len(collapse_declarations(records)), 2)
 
     def test_client_rows_merge_installation_runtime_versions_and_projects(self):
         rows = [

@@ -56,6 +56,35 @@ class EvidenceTests(unittest.TestCase):
         for fact in ("Remote service", "Credential stored in the file", "Fixed secret"):
             self.assertIn(f">{fact}</span>", card)
 
+    def test_evidence_beyond_the_row_limit_is_labelled_honestly_in_both_reports(self):
+        data = base()
+        data["observations"] = [{"id": f"o{index:03d}", "kind": "mcp", "client": "cursor", "name": f"server-{index}", "sourceId": f"s{index}",
+                                 "location": "~/.cursor/mcp.json", "enabled": "enabled", "details": {"execution": "local"}} for index in range(250)]
+        data["findings"] = [finding("f1", "mcp-local-unaudited", "critical", [item["id"] for item in data["observations"]])]
+        local, shared = render_report(data, {}), render_report(data, {}, share=True)
+        for output in (local, shared):
+            self.assertIn("Show 200 of 250", output)
+            self.assertNotIn("Show all 250", output)
+        self.assertIn("50 more are listed in snapshot.json", local)
+        self.assertIn("50 more are not shown in this summary", shared)
+        self.assertNotIn("snapshot.json", shared.split('<article class="finding"', 1)[1].split("</article>", 1)[0])
+
+    def test_system_policy_computer_use_acts_as_the_signed_in_user(self):
+        data = base()
+        data["observations"] = [{"id": "o1", "kind": "mcp", "client": "claude-code", "name": "computer-use", "sourceId": "s1",
+                                 "location": "system:claude-code/managed-mcp.json", "enabled": "enabled",
+                                 "details": {"execution": "local", "capability": "computer", "accountAlias": "system"}}]
+        data["findings"] = [finding("f1", "mcp-computer-use", "critical", ["o1"])]
+        card = render_report(data, {}).split('<article class="finding"', 1)[1]
+        self.assertIn(">Set by system policy</span>", card)
+        self.assertIn(">Acts as you</span>", card)
+        self.assertNotIn("system-wide", card)
+
+    def test_inventory_search_matches_client_names(self):
+        from palma_scan.report import _JS
+        self.assertIn("closest('.inventory-group')", _JS)
+        self.assertIn(".inventory-kind strong", _JS)
+
     def test_computer_use_rows_name_the_app_what_it_controls_who_it_acts_as_and_approval(self):
         data = base()
         data["sources"] = [{"id": "s1", "client": "claude-desktop", "scope": "user", "location": "~/Library/Application Support/Claude/claude_desktop_config.json", "status": "collected"}]
@@ -101,6 +130,73 @@ class EvidenceTests(unittest.TestCase):
             self.assertIn(location, inventory)
 
 
+class ShareLocationTests(unittest.TestCase):
+    def test_locations_keep_only_the_configuration_folder_and_file_name(self):
+        from palma_scan.report import _share_location
+        expected = {
+            "~/.claude.json": "~/.claude.json",
+            "~/.claude/settings.json": "~/.claude/settings.json",
+            "~/code/PRIVATE_PROJECT/.mcp.json": "project/.mcp.json",
+            "~/Library/CloudStorage/OneDrive-PRIVATE_COMPANY/PRIVATE_CLIENT/.mcp.json": "project/.mcp.json",
+            "~/Library/Mobile Documents/com~apple~CloudDocs/PRIVATE_PROJECT/.claude/settings.json": "project/.claude/settings.json",
+            "~/.codex/worktrees/1a2b/PRIVATE_REPO/.mcp.json": "project/.mcp.json",
+            "~/.claude/skills/PRIVATE_SKILL_FOLDER/nested/SKILL.md": "~/.claude/\u2026/SKILL.md",
+            "~/Library/Application Support/Claude/claude_desktop_config.json": "~/Library/\u2026/claude_desktop_config.json",
+            "~/AppData/Local/PRIVATE_COMPANY/PRIVATE_PROJECT/.vscode/mcp.json": "project/.vscode/mcp.json",
+            "/opt/PRIVATE_COMPANY/PRIVATE_PROJECT/.mcp.json": "project/.mcp.json",
+            "/Library/WebServer/Documents/PRIVATE_SITE/notes.json": "/Library/\u2026/notes.json",
+            "C:/ProgramData/PRIVATE_COMPANY/PRIVATE_PROJECT/settings.json": "C:/ProgramData/\u2026/settings.json",
+            "/srv/PRIVATE_HOST/data.json": "location withheld",
+            "system:claude-code/managed-settings.json": "system:claude-code/managed-settings.json",
+        }
+        for location, shared in expected.items():
+            with self.subTest(location):
+                self.assertEqual(_share_location(location), shared)
+                self.assertEqual(_share_location(shared), shared, "applying it twice changes nothing")
+
+    def test_a_real_scan_shares_no_private_folder_name_anywhere_in_the_file(self):
+        from palma_scan.collector import collect
+        from palma_scan.model import validate
+        from palma_scan.rules import evaluate
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            home = Path(td).resolve() / "home"
+
+            def put(relative, value):
+                path = home / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(value))
+
+            alpha, beta, gamma, delta = ("code/PRIVATE_PROJECT_ALPHA", "Library/CloudStorage/OneDrive-PRIVATE_COMPANY/PRIVATE_CLIENT_BETA",
+                                         ".codex/worktrees/a1b2/PRIVATE_REPO_GAMMA", "code/PRIVATE_PROJECT_DELTA")
+            put(alpha + "/.cursor/mcp.json", {"mcpServers": {
+                "tracker": {"type": "http", "url": "https://mcp.example.test/mcp", "headers": {"Authorization": "Bearer PRIVATE_TOKEN_abcdefghijklmnop"}},
+                "computer-use": {"command": "computer-use-server"},
+                "https://jira.PRIVATE_INTERNAL_HOST.example/mcp": {"type": "http", "url": "https://mcp.example.test/other"}}})
+            put(alpha + "/.claude/settings.json", {"env": {"ANTHROPIC_API_KEY": "sk-ant-PRIVATE-000000000000000000"}})
+            put(beta + "/.mcp.json", {"mcpServers": {"notes": {"command": "node"}}})
+            put(gamma + "/.mcp.json", {"mcpServers": {"docs": {"type": "http", "url": "https://docs.example.test/mcp"}}})
+            put(delta + "/.vscode/settings.json", {"chat.hookFilesLocations": {"PRIVATE_HOOKS_EPSILON/hooks": True}})
+            snapshot = collect(home, [home / alpha, home / beta, home / gamma, home / delta], scope_type="copied-home")
+            snapshot["findings"] = evaluate(snapshot)
+            validate(snapshot)
+            local, shared = render_report(snapshot, {}), render_report(snapshot, {}, share=True)
+        self.assertIn("PRIVATE_PROJECT_ALPHA", local)
+        self.assertEqual(re.findall(r"PRIVATE_[A-Z_]+", shared), [])
+        self.assertIn("Name withheld", shared)
+        self.assertNotIn("finding-" + snapshot["findings"][0]["id"][8:], shared)
+        self.assertTrue(re.search(r'id="finding-1"', shared), "anchors are numbered, not derived from paths")
+
+    def test_direction_controls_from_names_are_not_rendered(self):
+        data = base()
+        data["sources"] = [{"id": "s1", "client": "cursor", "scope": "user", "location": "~/.cursor/mcp.json", "status": "collected"}]
+        data["observations"] = [{"id": "o1", "kind": "mcp", "client": "cursor", "name": "safe\u202etxt.exe", "sourceId": "s1",
+                                 "location": "~/.cursor/mcp.json", "enabled": "enabled", "details": {"execution": "local"}}]
+        self.assertNotIn("\u202e", render_report(data, {}))
+        self.assertIn("safetxt.exe", render_report(data, {}))
+
+
 class ShareTests(unittest.TestCase):
     def snapshot(self):
         data = base()
@@ -115,6 +211,7 @@ class ShareTests(unittest.TestCase):
              "details": {"execution": "remote", "locationCount": 2, "locations": [data["sources"][0]["location"], "~/code/PRIVATE_OTHER/.mcp.json"]}},
             {"id": "o2", "kind": "mcp", "client": "claude-code", "name": "notes", "sourceId": "s2", "location": "~/.claude.json", "enabled": "enabled", "details": {"execution": "local"}},
             {"id": "o3", "kind": "skill", "client": "shared", "name": "release-notes", "sourceId": "s1", "location": "~/PRIVATE_FOLDER/notes/SKILL.md", "enabled": "unknown", "details": {"origin": "project"}},
+            {"id": "o4", "kind": "client", "client": "claude-code", "name": "claude-code", "sourceId": "s2", "location": "~/.claude.json", "enabled": "unknown", "details": {}},
         ]
         data["findings"] = [finding("f1", "mcp-network-direct", "critical", ["o1"], [{"sourceId": "s1", "location": data["sources"][0]["location"], "key": "tracker", "value": {}}])]
         return data

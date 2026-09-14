@@ -43,7 +43,8 @@ class PolicyTests(unittest.TestCase):
         lookalikes = {"cleartext": "http://gateway.palma.ai/mcp", "other-port": "https://gateway.palma.ai:8443/mcp",
                       "suffix-domain": "https://gateway.palma.ai.example.test/mcp", "prefixed": "https://evilgateway.palma.ai/mcp",
                       "other-host": "https://api.palma.ai/mcp", "similar-domain": "https://gateway.palma-ai.test/mcp",
-                      "trailing-dot": "https://gateway.palma.ai./mcp"}
+                      "trailing-dot": "https://gateway.palma.ai./mcp", "userinfo": "https://team:PRIVATE@gateway.palma.ai/mcp",
+                      "backslash": "https://gateway.palma.ai\\@collector.example.test/mcp"}
         servers = {name: {"type": "http", "url": url} for name, url in {**governed, **lookalikes}.items()}
         servers["gateway.palma.ai"] = {"command": "node"}  # A name is never evidence of governance.
         self.put(".cursor/mcp.json", {"mcpServers": servers})
@@ -76,6 +77,57 @@ class PolicyTests(unittest.TestCase):
         self.assertNotIn("Control who can invoke tools", inline["impact"])
         self.assertIn("\u201ctracker\u201d signs in with a fixed secret", static["summary"])
         self.assertNotIn("PRIVATE_EXAMPLE_TOKEN_123456", json.dumps(snapshot))
+
+    def test_a_fixed_secret_by_reference_is_reported_beside_an_unrelated_inline_credential(self):
+        self.put(".cursor/mcp.json", {"mcpServers": {"tracker": {"type": "http", "url": "https://mcp.example.test/mcp?api_key=PRIVATE_URL_KEY_123456",
+                                                                  "headers": {"Authorization": "Bearer ${env:TRACKER_TOKEN}"}}}})
+        snapshot = self.scan()
+        self.assertEqual([self.names(snapshot, item) for item in self.rule(snapshot, "mcp-inline-credential")], [{"tracker"}])
+        self.assertEqual([self.names(snapshot, item) for item in self.rule(snapshot, "mcp-static-secret-auth")], [{"tracker"}])
+
+    def test_summary_names_cannot_close_their_quotes_reorder_text_or_act_as_templates(self):
+        secret = {"type": "http", "url": "https://mcp.example.test/mcp", "headers": {"Authorization": "Bearer PRIVATE_EXAMPLE_TOKEN_123456"}}
+        self.put(".cursor/mcp.json", {"mcpServers": {
+            "a\u201d is routed through the Palma gateway. \u201cz": secret, "{where} {n} \u202ereversed": secret,
+            "https://jira.internal.example/mcp": secret, "x" * 200: secret}})
+        [finding] = self.rule(self.scan(), "mcp-inline-credential")
+        summary = finding["summary"]
+        self.assertEqual(summary.count("\u201c"), 3)
+        self.assertEqual(summary.count("\u201d"), 3)
+        self.assertIn("{where} {n} reversed", summary)
+        self.assertNotIn("\u202e", summary)
+        self.assertNotIn("jira.internal.example", summary)
+        self.assertIn("x" * 59 + "\u2026", summary)
+        self.assertIn("and 1 more", summary)
+
+    def test_summaries_stay_short_whatever_the_names_and_paths(self):
+        observations = [{"id": f"obs-{index}", "kind": "mcp", "client": "cursor", "name": "n" * 250 + str(index), "sourceId": "src-1",
+                         "location": "/" + "folder/" * 580 + f"{index}/mcp.json", "enabled": "enabled",
+                         "details": {"transport": "http", "execution": "remote", "auth": "bearer_header", "authSecretInline": True,
+                                     "literalCredentialCount": 1, "inlineCredentialPresent": True, "capability": "computer"}}
+                        for index in range(6)]
+        findings = evaluate({"observations": observations, "sources": []})
+        self.assertTrue(findings)
+        for finding in findings:
+            self.assertLess(len(finding["summary"]), 1000, finding["ruleId"])
+
+    def test_version_control_needs_a_real_repository_that_does_not_ignore_the_skill(self):
+        self.put("code/kept/.git/HEAD", "ref: refs/heads/main\n")
+        self.put("code/kept/.gitignore", "# build output\n*.log\n/build\n")
+        self.put("code/kept/.claude/skills/kept/SKILL.md", "---\nname: kept\n---\nSteps.")
+        self.put("code/ignored/.git/HEAD", "ref: refs/heads/main\n")
+        self.put("code/ignored/.gitignore", "node_modules/\n.claude/\n")
+        self.put("code/ignored/.claude/skills/ignored/SKILL.md", "---\nname: ignored\n---\nSteps.")
+        self.put("code/reincluded/.git/HEAD", "ref: refs/heads/main\n")
+        self.put("code/reincluded/.gitignore", ".claude/\n!.claude/skills/reincluded/SKILL.md\n")
+        self.put("code/reincluded/.claude/skills/reincluded/SKILL.md", "---\nname: reincluded\n---\nSteps.")
+        self.put("code/empty-marker/.git", "")
+        self.put("code/empty-marker/.claude/skills/marker/SKILL.md", "---\nname: marker\n---\nSteps.")
+        snapshot = self.scan([self.home / "code" / name for name in ("kept", "ignored", "reincluded", "empty-marker")])
+        findings = {item["severity"]: item for item in self.rule(snapshot, "skills-local-unreviewed")}
+        self.assertEqual(self.names(snapshot, findings["high"]), {"kept"})
+        self.assertEqual(self.names(snapshot, findings["critical"]), {"ignored", "reincluded", "marker"})
+        self.assertIn("not excluded by its .gitignore", findings["high"]["summary"])
 
     def test_computer_use_summary_names_the_connector_and_what_it_controls(self):
         self.put("Library/Application Support/Claude/claude_desktop_config.json", {"mcpServers": {"computer-use": {"command": "computer-use-server"}}})

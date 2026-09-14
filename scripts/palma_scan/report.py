@@ -8,6 +8,7 @@ Configuration is evidence of capability, not evidence of execution or compromise
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import html
 import json
@@ -101,8 +102,12 @@ def _text(value: object) -> str:
     return str(value)
 
 
+# Invisible direction controls from scanned names could visually reorder the text around them.
+_DIRECTION_CONTROLS = re.compile(r'[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]')
+
+
 def _e(value: object) -> str:
-    return html.escape(_text(value), quote=True)
+    return html.escape(_DIRECTION_CONTROLS.sub("", _text(value)), quote=True)
 
 
 def _records(value: object) -> list[dict]:
@@ -227,29 +232,93 @@ _KIND_ORDER = ("mcp", "skill", "plugin", "agent", "hook", "setting")
 _EVIDENCE_VISIBLE = 20
 _EVIDENCE_LIMIT = 200
 _LOCATIONS_LIMIT = 100
-# Path segments that begin a standard AI configuration location. The shareable report keeps
-# locations from the first such segment on and drops the folders above it.
+# Folders and files that name an AI configuration location. The shareable report keeps the
+# last such segment and the file name, and drops every folder around them.
 _SHARE_MARKERS = frozenset({".claude", ".claude.json", ".mcp.json", ".cursor", ".vscode", ".gemini", ".codex",
                             ".agents", ".github", ".opencode", "opencode.json", "opencode.jsonc", ".continue", ".kiro",
                             ".windsurf", ".roo", ".cline", ".codeium", ".aider.conf.yml", ".copilot", ".openclaw",
-                            ".lmstudio", ".local", ".config", ".mozilla", "Library", "AppData", "Applications"})
-_FIXED_LOCATIONS = ("system:", "machine:", "installation:", "managed:", "managed-cache:", "session:", "user:",
-                    "override:", "collection:", "/Library/", "/Applications/", "/etc/", "/opt/", "/usr/",
-                    "C:/Program Files", "C:/ProgramData")
+                            ".lmstudio", ".local", ".config", ".mozilla", "Library", "AppData", "Applications",
+                            "etc", "Program Files", "ProgramData"})
+# Scanner-generated labels rather than filesystem paths; they name no folder of the user's.
+_PSEUDO_LOCATIONS = ("system:", "machine:", "installation:", "managed:", "managed-cache:", "session:", "user:",
+                     "override:", "collection:", "scope:")
+_PATH_LIKE = re.compile(r"[\\/]|://")
 
 
 def _share_location(value: object) -> str:
-    """A location for the shareable report: standard AI paths, never project or folder names."""
+    """A location for the shareable report: its AI configuration folder and file name only.
+
+    ``~/.claude/settings.json`` stays as it is; ``~/code/app/.cursor/mcp.json`` becomes
+    ``project/.cursor/mcp.json``; anything between the configuration folder and the file
+    becomes an ellipsis. Applying it twice gives the same result.
+    """
     text = _text(value).replace("\\", "/")
-    if text.startswith(_FIXED_LOCATIONS):
+    if text.startswith(_PSEUDO_LOCATIONS):
         return text
-    parts = text.split("/")
+    parts = [part for part in text.split("/") if part]
     markers = [index for index, part in enumerate(parts) if part in _SHARE_MARKERS]
-    if parts[0] == "~" and markers and markers[0] == 1:
-        return text
-    if markers:
-        return "project/" + "/".join(parts[markers[-1]:])
-    return "location withheld"
+    if not markers:
+        return "location withheld"
+    start = markers[-1]
+    tail = parts[start:] if len(parts) - start <= 2 else [parts[start], "\u2026", parts[-1]]
+    if start == 1 and parts[0] == "~":
+        prefix = "~/"
+    elif start == 1 and re.fullmatch(r"[A-Za-z]:", parts[0]):
+        prefix = parts[0] + "/"
+    elif start == 0 and text.startswith("/"):
+        prefix = "/"
+    else:
+        prefix = "project/"
+    return prefix + "/".join(tail)
+
+
+def _shareable(snapshot: dict) -> dict:
+    """The snapshot as the shareable summary shows it: nothing names a folder.
+
+    Locations are reduced by ``_share_location``; a name or setting value that is a path or
+    web address is withheld. The same replacements apply inside finding summaries, which
+    quote declaration names and file locations.
+    """
+    data = copy.deepcopy(snapshot)
+    replacements = {}
+
+    def location(value):
+        if isinstance(value, str):
+            replacements[value] = _share_location(value)
+            return replacements[value]
+        return value
+
+    def label(value, withheld):
+        if isinstance(value, str) and _PATH_LIKE.search(value):
+            replacements[value] = withheld
+            return withheld
+        return value
+
+    for source in _records(data.get("sources")):
+        source["location"] = location(source.get("location"))
+    for item in _records(data.get("observations")):
+        item["location"] = location(item.get("location"))
+        item["name"] = label(item.get("name"), "Name withheld")
+        details = item.get("details") if isinstance(item.get("details"), dict) else {}
+        if isinstance(details.get("locations"), list):
+            details["locations"] = list(dict.fromkeys(location(entry) for entry in details["locations"]))
+        if "value" in details:
+            details["value"] = label(details["value"], "value withheld")
+    for finding in _records(data.get("findings")):
+        for entry in _records(finding.get("evidence")):
+            entry["location"] = location(entry.get("location"))
+            entry["key"] = label(entry.get("key"), "Name withheld")
+            value = entry.get("value")
+            if isinstance(value, dict) and "value" in value:
+                value["value"] = label(value["value"], "value withheld")
+            elif not isinstance(value, dict):
+                entry["value"] = label(value, "value withheld")
+    for finding in _records(data.get("findings")):
+        if isinstance(finding.get("summary"), str):
+            for original in sorted(replacements, key=len, reverse=True):
+                if original in finding["summary"]:
+                    finding["summary"] = finding["summary"].replace(original, replacements[original])
+    return data
 
 
 def _client_anchor(value: object) -> str:
@@ -327,7 +396,11 @@ def _facts(item: dict) -> list[str]:
         approval = details.get("autoApproval")
         if capability in {"computer", "browser"}:
             add("Controls screen, keyboard and mouse" if capability == "computer" else "Controls a web browser", "risk")
-            add("Acts as you" if details.get("accountAlias", "~") == "~" else "Acts system-wide")
+            # System policy configures the connector; it still acts as the signed-in user.
+            alias = details.get("accountAlias", "~")
+            if alias == "system":
+                add("Set by system policy")
+            add("Acts as that account" if isinstance(alias, str) and alias.startswith("user-") else "Acts as you")
             add({"all": "No approval before tool use", "none": "Asks before tool use"}.get(approval, "Approval setting not recorded"), "risk" if approval == "all" else "")
         elif approval == "all":
             add("No approval before tool use", "risk")
@@ -374,7 +447,8 @@ def _facts(item: dict) -> list[str]:
             add("Runs on " + ", ".join(events[:4]) + (f" and {len(events) - 4} more" if len(events) > 4 else ""))
         counts = details.get("typeCounts") if isinstance(details.get("typeCounts"), dict) else {}
         for handler, (singular, plural) in (("command", ("command handler", "command handlers")), ("http", ("web request handler", "web request handlers")),
-                                            ("prompt", ("prompt handler", "prompt handlers")), ("agent", ("agent handler", "agent handlers"))):
+                                            ("prompt", ("prompt handler", "prompt handlers")), ("agent", ("agent handler", "agent handlers")),
+                                            ("configuredLocations", ("hook folder", "hook folders"))):
             if _count(counts.get(handler)):
                 add(_plural(counts[handler], singular, plural))
     elif kind == "setting":
@@ -410,7 +484,7 @@ def _where(item: dict, share: bool, *, list_places: bool = True) -> str:
     elif total > 1:
         rows = "".join(f"<li><code>{_e(entry)}</code></li>" for entry in others[:_LOCATIONS_LIMIT])
         if total > min(len(others), _LOCATIONS_LIMIT):
-            rows += f'<li class="muted">{total - min(len(others), _LOCATIONS_LIMIT):,} more in snapshot.json</li>'
+            rows += f'<li class="muted">{total - min(len(others), _LOCATIONS_LIMIT):,} more not listed</li>'
         html += f'<details class="locations"><summary>Declared in {total:,} places{_icon("chevron", "disclosure-icon")}</summary><ul>{rows}</ul></details>'
     elif copies > 1:
         html += f'<span class="location-count">Declared {copies:,} times in this file</span>'
@@ -620,9 +694,10 @@ def _evidence(finding: dict, observations: dict[str, dict], share: bool) -> str:
     rows.extend(_evidence_row(None, entry, share) for position, entry in enumerate(evidence) if position not in used)
     shown = "".join(rows[:_EVIDENCE_VISIBLE])
     rest = rows[_EVIDENCE_VISIBLE:_EVIDENCE_LIMIT]
-    more = f'<details class="evidence-more"><summary>Show all {len(rows):,}{_icon("chevron", "disclosure-icon")}</summary><ul class="evidence-list">{"".join(rest)}</ul></details>' if rest else ""
+    shown_all = f"Show all {len(rows):,}" if len(rows) <= _EVIDENCE_LIMIT else f"Show {_EVIDENCE_LIMIT:,} of {len(rows):,}"
+    more = f'<details class="evidence-more"><summary>{shown_all}{_icon("chevron", "disclosure-icon")}</summary><ul class="evidence-list">{"".join(rest)}</ul></details>' if rest else ""
     if len(rows) > _EVIDENCE_LIMIT:
-        more += f'<p class="muted evidence-omitted">{len(rows) - _EVIDENCE_LIMIT:,} more are listed in snapshot.json.</p>'
+        more += f'<p class="muted evidence-omitted">{len(rows) - _EVIDENCE_LIMIT:,} more {"are not shown in this summary" if share else "are listed in snapshot.json"}.</p>'
     evidence_html = f'<ul class="evidence-list">{shown}</ul>{more}' if rows else '<p class="muted">No evidence lines were recorded for this finding.</p>'
     links = []
     for value in finding.get("references", []) if isinstance(finding.get("references"), list) else []:
@@ -836,7 +911,11 @@ _JS = r"""
   cards.forEach(card => card.querySelector('.finding-evidence').addEventListener('toggle', syncExpansion));
   const inventoryGroups = Array.from(document.querySelectorAll('.inventory-group'));
   const inventoryRows = Array.from(document.querySelectorAll('.inventory-row'));
-  const inventoryText = new Map(inventoryRows.map(row => [row, row.textContent.toLocaleLowerCase()]));
+  // A row matches its client's name too, so "claude code" finds that client's items.
+  const inventoryText = new Map(inventoryRows.map(row => {
+    const client = row.closest('.inventory-group').querySelector('.inventory-kind strong');
+    return [row, `${client ? client.textContent : ''} ${row.textContent}`.toLocaleLowerCase()];
+  }));
   const inventorySearch = document.getElementById('inventory-search');
   const inventoryStatus = document.getElementById('inventory-search-status');
   const inventoryEmpty = document.getElementById('inventory-no-results');
@@ -922,14 +1001,17 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     a hash-based Content Security Policy. It does not evaluate configuration values.
     The optional booking link is navigation initiated by the reader, never a request
     made by report generation or loading. Identical inputs produce identical bytes.
-    ``share`` renders the shareable summary: locations keep only their standard AI
-    configuration part, and coverage lists counts instead of source locations.
+    ``share`` renders the shareable summary from ``_shareable``: locations keep only their AI
+    configuration folder and file name, and coverage lists counts instead of source locations.
     """
+    if share:
+        snapshot = _shareable(snapshot)
     sources = _records(snapshot.get("sources"))
     observations = _records(snapshot.get("observations"))
     findings_data = _records(snapshot.get("findings"))
     findings_data = sorted(findings_data, key=lambda item: (_SEVERITIES.index(_enum(item.get("severity"), _SEVERITIES, "info")), _text(item.get("title", "")).casefold(), _text(item.get("id", ""))))
-    findings = [(_anchor("finding", index, item.get("id", "")), item) for index, item in enumerate(findings_data)]
+    # Finding ids derive from local paths, so the shareable summary numbers its anchors instead.
+    findings = [(f"finding-{index + 1}" if share else _anchor("finding", index, item.get("id", "")), item) for index, item in enumerate(findings_data)]
     severity_counts = Counter(_enum(item.get("severity"), _SEVERITIES, "info") for item in findings_data)
     observation_map = {_text(item.get("id", "")): item for item in observations}
     kind_counts = Counter(_text(item.get("kind", "other")) for item in observations)
@@ -955,7 +1037,7 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     declared = snapshot.get("mode") == "declared"
     banner = ""
     if share:
-        banner = '<div class="scope-banner" role="note">' + _icon("lock") + '<strong>Shareable summary: file locations keep only their standard AI configuration path, without project or folder names. Tool, connector and skill names are included.</strong></div>'
+        banner = '<div class="scope-banner" role="note">' + _icon("lock") + '<strong>Shareable summary: file locations keep only their AI configuration folder and file name, without project or folder names. Tool, connector and skill names are included; names that are paths or web addresses are withheld.</strong></div>'
     if isinstance(scope.get("label"), str) and scope["label"].strip():
         banner += '<div class="scope-banner" role="note">' + _icon("info") + '<strong>' + _e(scope["label"]) + '</strong></div>'
     if declared:

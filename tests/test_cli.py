@@ -39,6 +39,7 @@ class CliTests(unittest.TestCase):
             result = self.invoke("report", "--run-dir", output, "--share", "--output", rebuilt_share)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((output / "share.html").read_bytes(), rebuilt_share.read_bytes())
+            self.assertEqual(self.invoke("report", "--run-dir", output, "--share", "--output", rebuilt_share).returncode, 2, "never replaced")
             snapshot = json.loads((output / "snapshot.json").read_text())
             self.assertEqual(snapshot["scope"]["type"], "copied-home")
             self.assertEqual(snapshot["schemaVersion"], "2.0")

@@ -414,7 +414,7 @@ def _credentials(collector, source, values, *, key="additionalCredentialStorage"
         references += reference_count
     if literal or references:
         counts = {"literalCredentialCount": literal, "credentialReferenceCount": references}
-        _record(collector, source, key, counts, context=context, extra=counts)
+        _record(collector, source, key, counts, context=context, extra=counts)["_content"] = content_digest(values)
 
 
 def _endpoint_summary(value):

@@ -52,7 +52,9 @@ operating-system context. Keep the folder intact so the assistant has all matchi
 
 Each run saves `report.html`, `share.html` (a summary without project or folder names, for
 sharing), `snapshot.json` (sanitized evidence and findings), and `summary.json` (counts and
-scope). Review priorities first, explore access charts, then open evidence and inventory
+scope). These files describe your computer's AI access, including which files hold
+credentials: keep them private, share only `share.html`, and delete the folder when you are
+done. Review priorities first, explore access charts, then open evidence and inventory
 details. Search actual skill, plugin, agent, and connector
 names and their local configuration paths. All priorities remain visible, with Critical
 and High first. Client and connector icons are embedded.

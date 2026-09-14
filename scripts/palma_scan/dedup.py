@@ -32,12 +32,15 @@ def _order(item):
     return (location.count("/"), len(location), location, item["id"])
 
 
-def _key(item):
+def _key(item, malformed):
     details = {key: value for key, value in item.get("details", {}).items() if key not in _PER_COPY}
     content = details.get("digest") if item["kind"] == "skill" else item.get("_content")
-    if not content and (item["kind"] in _CONTENT_REQUIRED or item["kind"] == "skill"):
+    # Credential counts alone cannot tell two different secrets apart.
+    credential = type(details.get("literalCredentialCount")) is int and details["literalCredentialCount"] > 0
+    if not content and (item["kind"] in _CONTENT_REQUIRED or item["kind"] == "skill" or credential):
         return ("unique", item["id"])
-    return json.dumps([item["kind"], item["client"], item["name"], item["enabled"], details, content],
+    # A copy in a malformed file stays separate, so it cannot stand in for a well-formed one.
+    return json.dumps([item["kind"], item["client"], item["name"], item["enabled"], details, content, item["sourceId"] in malformed],
                       sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
 
 
@@ -53,18 +56,18 @@ def _record_locations(canonical, items):
         canonical["details"]["locationCount"] = len(unique)
 
 
-def collapse_declarations(observations):
+def collapse_declarations(observations, malformed=frozenset()):
     """Merge identical copies of declarations; client rows are merged separately.
 
     Copies merge across files, and across contexts within one file (the same server
     configured for several projects in one state file). Two identical entries in the
     same file and context are distinct declarations, and that repetition is itself
     worth seeing. ``copyCount`` records how many declarations merged; ``locations``
-    lists the distinct files.
+    lists the distinct files. ``malformed`` holds the ids of sources with unsupported shapes.
     """
     groups, members = {}, {}
     for item in observations:
-        key = ("client", item["id"]) if item["kind"] == "client" else _key(item)
+        key = ("client", item["id"]) if item["kind"] == "client" else _key(item, malformed)
         position = (item["sourceId"], item.get("details", {}).get("contextId"))
         index = 0
         while position in members.get((key, index), ()):

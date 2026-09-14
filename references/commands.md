@@ -53,8 +53,8 @@ For web requests, follow the native run workflow in SKILL.md.
 `--no-open` keeps it closed. Direct Python commands require `--open` to launch it.
 
 `share.html` and `report --share` render the shareable summary: the same findings and names,
-with locations reduced to their standard AI configuration path and no project, folder or
-volume names.
+with every location reduced to its AI configuration folder and file name, names that are
+paths or web addresses withheld, and no project, folder or volume names.
 
 `--booking-url https://...` includes an optional calendar link. No destination is built in.
 Rendering neither fetches it nor appends inventory. Use the same options for identical HTML.

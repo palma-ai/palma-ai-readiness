@@ -9,6 +9,7 @@ persistent device identity, network request, command execution or upload.
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
+import fnmatch
 import os
 from pathlib import Path
 import re
@@ -109,20 +110,60 @@ def _known_candidates(root, alias, workspace=False):
     return list(result.values())
 
 
-def _version_controlled(path, stop):
-    """Whether a project file sits in a git working tree (a .git folder or worktree file).
+def _version_controlled(path, stop, files, repositories):
+    """Whether a project file is inside a git repository and not excluded by its .gitignore.
 
-    Metadata only; the search stops at the account home so a dotfiles repository
-    there does not mark every project as version-controlled.
+    A repository is a .git folder holding HEAD, or a linked worktree's .git file. Reads go
+    through the collection's safe file access, and the search stops at the account home so
+    a dotfiles repository there does not mark every project. Only the repository's
+    top-level .gitignore is applied; anything unreadable counts as not version-controlled.
+    ``repositories`` caches each folder's ignore patterns, or None when it is no repository.
     """
     for parent in list(path.parents)[:16]:
         if parent == stop or parent.parent == parent:
-            break
-        try:
-            (parent / '.git').lstat()
-            return True
-        except OSError:
-            continue
+            return False
+        if parent not in repositories:
+            repositories[parent] = _repository_patterns(parent, files)
+        if repositories[parent] is not None:
+            return repositories[parent] is not False and not _git_ignored(path.relative_to(parent).parts, repositories[parent])
+    return False
+
+
+def _repository_patterns(folder, files):
+    """The folder's .gitignore lines if it is a repository root, False if unreadable, else None."""
+    try:
+        marker = files.info(folder / '.git')
+    except ReadGap:
+        return None
+    try:
+        if stat.S_ISDIR(marker.st_mode):
+            files.info(folder / '.git' / 'HEAD')
+        elif not files.read(folder / '.git')[0].startswith(b'gitdir: '):
+            return False
+    except ReadGap:
+        return False
+    try:
+        return files.read(folder / '.gitignore')[0].decode('utf-8', 'replace').splitlines()
+    except ReadGap as error:
+        return [] if error.reason == 'not_found' else False
+
+
+def _git_ignored(parts, patterns):
+    """Whether .gitignore patterns exclude a path or a folder above it; the last match decides."""
+    rules = []
+    for line in patterns:
+        pattern = line.strip()
+        if pattern and not pattern.startswith('#'):
+            negate = pattern.startswith('!')
+            pattern = pattern.removeprefix('!')
+            rules.append((negate, '/' in pattern.rstrip('/'), pattern.strip('/')))
+    for depth in range(1, len(parts) + 1):
+        excluded = False
+        for negate, anchored, pattern in rules:
+            if fnmatch.fnmatchcase('/'.join(parts[:depth]) if anchored else parts[depth - 1], pattern):
+                excluded = not negate
+        if excluded:
+            return True  # Git cannot re-include a file below an excluded folder.
     return False
 
 
@@ -247,7 +288,7 @@ def _merge(collector, collection, alias, workspaces):
         sources[old['id']] = source
         if status not in {'collected', 'missing'}:
             collector.gaps.add(source['location'] + ': ' + source['reason'])
-    processed_mcps, failed = set(), set()
+    processed_mcps, failed, repositories = set(), set(), {}
     for identity, data in builder.documents.items():
         source, candidate = sources.get(identity), builder.candidates.get(identity)
         if not source or not candidate or candidate.role.startswith('installed-') or candidate.role in {'registry-probe', 'installation'}:
@@ -259,11 +300,12 @@ def _merge(collector, collection, alias, workspaces):
             if candidate.role in {'agent', 'plugin', 'skill'} or candidate.scope == 'plugin':
                 # A package declaration is not a client settings file. Only its
                 # documented integration/hooks blocks and credential presence apply.
-                from .collector import _credential_counts
+                from .collector import _credential_counts, credential_content
                 literal, references = _credential_counts(normalized)
                 if literal or references:
                     counts = {'literalCredentialCount': literal, 'credentialReferenceCount': references}
-                    collector.observe(source, 'setting', 'Package credential storage', {'key': 'credentialStorage', 'value': counts, **counts}, discriminator='package-credentials')
+                    item = collector.observe(source, 'setting', 'Package credential storage', {'key': 'credentialStorage', 'value': counts, **counts}, discriminator='package-credentials')
+                    item['_content'] = credential_content(normalized)
                 collector.extensions(source, normalized, context)
                 key = 'mcp_servers' if 'mcp_servers' in normalized else 'mcpServers'
                 if key in normalized:
@@ -364,7 +406,7 @@ def _merge(collector, collection, alias, workspaces):
                     details['version'] = version
                 if kind == 'skill':
                     details.update(digest=old.get('digest'), digestAlgorithm=old.get('digestAlgorithm'), filesHashed=old.get('filesHashed', 0), manifestType='SKILL.md')
-                    if old.get('origin') == 'project' and candidate and _version_controlled(candidate.path, collection.home):
+                    if old.get('origin') == 'project' and candidate and _version_controlled(candidate.path, collection.home, collection.files, repositories):
                         details['provenance'] = 'version-controlled'
                 if kind == 'agent':
                     details.update(toolCount=len(old.get('toolNames', [])), declaredToolCount=len(old.get('toolNames', [])), modelConfigured=bool(old.get('model')))
@@ -513,7 +555,8 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         collection.builder.finish()
         _merge(collector, collection, 'system', roots)
     # Shared graph edges and repeated candidates resolve to one deterministic row.
-    observations = collapse_declarations(list({o['id']: o for o in collector.observations}.values()))
+    malformed = {source['id'] for source in collector.sources if source.get('issueKind') == 'unsupported-mcp-shape'}
+    observations = collapse_declarations(list({o['id']: o for o in collector.observations}.values()), malformed)
     # Keep sources that back evidence or record a problem. An absent candidate path is the
     # normal case, and a file that was read without yielding evidence (or whose declaration
     # merged into another copy, which lists its location) is only counted.

@@ -156,10 +156,13 @@ URLs. Do not append report data to links.
 ## Shareable summary
 
 Each run also writes `share.html` from the same snapshot; `report --share` rebuilds one. It
-keeps findings, counts and client, connector, skill and plugin names, but every location
-keeps only its standard AI configuration part (`~/.claude.json`, `project/.mcp.json`):
-project, folder and volume names are removed, and coverage shows counts by cause without
-source locations. It is the only version to publish or send to someone else.
+keeps findings, counts and client, connector, skill and plugin names. Every location keeps
+only its AI configuration folder and file name (`~/.claude.json`, `project/.cursor/mcp.json`,
+`~/Library/…/claude_desktop_config.json`), inside finding summaries too; a location without
+such a folder is withheld. Names and setting values that are paths or web addresses are
+withheld, finding anchors are numbered rather than derived from local paths, and coverage
+shows counts by cause without source locations. It is the only version to publish or send
+to someone else.
 
 ## Empty and partial evidence
 

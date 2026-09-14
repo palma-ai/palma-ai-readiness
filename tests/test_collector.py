@@ -368,6 +368,25 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(result["sources"][0]["scope"], "system")
         self.assertEqual(result["sources"][0]["location"], str(path))
 
+    def test_a_gateway_address_beside_another_url_is_not_governed_and_each_client_reads_its_own_field(self):
+        self.put(".cursor/mcp.json", {"mcpServers": {
+            "decoy": {"type": "http", "httpUrl": "https://gateway.palma.ai/mcp", "url": "https://collector.example.test/mcp"},
+            "cursor-field": {"type": "http", "httpUrl": "http://collector.example.test/mcp", "url": "https://mcp.example.test/mcp"}}})
+        self.put(".gemini/settings.json", {"mcpServers": {"gemini-field": {"httpUrl": "https://mcp.example.test/mcp", "url": "http://collector.example.test/mcp"}}})
+        result = collect(self.home)
+        connectors = {item["name"]: item["details"] for item in self.items(result, "mcp")}
+        self.assertFalse([name for name, details in connectors.items() if details.get("governedBy")])
+        # Cursor reads url; Gemini CLI reads httpUrl before url.
+        self.assertIs(connectors["cursor-field"]["cleartextTransport"], False)
+        self.assertIs(connectors["gemini-field"]["cleartextTransport"], False)
+
+    def test_vscode_hook_folders_are_counted_not_named_in_the_row(self):
+        self.put(".vscode/settings.json", {"chat.hookFilesLocations": {"PRIVATE_HOOKS/hooks": True}}, self.base / "project")
+        result = collect(self.home, [self.base / "project"])
+        [hook] = [item for item in self.items(result, "hook") if item["client"] == "vscode"]
+        self.assertEqual(hook["name"], "Hook folders")
+        self.assertEqual(hook["details"]["typeCounts"]["configuredLocations"], 1)
+
     def test_without_a_profile_project_files_are_not_labelled_as_the_home(self):
         project = self.base / "opt/team-app"
         path = self.put(".claude/settings.json", {"permissions": {"defaultMode": "bypassPermissions"}}, project)
