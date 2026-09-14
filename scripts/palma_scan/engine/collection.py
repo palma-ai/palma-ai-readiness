@@ -119,6 +119,7 @@ class Collection:
             if key in self.processed:
                 continue
             self.processed.add(key)
+            checkpoint = self.builder.checkpoint()
             try:
                 # A large cache must not exhaust independent configuration sources.
                 self.files.budget = Budget(self.options, time.monotonic())
@@ -132,7 +133,10 @@ class Collection:
             except Exception:
                 # One candidate is the adapter failure boundary: an unanticipated
                 # shape or adapter defect leaves the other sources collectable.
-                # The exception text is not recorded; it can echo file contents.
+                # Everything the candidate registered is discarded first, so a
+                # half-run adapter exports neither probe-only sources nor partial
+                # evidence. The exception text is not recorded; it can echo contents.
+                self.builder.rollback(checkpoint)
                 self.builder.gap(candidate, "adapter_error", "invalid")
 
     def _candidate(self, candidate):

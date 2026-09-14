@@ -799,8 +799,8 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
     started = datetime.now(timezone.utc).isoformat()
     layout = _layout()
     discovery = _Discovery(layout, directory_limit=directory_limit, entry_limit=entry_limit, seconds=seconds)
-    current = [{"root": layout["currentHome"], "alias": "~"}] if layout.get("currentHome") else []
-    profiles = discovery.step("local-user-profiles", discovery.profiles, current)
+    # A failed profile step scans no profile: an unchecked home could be a network mount or a link.
+    profiles = discovery.step("local-user-profiles", discovery.profiles, [])
     discovery.step("running-process-names", discovery.processes)
     # The retained baseline engine invoked by collect_scopes owns its richer
     # installation/MSIX/native-package/payload collectors; do not replace it

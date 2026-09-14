@@ -101,6 +101,64 @@ class CollectionBoundaryTests(unittest.TestCase):
         self.assertIn("sandbox-disabled", {item["ruleId"] for item in snapshot["findings"]})
         self.assertNotIn("PRIVATE_EXCEPTION_TEXT", json.dumps(snapshot))
 
+    @unittest.skipIf(os.name == "nt", "POSIX fixture modes")
+    def test_failed_bundle_probe_leaves_no_trace_of_an_unrelated_application(self):
+        self.write("Applications/PRIVATE_UNRELATED.app/Contents/Info.plist", plistlib.dumps({"CFBundleIdentifier": "com.example.unrelated"}))
+        from palma_scan.engine import observations
+        original = observations.ReportBuilder.file_metadata
+
+        def file_metadata(builder, candidate, source, info):
+            if "PRIVATE_UNRELATED" in str(candidate.path):
+                raise RuntimeError("PRIVATE_EXCEPTION_TEXT")
+            return original(builder, candidate, source, info)
+
+        with patch.object(observations.ReportBuilder, "file_metadata", file_metadata):
+            snapshot = self.scan()
+        self.assertNotIn("PRIVATE_UNRELATED", json.dumps(snapshot))
+        self.assertTrue([source for source in snapshot["sources"] if source.get("reason") == "adapter_error"])
+
+    def test_failing_adapter_discards_its_partial_evidence(self):
+        self.write(".cursor/mcp.json", {"mcpServers": {"remote": {"url": "https://mcp.example.test/mcp", "headers": {"Authorization": "Bearer PRIVATE_TOKEN_VALUE_1234"}}}})
+        with patch("palma_scan.engine.adapters.configs.client_auth", side_effect=RuntimeError("PRIVATE_EXCEPTION_TEXT")):
+            snapshot = self.scan()
+        cursor = [source for source in snapshot["sources"] if source["location"].startswith("~/.cursor/mcp.json")]
+        self.assertTrue(cursor)
+        self.assertEqual({source["status"] for source in cursor}, {"error"})
+        self.assertFalse([item for item in snapshot["observations"] if item["location"] == "~/.cursor/mcp.json"])
+        self.assertNotIn("PRIVATE_TOKEN_VALUE_1234", json.dumps(snapshot))
+
+    def test_a_source_that_fails_in_the_first_pass_is_not_retranslated_later(self):
+        self.write("Library/Application Support/Code/User/profiles/work/mcp.json", {"servers": {"source-control": {"type": "http", "url": "https://api.githubcopilot.com/mcp/"}}})
+        original = collector._Collector.process_data
+
+        def process_data(instance, root, source, data, context="base", filename=""):
+            if source["client"] == "vscode":
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, root, source, data, context, filename)
+
+        with patch.object(collector._Collector, "process_data", process_data):
+            snapshot = self.scan()
+        self.assertFalse([item for item in snapshot["observations"] if item["client"] == "vscode" and item["kind"] == "mcp"])
+        self.assertTrue([source for source in snapshot["sources"] if source["client"] == "vscode" and source["status"] == "error"])
+
+    def test_a_withdrawn_parent_leaves_no_dangling_links(self):
+        relative = ".codex/plugins/cache/market/demo/1.0.0"
+        self.write(relative + "/.codex-plugin/plugin.json", {"name": "demo"})
+        self.write(relative + "/skills/helper/SKILL.md", "---\nname: helper\n---\nbody\n")
+        self.write(relative + "/.mcp.json", {"mcpServers": {"local": {"command": "node"}}})
+        original = collector._Collector.observe
+
+        def observe(instance, source, kind, name, details, enabled="unknown", discriminator="", location=None):
+            if kind == "plugin" and discriminator.startswith("engine:"):
+                raise RuntimeError("PRIVATE_EXTRACTOR_TEXT")
+            return original(instance, source, kind, name, details, enabled, discriminator, location)
+
+        with patch.object(collector._Collector, "observe", observe):
+            snapshot = self.scan()
+        self.assertFalse([item for item in snapshot["observations"] if item["kind"] == "plugin"])
+        identities = {item["id"] for item in snapshot["observations"]}
+        self.assertTrue(all(item["details"]["parentId"] in identities for item in snapshot["observations"] if "parentId" in item["details"]))
+
     def test_failing_translation_rolls_back_only_that_source(self):
         self.write(".gemini/settings.json", {"tools": {"sandbox": False}})
         self.write(".claude/settings.json", {"sandbox": {"enabled": False}})
@@ -151,14 +209,18 @@ class MachineStepTests(unittest.TestCase):
             return machine.collect_machine()
 
     def test_unexpected_step_failure_is_partial_coverage_not_a_lost_scan(self):
-        snapshot = self.collect_with(browser_extensions=lambda *_: (_ for _ in ()).throw(RuntimeError("PRIVATE_STEP_TEXT")))
+        def failing(discovery, *_):
+            discovery.source("browser-ai-extension-metadata")  # The step's own source exists before it fails.
+            raise RuntimeError("PRIVATE_STEP_TEXT")
+
+        snapshot = self.collect_with(browser_extensions=failing)
         step = next(source for source in snapshot["sources"] if source["location"] == "machine:browser-ai-extension-metadata")
         self.assertEqual(step["status"], "error")
         self.assertEqual(snapshot["status"], "partial")
         self.assertEqual(len({source["id"] for source in snapshot["sources"]}), len(snapshot["sources"]))
         self.assertNotIn("PRIVATE_STEP_TEXT", json.dumps(snapshot))
 
-    def test_profile_step_failure_falls_back_to_the_current_account(self):
+    def test_profile_step_failure_scans_no_unchecked_profile(self):
         received = []
 
         def core(profiles, **kwargs):
@@ -172,7 +234,7 @@ class MachineStepTests(unittest.TestCase):
              patch.object(machine._Discovery, "services", return_value=None), \
              patch.object(collector, "collect_scopes", side_effect=core, create=True):
             snapshot = machine.collect_machine()
-        self.assertEqual(received, [{"root": self.home, "alias": "~"}])
+        self.assertEqual(received, [])
         self.assertEqual(snapshot["status"], "partial")
 
 

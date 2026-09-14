@@ -180,19 +180,21 @@ def _source_location(collector, candidate, old, home, alias):
 
 
 @contextmanager
-def _atomic_source(collector, source):
+def _atomic_source(collector, source, failed):
     """Translate one source's evidence completely or not at all.
 
     Extraction runs over untrusted local documents. An unanticipated shape or an
     extractor defect must neither end the scan nor leave half-annotated records,
-    such as profile settings missing their applicability. The source keeps an
-    error status; the exception text is withheld because it can echo contents.
+    such as profile settings missing their applicability. A failed source is added
+    to ``failed``: later passes skip it and its remaining rows are withdrawn when
+    the merge ends. The exception text is withheld because it can echo contents.
     """
     start = len(collector.observations)
     try:
         yield start
     except Exception:
         del collector.observations[start:]
+        failed.add(source['id'])
         collector.gap(source, 'evidence in this source could not be interpreted safely', 'error')
 
 
@@ -225,12 +227,12 @@ def _merge(collector, collection, alias, workspaces):
         sources[old['id']] = source
         if status not in {'collected', 'missing'}:
             collector.gaps.add(source['location'] + ': ' + source['reason'])
-    processed_mcps = set()
+    processed_mcps, failed = set(), set()
     for identity, data in builder.documents.items():
         source, candidate = sources.get(identity), builder.candidates.get(identity)
         if not source or not candidate or candidate.role.startswith('installed-') or candidate.role in {'registry-probe', 'installation'}:
             continue
-        with _atomic_source(collector, source) as start:
+        with _atomic_source(collector, source, failed) as start:
             context = source['context']
             normalizer = getattr(extra, 'normalize_extra_data', None)
             normalized = normalizer(source['client'], data) if normalizer else data
@@ -276,9 +278,9 @@ def _merge(collector, collection, alias, workspaces):
                         item['details']['parentId'] = 'obs-' + _id('engine', alias, parent_id)
             continue
         source = sources.get(old_source['id'])
-        if not source:
+        if not source or source['id'] in failed:
             continue
-        with _atomic_source(collector, source) as start:
+        with _atomic_source(collector, source, failed) as start:
             normalized = {}
             for name, entry in entries.items():
                 if isinstance(entry, dict) and candidate.family == 'cline' and isinstance(entry.get('transport'), dict):
@@ -297,9 +299,9 @@ def _merge(collector, collection, alias, workspaces):
     hook_sources = {item['sourceId'] for item in collector.observations if item['kind'] == 'hook'}
     for old in builder.observations.values():
         source = sources.get(old.get('sourceId'))
-        if not source:
+        if not source or source['id'] in failed:
             continue
-        with _atomic_source(collector, source):
+        with _atomic_source(collector, source, failed):
             kind = old['kind']
             candidate = builder.candidates.get(old['sourceId'])
             context = source['context']
@@ -356,6 +358,9 @@ def _merge(collector, collection, alias, workspaces):
                 continue
             item = collector.observe(source, kind, name, details, enabled, discriminator='engine:' + old['id'])
             item['id'] = 'obs-' + _id('engine', alias, old['id'])
+    if failed:
+        # A source that failed in any pass contributes no rows at all.
+        collector.observations[:] = [item for item in collector.observations if item['sourceId'] not in failed]
 
 
 
@@ -482,4 +487,9 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
     # Shared graph edges and repeated candidates resolve to one deterministic row.
     sources = list({s['id']: s for s in collector.sources}.values())
     observations = list({o['id']: o for o in collector.observations}.values())
+    # A parent withdrawn with a failed source must not leave dangling links behind.
+    identities = {item['id'] for item in observations}
+    for item in observations:
+        if 'parentId' in item['details'] and item['details']['parentId'] not in identities:
+            del item['details']['parentId']
     return {'schemaVersion': '2.0', 'collector': {'name': 'palma-ai-readiness', 'version': __version__, 'rulesVersion': RULES_VERSION}, 'mode': 'endpoint', 'startedAt': started, 'completedAt': datetime.now(timezone.utc).isoformat(), 'status': 'partial' if collector.gaps else 'complete', 'scope': {'type': scope_type, 'workspaceCount': len(roots), 'profileCount': len(selected)}, 'sources': sources, 'observations': observations, 'coverage': {'limitations': sorted(collector.gaps)}}

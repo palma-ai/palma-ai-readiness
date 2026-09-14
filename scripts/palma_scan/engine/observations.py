@@ -83,6 +83,27 @@ class ReportBuilder:
         self.redactor.learn(data)
         self.documents[source["id"]] = data
 
+    def checkpoint(self):
+        """Registry state before one candidate runs; see `rollback`."""
+        return set(self.sources), set(self.observations), len(self.mcp_documents)
+
+    def rollback(self, checkpoint):
+        """Discard every source, document and observation registered since `checkpoint`.
+
+        An adapter that fails part-way leaves nothing behind: no probe-only source
+        naming an unrelated application, and no partial evidence that looks complete.
+        """
+        sources, observations, mcp_documents = checkpoint
+        for identity in [identity for identity in self.sources if identity not in sources]:
+            del self.sources[identity]
+            self.documents.pop(identity, None)
+            self.candidates.pop(identity, None)
+            self.component_parents.pop(identity, None)
+        for identity in [identity for identity in self.observations if identity not in observations]:
+            del self.observations[identity]
+        self.clients = {context: client for context, client in self.clients.items() if client["id"] in self.observations}
+        del self.mcp_documents[mcp_documents:]
+
     def gap(self, candidate, reason, status="skipped"):
         identity = fingerprint(self.namespace, "gap", candidate.family, str(candidate.path), reason)
         if identity in self.sources:
