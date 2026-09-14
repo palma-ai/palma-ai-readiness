@@ -340,15 +340,22 @@ def _merge(collector, collection, alias, workspaces):
                 details.update(key=key, nativeKey=key, effectiveState=old.get('effectiveState', 'unknown'), value=old.get('value'), valueCollected=old.get('valueCollected', False), valueType=old.get('valueType', 'unknown'), category=old.get('category', 'other'), interpretation='inventory-only', declaredState=old.get('effectiveState', 'unknown'))
                 name = key
             elif kind in {'skill', 'agent', 'plugin'}:
-                # Configured plugin declarations already have exact enabled flags.
-                if kind == 'plugin' and old.get('installationState') == 'config_only' and any(o['kind'] == 'plugin' and o['sourceId'] == source['id'] for o in collector.observations):
-                    for existing in collector.observations:
-                        if existing['kind'] == 'plugin' and existing['sourceId'] == source['id'] and existing['name'] == collector.display_text(old.get('name', '')):
-                            existing['details'].update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
-                            if 'marketplaceId' in old:
-                                existing['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
-                    continue
-                details.update({key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old})
+                # A configured pack the collector already lists (Claude's enabledPlugins) keeps
+                # its exact enabled flag and gains the provenance; other entries, such as
+                # Codex's [plugins] table, are listed here, one observation per entry.
+                trust = {key: collector.display_text(old[key]) if key == 'marketplaceId' else old[key] for key in TRUST_FIELDS if key in old}
+                if kind == 'plugin' and old.get('installationState') == 'config_only':
+                    listed = [existing for existing in collector.observations if existing['kind'] == 'plugin'
+                              and existing['sourceId'] == source['id'] and existing['name'] == collector.display_text(old.get('name', ''))]
+                    for existing in listed:
+                        existing['details'].update(trust)
+                        if 'marketplaceId' in old:
+                            existing['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
+                    # Claude's enabledPlugins entries are the collector's rows; an entry it did not
+                    # list (a name outside its limits) is not listed twice.
+                    if listed or source['client'] == 'claude-code':
+                        continue
+                details.update(trust)
                 details.update(activation={'config_only': 'configured', 'cached': 'cached', 'installed': 'installed'}.get(old.get('installationState'), 'present'), auditStatus='not-assessed', origin=old.get('origin', 'unknown'))
                 if type(source.get('sizeBytes')) is int:
                     details['manifestSizeBytes'] = source['sizeBytes']
@@ -383,6 +390,11 @@ def _merge(collector, collection, alias, workspaces):
                 item['_marketplaceIdentity'] = content_digest(old['marketplaceId'])
             if kind == 'agent' or (kind == 'plugin' and old.get('installationState') in {'cached', 'installed'}):
                 item['_content'] = builder.content.get(old['sourceId'])
+    for identity, name in getattr(builder, 'consumed_switches', ()):
+        # The pack row carries the switch's state; the switch's own row would list the pack twice.
+        consumed = 'src-' + identity[:24]
+        collector.observations[:] = [o for o in collector.observations
+                                     if not (o['kind'] == 'plugin' and o['sourceId'] == consumed and o['name'] == collector.display_text(name))]
 
 
 def _collect_in_memory(builder, candidate, data, normalize=None):

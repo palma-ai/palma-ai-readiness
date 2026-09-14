@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-14.2",
+  "version": "2026-09-14.3",
   "reviewedAt": "2026-09-14",
   "sources": [
     {
@@ -62,6 +62,29 @@
       "systemSkillsDir": "skills/.system",
       "markerFile": ".codex-system-skills.marker",
       "evidence": "https://github.com/openai/codex/blob/main/codex-rs/skills/src/lib.rs"
+    },
+    {
+      "id": "openai-codex-bundled-plugins",
+      "label": "Codex bundled plugins",
+      "clients": [
+        "codex"
+      ],
+      "managedLocal": {
+        "openai-bundled": "<codexHome>/.tmp/bundled-marketplaces/openai-bundled",
+        "openai-bundled-alpha": "<codexHome>/.tmp/bundled-marketplaces/openai-bundled-alpha"
+      },
+      "evidence": "https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace_policy.rs"
+    },
+    {
+      "id": "openai-codex-primary-runtime",
+      "label": "Codex primary runtime plugins",
+      "clients": [
+        "codex"
+      ],
+      "managedLocal": {
+        "openai-primary-runtime": "<cacheHome>/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+      },
+      "evidence": "https://github.com/openai/codex/blob/main/codex-rs/core-plugins/src/marketplace_policy.rs"
     }
   ]
 }

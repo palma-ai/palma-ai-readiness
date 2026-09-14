@@ -163,6 +163,29 @@ class MachineTests(unittest.TestCase):
         self.assertFalse([path for path in opened if path == self.other or self.other in path.parents])
         self.assertEqual(snapshot["scope"]["discovery"]["excludedDirectories"], 3)
 
+    def test_client_staging_folders_are_not_projects(self):
+        for relative in (".codex/.tmp/plugins/pack/.mcp.json", ".codex/.tmp/bundled-marketplaces/openai-bundled/plugins/browser/.mcp.json",
+                         ".claude/plugins/marketplaces/official/plugins/tool/.mcp.json", ".claude/plugins/repos/org/repo/.mcp.json"):
+            self.put(self.home / relative, {})
+        self.put(self.home / "work/app/.mcp.json", {})
+        # A person's own folder is a project whatever it is called; only fixed client staging paths are skipped.
+        self.put(self.home / "work/.tmp/scratch/.mcp.json", {})
+        self.scan()
+        workspaces = self.received["workspaces"]
+        self.assertIn(self.home / "work/app", workspaces)
+        self.assertIn(self.home / "work/.tmp/scratch", workspaces)
+        self.assertFalse([path for path in workspaces if ".codex" in path.parts or ".claude" in path.parts], workspaces)
+
+    def test_staging_under_relocated_client_homes_is_not_a_project(self):
+        for relative in ("dotfiles/claude/plugins/marketplaces/official/plugins/tool/.mcp.json", "dotfiles/claude/plugins/repos/team/plugins/tool/.mcp.json",
+                         "codex-home/.tmp/bundled-marketplaces/openai-bundled/plugins/browser/.mcp.json", "dotfiles/claude/mine/.mcp.json"):
+            self.put(self.home / relative, {})
+        with patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(self.home / "dotfiles/claude"), "CODEX_HOME": str(self.home / "codex-home")}):
+            self.scan()
+        workspaces = self.received["workspaces"]
+        self.assertIn(self.home / "dotfiles/claude/mine", workspaces)
+        self.assertFalse([path for path in workspaces if "marketplaces" in path.parts or "repos" in path.parts or ".tmp" in path.parts], workspaces)
+
     @unittest.skipIf(os.name == "nt", "POSIX symbolic-link layout")
     def test_another_accounts_linked_home_is_not_searched_where_it_points(self):
         target = self.volume / "data/PRIVATE_OTHER"

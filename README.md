@@ -101,8 +101,9 @@ connectors, not file paths; paths sit in the evidence. Access, capability and pe
 findings say how many declarations apply as written: an entry in an unselected profile, a
 cached policy copy, a plugin pack that is switched off or has no installation record, or an
 entry that is switched off stays in the evidence without raising the priority on its own.
-Skills and plugins from a marketplace outside Palma's allowlist are Critical; packs whose
-source could not be resolved locally are High, with a verify-the-source action. MCP servers
+Installed skills and plugins from a marketplace outside Palma's allowlist are Critical;
+installed packs whose source could not be resolved locally are High, with a verify-the-source
+action; packs that are only downloaded stay Info. MCP servers
 and skills appear once per declared name with client badges and declaration counts;
 matching names do not imply identical versions or access. Browser extension records are
 grouped with their permission sets. Client and connector icons, the Onest typeface and the
