@@ -48,6 +48,10 @@ For web requests, follow the native run workflow in SKILL.md.
 `--booking-url https://...` includes an optional calendar link. No destination is built in.
 Rendering neither fetches it nor appends inventory. Use the same options for identical HTML.
 
+The EU AI Act overview and EU AI Act review appear automatically in `run`
+and `report` output. Rebuild a saved run to add them without rescanning. This uses
+bundled, dated guidance; it does not reassess legal applicability or modify saved findings.
+
 ## Evidence
 
 Schema `2.0` records collector/rules versions, timestamps, scope and discovery counters,

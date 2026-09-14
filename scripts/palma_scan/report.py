@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 from .brands_extra import EXTRA_ARTWORK_NOTICE, EXTRA_BRAND_ASSETS, EXTRA_CLIENTS
 from .report_font import FONT_NOTICE
+from .report_regulation import render_regulation_section
 from .report_theme import CSS as _CSS
 
 # The embedded Palma logo is a fixed asset, never fetched at runtime.
@@ -687,9 +688,11 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     policy = f"default-src 'none'; script-src 'sha256-{script_hash}'; style-src 'sha256-{style_hash}'; img-src data:; font-src data:; connect-src 'none'; object-src 'none'; media-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'none'"
     return f'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="{_e(policy)}"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="light"><title>Palma · Personal AI access scan</title><style>{_CSS}</style></head>
-<body><a class="skip-link" href="#main">Skip to report</a>{_brand_sprite(observations)}<header class="site-header"><div class="shell header-inner"><a class="brand" href="#main" aria-label="Palma, back to report overview"><img src="data:image/png;base64,{_LOGO}" width="122" height="30" alt="palma.ai"><span class="brand-label">Personal AI<br>access scan</span></a><nav class="main-nav" aria-label="Report sections"><a href="#overview">Overview</a><a href="#findings">Findings</a><a href="#inventory">Inventory</a><a href="#coverage">Coverage</a><button class="print-button js-only" type="button" id="print-report" aria-label="Print report">{_icon("print")}<span>Print report</span></button></nav></div></header>
-<main class="shell" id="main"><div class="report-title"><div><p class="eyebrow">Your personal AI access report</p><h1>Your AI access, <span class="title-accent">in focus.</span></h1><p class="report-subtitle">Your AI tools, the access they have, and what needs attention.<br>Start with the priorities. Follow the evidence.</p></div><div class="report-meta"><span class="meta-label">Scan details</span><span>{_e(_date(snapshot.get("completedAt")))}</span><span>{_e(scope_name)}</span></div></div>{banner}
-{_overview(findings, severity_counts, observation_map)}<div class="metric-strip" aria-label="Inventory and coverage summary">{metrics}</div><p class="metric-context">Explore the names, clients, and configuration locations behind each count.</p>
+<body><a class="skip-link" href="#main">Skip to report</a>{_brand_sprite(observations)}<header class="site-header"><div class="shell header-inner"><a class="brand" href="#main" aria-label="Palma, back to report overview"><img src="data:image/png;base64,{_LOGO}" width="122" height="30" alt="palma.ai"><span class="brand-label">Personal AI<br>access scan</span></a><nav class="main-nav" aria-label="Report sections"><a href="#main">Overview</a><a class="regulation-nav" href="#eu-ai-regulation">EU AI Act</a><a href="#findings">Findings</a><a href="#inventory">Inventory</a><a href="#coverage">Coverage</a><button class="print-button js-only" type="button" id="print-report" aria-label="Print report">{_icon("print")}<span>Print report</span></button></nav></div></header>
+<main class="shell" id="main"><div class="report-title"><div><p class="eyebrow">Your personal AI access report</p><h1>Your AI access, <span class="title-accent">in focus.</span></h1><p class="report-subtitle">Your AI tools, the access they have, and what needs attention.<br> Start with the priorities. Follow the evidence.</p></div><div class="report-meta"><span class="meta-label">Scan details</span><span>{_e(_date(snapshot.get("completedAt")))}</span><span>{_e(scope_name)}</span></div></div>{banner}
+{_overview(findings, severity_counts, observation_map)}
+{render_regulation_section(findings, observations, declared)}
+<div class="metric-strip" aria-label="Inventory and coverage summary">{metrics}</div><p class="metric-context">Explore the names, clients, and configuration locations behind each count.</p>
 {_client_overview(observations)}
 {_access_overview(observations)}
 {_findings_section(findings, severity_counts, source_anchors, observation_map)}

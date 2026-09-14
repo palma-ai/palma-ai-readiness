@@ -71,6 +71,84 @@ def snapshot():
 
 
 class ReportTests(unittest.TestCase):
+    def test_regulation_follows_review_first_with_four_native_review_tiles(self):
+        output = render_report(snapshot(), {})
+        self.assertLess(output.index('id="overview"'), output.index('id="eu-ai-regulation"'))
+        self.assertLess(output.index('id="eu-ai-regulation"'), output.index('class="metric-strip"'))
+        document = Document(output)
+        tiles = [attrs for tag, attrs in document.tags if tag == "details" and attrs.get("class") == "regulation-tile"]
+        self.assertEqual([item["id"] for item in tiles], ["regulation-oversight", "regulation-safeguards", "regulation-transparency", "regulation-classification"])
+        self.assertTrue(all("open" not in item for item in tiles), "Details must not crowd the opening summary")
+
+    def test_regulation_tiles_count_review_inputs_without_scoring_unknowns(self):
+        data = snapshot()
+        data["findings"][0]["ruleId"] = "approval-prompts-disabled"
+        data["findings"][1]["ruleId"] = "sandbox-disabled"
+        document = Document(render_report(data, {"compliance": 100, "findings": 999}))
+        counts = [attrs.get("data-count") for _, attrs in document.tags if attrs.get("class") == "regulation-count"]
+        self.assertEqual(counts, ["1", "1"])
+        self.assertNotIn("999", " ".join(document.text))
+        data["findings"] = []
+        document = Document(render_report(data, {}))
+        self.assertFalse(any(attrs.get("class") == "regulation-count" for _, attrs in document.tags), "No findings must not look like a passed legal control")
+
+    def test_regulation_indicator_cannot_infer_legal_status_from_priorities(self):
+        for severity in ("critical", "high", "low", "info"):
+            data = snapshot()
+            data["findings"][1]["severity"] = severity
+            output = render_report(data, {})
+            document = Document(output)
+            indicator = next((attrs for _, attrs in document.tags if attrs.get("id") == "regulation-indicator"), {})
+            self.assertEqual(indicator.get("data-status"), "review-needed")
+            self.assertIn("Compliance not assessed", " ".join(document.text))
+        data["findings"] = []
+        self.assertIn('data-status="review-needed"', render_report(data, {}))
+
+    def test_empty_and_declared_regulation_status_remains_unassessed(self):
+        for mode, observations, expected in (
+            ("endpoint", [], "not-assessed"),
+            ("declared", snapshot()["observations"], "declared-only"),
+            ("declared", [], "declared-only"),
+        ):
+            data = snapshot()
+            data.update(mode=mode, observations=observations, findings=[])
+            output = render_report(data, {})
+            document = Document(output)
+            indicator = next((attrs for _, attrs in document.tags if attrs.get("id") == "regulation-indicator"), {})
+            self.assertEqual(indicator.get("data-status"), expected)
+            self.assertIn("Compliance not assessed", " ".join(document.text))
+
+    def test_regulation_links_only_existing_allowlisted_findings(self):
+        data = snapshot()
+        data["findings"][1]["ruleId"] = "sandbox-disabled"
+        # A title or category must never turn an unrelated finding into a legal mapping.
+        data["findings"][0].update(title="EU AI Act human oversight", category="security")
+        document = Document(render_report(data, {}))
+        links = [attrs for tag, attrs in document.tags if tag == "a" and attrs.get("class") == "regulation-finding-link"]
+        self.assertEqual(len(links), 1)
+        finding = next(attrs for tag, attrs in document.tags if tag == "article" and attrs.get("data-severity") == "high")
+        self.assertEqual(links[0]["href"], "#" + finding["id"])
+        self.assertIn("1 existing finding", " ".join(document.text))
+
+    def test_regulation_keeps_inactive_evidence_and_low_priority_oversight(self):
+        data = snapshot()
+        data["observations"] = [data["observations"][2]]
+        data["findings"] = [data["findings"][1]]
+        data["findings"][0].update(ruleId="approval-prompts-disabled", severity="low", observationIds=["o-disabled"])
+        output = render_report(data, {})
+        self.assertIn('data-status="review-needed"', output)
+        document = Document(output)
+        self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
+        self.assertIn("Disabled in configuration", " ".join(document.text))
+
+    def test_regulation_link_escapes_untrusted_finding_title(self):
+        data = snapshot()
+        data["findings"][1].update(ruleId="sandbox-disabled", title='<img src="https://invalid.test" onerror="alert(1)">')
+        document = Document(render_report(data, {}))
+        self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
+        self.assertEqual(sum(tag == "img" for tag, _ in document.tags), 1)
+        self.assertFalse(any(key.startswith("on") for _, attrs in document.tags for key in attrs))
+
     def test_deterministic_and_does_not_mutate_inputs(self):
         data = snapshot()
         before = copy.deepcopy(data)
@@ -193,8 +271,13 @@ class ReportTests(unittest.TestCase):
         data = snapshot()
         data["findings"][1]["references"] = ["javascript:alert(1)", "https://user:secret@example.com", "https://example.com/docs?a=1&b=2"]
         document = Document(render_report(data, {}))
-        external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") != "artwork-reference" and not attrs["href"].startswith("#")]
+        external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") not in {"artwork-reference", "regulation-source"} and not attrs["href"].startswith("#")]
         self.assertEqual(external, ["https://example.com/docs?a=1&b=2"])
+        for tag, attrs in document.tags:
+            if tag == "a" and attrs.get("class") == "regulation-source":
+                self.assertTrue(attrs["href"].startswith(("https://ai-act-service-desk.ec.europa.eu/en/", "https://digital-strategy.ec.europa.eu/en/")))
+                self.assertNotIn("?", attrs["href"])
+                self.assertEqual(attrs["rel"], "noreferrer noopener")
 
     def test_disabled_inventory_is_kept_without_claiming_execution(self):
         output = render_report(snapshot(), {})

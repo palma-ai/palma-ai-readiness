@@ -54,6 +54,13 @@ The report uses Palma's light visual style, with Onest typography, linked metric
 priority and access charts, and expandable evidence. Its font and artwork are embedded;
 the report works offline and makes no network requests.
 
+The **EU AI Act overview** highlights when an AI use-case review is needed.
+Its compact tiles link relevant local findings to review questions, with an official
+EU AI Act guidance link for further detail. Legal risk class and compliance remain
+unassessed: local access settings cannot establish the intended use or your legal role.
+It appears automatically in local reports. See the
+[EU AI Act review guidance](references/eu-ai-regulation.md).
+
 Rebuild a saved report without rescanning:
 
 ```bash

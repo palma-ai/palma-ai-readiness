@@ -4,6 +4,10 @@ Vendor documentation reviewed **10 September 2026**. The 29-rule Palma findings 
 
 ## What the evidence means
 
+The report's [EU AI Act overview](eu-ai-regulation.md) is a separate review aid.
+Palma priorities do not determine the AI Act's legal risk class, applicability or
+compliance. It links selected existing findings without changing this policy baseline.
+
 The scan records **configuration declarations, installation metadata, and selected OS runtime observations**. A process-name observation establishes that a matching name was visible during collection; it does not establish executable provenance or session permissions. Configuration can be overridden by a selected profile, workspace trust, CLI flags, a running session, an embedding host, or organization policy. An unreadable, unsupported, or truncated source is a coverage gap, never a passed security check. An absent configuration is recorded as absent without inventing missing governance.
 
 Apply the defined rating policy; do not independently change it because the scan is personal, offline, or based on configuration:

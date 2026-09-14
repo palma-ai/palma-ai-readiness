@@ -42,6 +42,17 @@ Build one flowing page with these levels of detail. Keep a compact anchored navi
 for Overview, Findings, Inventory, and Coverage. Prefer native links and `<details>` so
 all information remains usable without JavaScript.
 
+Place a compact **EU AI Act** panel immediately after **Review first**, before the
+inventory metrics. Highlight **EU AI Act** in the navigation. Four native disclosure
+tiles show human oversight and technical-safeguard finding counts, plus transparency
+and risk classification as unassessed. Clicking a tile reveals its review guidance
+and original finding links in place. Use one official EU AI Act guidance link in the footer; omit the
+background explainer and timeline from the report. Do not repeat a separate regulation section farther down the page.
+Follow [eu-ai-regulation.md](eu-ai-regulation.md) for status semantics, the explicit
+finding crosswalk and offline contract. Counts are local review inputs; never show a
+regulatory score or certification seal. Use **EU AI Act** as the public title, without
+internal labels such as “indicator”. Keep the research date in the reference.
+
 1. **Palma identity and scope.** Show the Palma wordmark/logo, “AI access scan,” scan date,
    and compact scope metadata. A machine scan shows OS, profiles, and discovered projects.
    Identify machine vs copied-home vs declared scope without a generic warning banner.

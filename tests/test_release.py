@@ -24,6 +24,7 @@ class ReleaseTests(unittest.TestCase):
                 for required in ("SKILL.md", "scripts/palma-scan.py", "scripts/palma_scan/collector.py",
                                  "scripts/palma_scan/rules.py", "scripts/palma_scan/report.py",
                                  "scripts/palma_scan/report_theme.py", "scripts/palma_scan/report_font.py",
+                                 "scripts/palma_scan/report_regulation.py", "references/eu-ai-regulation.md",
                                  "scripts/palma_scan/governance.py", "scripts/palma_scan/palma_catalog.json",
                                  "scripts/palma_scan/baseline.py", "scripts/palma_scan/machine.py",
                                  "scripts/palma_scan/extra_clients.py", "scripts/palma_scan/brands_extra.py",

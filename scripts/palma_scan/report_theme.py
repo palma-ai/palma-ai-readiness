@@ -60,6 +60,33 @@ pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px
 .eyebrow { display: flex; gap: 9px; align-items: center; color: var(--brand); font-size: 11px; font-weight: 600; letter-spacing: .13em; text-transform: uppercase; margin-bottom: 12px }
 .eyebrow:before { content: ""; width: 18px; height: 3px; border-radius: 3px; background: var(--gradient) }
 
+/* A compact EU AI Act overview follows the priorities; each area expands in place. */
+.regulation-panel { --eu-blue: #2357af; --eu-pale: #f4f7fd; margin: 24px 0 0; padding: 24px 26px 0; border: 1px solid #cbd9ed; border-top: 3px solid var(--eu-blue); border-radius: var(--radius); background: var(--white); box-shadow: var(--shadow); overflow-wrap: anywhere }
+.regulation-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px }
+.regulation-identity { display: flex; align-items: center; gap: 14px; min-width: 0 }.regulation-mark { display: grid; place-items: center; width: 48px; height: 48px; flex: none; border-radius: 13px; background: var(--eu-blue); color: #fff; font-size: 23px; font-weight: 700; letter-spacing: -.06em }.regulation-identity h2 { font-size: 26px; line-height: 1.15 }.regulation-identity p { margin-top: 5px; color: var(--muted); font-size: 13px }
+.regulation-status { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border: 1px solid #dbe3ee; border-radius: 7px; color: var(--muted); background: var(--surface); font-size: 12px; font-weight: 500 }.regulation-status:before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none }.regulation-heading[data-status="review-needed"] .regulation-status { color: #795514; background: #fff8e8; border-color: #eddfb8 }
+.regulation-tiles { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; align-items: start }
+.regulation-tile { min-width: 0; background: var(--eu-pale); border: 1px solid #dce5f3; border-radius: 13px; overflow: hidden }
+.regulation-tile>summary { display: flex; flex-direction: column; padding: 16px 17px; min-height: 174px; list-style: none; color: var(--ink) }.regulation-tile>summary:hover { background: #eaf0fc }.regulation-tile[open]>summary { background: #eaf0fc }.regulation-tile>summary:focus-visible { outline-offset: -4px }
+.regulation-tile-top { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px }.regulation-tile-icon { display: flex; color: var(--eu-blue) }.regulation-tile-icon svg { width: 23px; height: 23px }.regulation-chevron { flex: none; width: 15px; height: 15px; color: var(--eu-blue); transition: transform .2s var(--ease) }.regulation-tile[open]>summary .regulation-chevron { transform: rotate(90deg) }
+.regulation-tile-title { font-size: 15px; font-weight: 600; letter-spacing: -.02em; line-height: 1.3 }.regulation-article { display: block; color: var(--muted); font-size: 12px; margin-top: 3px }
+.regulation-count { display: flex; align-items: baseline; gap: 8px; margin-top: 12px; color: var(--eu-blue); font-size: 32px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; letter-spacing: -.04em }.regulation-count>span { font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: 0; line-height: 1.4 }
+.regulation-unknown { display: block; color: var(--muted); font-size: 16px; font-weight: 600; margin-top: 14px; line-height: 1.3 }.regulation-unknown>span { display: block; margin-top: 3px; font-size: 12px; font-weight: 400 }
+.regulation-tile-body { padding: 16px; background: var(--white); border-top: 1px solid #dce5f3; color: var(--muted); font-size: 13px }.regulation-tile-body p+p { margin-top: 12px }.regulation-tile-body ul { margin: 8px 0 14px; padding-left: 18px }.regulation-tile-body li { margin: 7px 0 }.regulation-evidence-label { color: var(--ink); font-weight: 600 }.regulation-panel a { color: var(--eu-blue) }
+.regulation-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 18px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted) }.regulation-footer>a { display: inline-flex; align-items: center; min-height: 44px; font-weight: 500 }
+.main-nav a.regulation-nav { color: #2357af; background: #edf3ff; font-weight: 600 }
+@media(max-width:960px) {
+  .regulation-tiles { grid-template-columns: repeat(2,minmax(0,1fr)) }.regulation-tile>summary { min-height: 167px }
+}
+@media(max-width:560px) {
+  .regulation-panel { padding: 18px 14px 0; margin-top: 22px }.regulation-heading { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 16px }.regulation-identity h2 { font-size: 24px }.regulation-mark { width: 43px; height: 43px; font-size: 21px }.regulation-identity p { font-size: 12px }.regulation-status { font-size: 12px }
+  .regulation-tiles { gap: 9px }.regulation-tile>summary { padding: 13px 11px; min-height: 180px }.regulation-tile-title { font-size: 14px; min-height: 36px }.regulation-tile-top { margin-bottom: 9px }.regulation-tile-icon svg { width: 21px; height: 21px }.regulation-count { font-size: 29px; gap: 6px }.regulation-count>span { font-size: 12px; max-width: 60px }.regulation-unknown { font-size: 15px }.regulation-tile-body { padding: 12px; font-size: 13px }
+  .regulation-footer { align-items: flex-start; flex-direction: column; gap: 2px; padding-top: 12px }
+}
+@media print {
+  .regulation-panel { box-shadow: none; margin-bottom: 20px; padding: 16px 16px 0 }.regulation-tiles { grid-template-columns: repeat(2,minmax(0,1fr)) }.regulation-tile { break-inside: avoid; overflow: visible }.regulation-tile>summary { min-height: 0 }.regulation-tile-body { font-size: 10px }.regulation-count { font-size: 24px }.regulation-footer { font-size: 10px }
+}
+
 /* A compact masthead leaves the evidence in focus. */
 .site-header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--line) }
 .header-inner { min-height: 80px; display: flex; align-items: center; justify-content: space-between; gap: 24px }
@@ -292,6 +319,7 @@ tbody tr:last-child>* { border-bottom: 0 }
 }
 @media(max-width:560px) {
   .shell { width: calc(100% - 32px) }
+  .header-inner { position: relative }.brand { padding-right: 44px }.main-nav a { padding-inline: 4px; font-size: 11px }.print-button { position: absolute; top: 12px; right: 0; margin: 0 }
   .report-title { padding: 30px 0 26px }.report-subtitle { font-size: 15px }.report-subtitle br { display: none }.report-meta { font-size: 11px }
   .overview-intro { padding: 23px 18px 0 }.overview-intro>p:last-child { font-size: 13px }.overview-grid { padding: 20px 14px 16px; gap: 14px }.priority-item { padding: 15px 12px; gap: 9px }.priority-index { width: 24px; height: 24px; font-size: 10px }.priority-item>.icon { width: 14px }.priority-meta { font-size: 11px }.priority-copy strong { font-size: 14px }.priority-action { font-size: 12px }.priority-chart { padding: 18px 14px; gap: 0 15px }.priority-ring { width: 108px; height: 108px }.ring-center strong { font-size: 28px }.chart-row { grid-template-columns: 46px minmax(0,1fr) 20px; gap: 7px; margin: 8px 0 }.chart-label,.chart-number { font-size: 11px }.chart-footnote { font-size: 11px }
   .metric { padding: 17px 14px }.metric-number { font-size: 31px }.metric-icon { top: 16px; right: 13px; width: 28px; height: 28px; border-radius: 8px }.metric-icon .icon { width: 16px; height: 16px }.metric-label { font-size: 12px; gap: 5px }.metric-label .icon { width: 12px }.metric-context { font-size: 11px }

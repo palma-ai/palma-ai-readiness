@@ -13,12 +13,12 @@ def main():
     root = Path(__file__).resolve().parents[1]
     files = ["SKILL.md", "README.md", "THIRD_PARTY_NOTICES.md", "agents/openai.yaml",
              "references/commands.md", "references/declared-report.md",
-             "references/report-design.md", "references/risk-rules.md",
+             "references/report-design.md", "references/risk-rules.md", "references/eu-ai-regulation.md",
              "scripts/palma-scan.py", "scripts/run.sh", "scripts/run.ps1",
              "scripts/run.command", "scripts/run.cmd",
              *[f"scripts/palma_scan/{name}.py" for name in
                ("__init__", "cli", "model", "collector", "rules", "report", "machine",
-                "baseline", "extra_clients", "brands_extra", "governance", "report_theme", "report_font")],
+                "baseline", "extra_clients", "brands_extra", "governance", "report_theme", "report_font", "report_regulation")],
              "scripts/palma_scan/palma_catalog.json",
              *[f"scripts/palma_scan/engine/{name}.py" for name in
                ("__init__", "collection", "filesystem", "identity", "observations", "paths",

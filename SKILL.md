@@ -142,7 +142,14 @@ an external destination. Connect that possibility to the observed capability and
 scoped permissions, trusted sources, review records and controlled data destinations.
 Do not claim that prompt injection succeeded or that data already leaked.
 
-**Report hierarchy:** priorities, access visuals, detailed findings, inventory, collection
+**EU AI Act overview:** show the compact **EU AI Act** panel immediately after
+**Review first** in the local report, with four expandable review areas. Use local evidence to identify review
+inputs, never to assign a legal risk class or certify compliance. Empty and declared
+inventories remain unassessed. Do not equate Palma severity with the Act's high-risk
+classification or infer applicability from tool names. Use the dated, bundled guidance in
+[eu-ai-regulation.md](references/eu-ai-regulation.md); no runtime legal lookup is required.
+
+**Report hierarchy:** priorities, EU AI Act overview, access visuals, detailed findings, inventory, collection
 coverage, then the Palma invitation. Do not add a generic collection-gap banner, a
 “Keep this in perspective” block, or a long disclaimer checklist. Put actual failures
 beside their sources and relevant evidence context beside the finding.
