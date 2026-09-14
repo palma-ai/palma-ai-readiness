@@ -1,6 +1,6 @@
 ---
 name: palma-ai-readiness
-description: Run a machine-wide Palma AI access scan on Windows, macOS, or Linux. Discover AI applications, profiles, projects, connectors, skills, permissions, and governance risks; generate or rebuild a professional local HTML report. Use for Palma scans and endpoint AI access inventories, including requests that start from a website.
+description: Run a local Palma AI access scan of the signed-in account on Windows, macOS, or Linux. Discover AI applications, profiles, projects, connectors, skills, permissions, and governance risks; generate or rebuild a professional local HTML report. Use for Palma scans and endpoint AI access inventories, including requests that start from a website.
 ---
 
 # Palma AI access scan
@@ -12,16 +12,17 @@ upload command. Organization metadata and reporting credentials are not scanner 
 
 ## Run on the right machine
 
-**The default is machine-wide discovery. Do not narrow the scan to the working
-directory, one project, or only the current user's home.** Run the complete release on
-the endpoint the user wants assessed. It searches local volumes for AI configuration
-and project markers, discovers accessible OS user profiles, and inspects supported system,
-application, editor, extension, installation, and runtime sources. Explicit projects
-supplement automatic discovery.
+Run the complete release on the computer the user wants assessed. The scan covers the
+**signed-in account**: its AI clients, connectors, skills and settings, system and managed
+AI policy, installed AI apps, running AI app names, and AI projects on local drives.
+Other accounts' home folders are never opened. Do not narrow the scan to the working
+directory or one project; `--workspace` only adds a project to automatic discovery.
 
-A request to run the skill authorizes read-only discovery and local report creation.
-Briefly say: “I'll scan this machine for AI tools and access settings, evaluate the
-evidence, and build your Palma report.” Then proceed without another consent form.
+Before running, tell the user in one sentence what will be read, for example: “I'll scan
+your account on this computer for AI tools, connectors and access settings, including AI
+projects on its local drives. It only reads configuration, runs nothing it finds, and
+sends nothing anywhere.” The request to run the skill is consent for that scope; do not
+ask again.
 
 Establish where your execution tool runs. A native desktop agent or terminal inspects
 that operating system. SSH scans the remote host. WSL and containers expose their own
@@ -175,9 +176,9 @@ machine, provide native run instructions; do not fabricate an endpoint report.
 Supported configuration and manifest contents are read to extract safe metadata, inspect
 typed settings, count credential presence, and fingerprint extension components. Artifacts
 exclude credential values, raw configuration/commands, conversation history, instruction
-bodies, hostnames, and account enumeration details. Local source paths can include account
-or project directory names so the user can find the configuration; current-home paths use
-`~` and account enumeration uses ordinal aliases. Retain recognizable client, connector, skill,
+bodies, and hostnames. Local source paths keep project folder names so the user can find
+the configuration; the account's home is shown as `~`, and the account name is removed
+from every exported string. Retain recognizable client, connector, skill,
 plugin and agent names in the local report; do not replace useful names with hashes.
 Redact secrets and use source-location aliases where identity protection is needed.
 No persistent endpoint identifier is created.

@@ -163,11 +163,15 @@ def _source_artifact_metadata(builder, candidate, old, collection, index):
 
 
 def _source_location(collector, candidate, old, home, alias):
-    """Publish the actual local declaration path, with only the home abbreviated."""
+    """Publish the actual local declaration path with the account home as its alias.
+
+    The scanning account's home is ``~``; another account's home is its ordinal
+    alias (``user-2/.claude/settings.json``), so a location never names a person.
+    """
     if candidate is None or candidate.format == "registry" or any(part in {".palma-in-memory", ".palma-scan-discovery"} for part in candidate.path.parts):
         location = old["location"]
-    elif alias == "~" and candidate.path.is_relative_to(home):
-        location = "~/" + candidate.path.relative_to(home).as_posix()
+    elif alias != "system" and candidate.path.is_relative_to(home):
+        location = alias + "/" + candidate.path.relative_to(home).as_posix()
     else:
         location = candidate.path.as_posix()
     if candidate and candidate.format == "sqlite" and "#" in old["location"]:

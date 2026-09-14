@@ -9,7 +9,7 @@ are bundled; the public skill requires no package installation or build setup.
 - Follow the user's requested scope and preserve unrelated changes. Commit or
   publish only when explicitly requested.
 - Read `SKILL.md`, `README.md`, and the relevant references before changing skill
-  behavior. Repository maintenance does not itself request a machine-wide scan;
+  behavior. Repository maintenance does not itself request a real scan;
   use fixtures and synthetic demos for development validation.
 - Keep repository guidance here and task-specific workflow instructions in
   `SKILL.md`. Follow more specific `AGENTS.md` guidance within its directory scope.

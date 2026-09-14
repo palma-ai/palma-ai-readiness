@@ -24,7 +24,7 @@ Publish the checksum through the trusted website alongside the download.
 The website owns the marketing form and consent record. They are not scanner inputs.
 Replace the bracketed URL in this suggested website prompt before publication:
 
-> I want a Palma AI access scan of this entire computer. Read the skill at [hosted SKILL.md URL] and obtain its matching complete release. Run the native machine-wide scan and show me the local report with its priorities and actions. If this chat only has cloud execution, give me the download and native run command for my computer instead.
+> I want a Palma AI access scan of my account on this computer. Read the skill at [hosted SKILL.md URL] and obtain its matching complete release. Run the native scan and show me the local report with its priorities and actions. If this chat only has cloud execution, give me the download and native run command for my computer instead.
 
 The team-view invitation is included at the end of each report. When the calendar URL
 is available, `--booking-url https://...` adds an ordinary optional booking link. No

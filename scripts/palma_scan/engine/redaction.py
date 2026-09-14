@@ -217,3 +217,80 @@ class Redactor:
             observation["endpointOrigin"] = None
         if "toolNames" in observation:
             observation["toolNames"] = [self.text(item, 100) for item in observation["toolNames"]]
+
+
+# Ordinary words, default service accounts and client names occur in unrelated paths
+# and labels. An account with such a name is still removed from its home paths, but
+# its bare name is not rewritten elsewhere: that would corrupt unrelated text.
+GENERIC_ACCOUNT_NAMES = frozenset({
+    "admin", "administrator", "agent", "agents", "app", "apps", "build", "ci", "claude", "cline",
+    "code", "codex", "config", "continue", "copilot", "cursor", "data", "default", "desktop", "dev",
+    "developer", "docker", "documents", "downloads", "ec2-user", "gemini", "git", "github", "guest",
+    "home", "kiro", "library", "local", "mcp", "node", "ollama", "opencode", "plugins", "project",
+    "projects", "public", "python", "root", "runner", "server", "servers", "settings", "shared",
+    "skills", "src", "system", "test", "tests", "ubuntu", "user", "users", "vagrant", "windsurf",
+    "work", "workspace",
+})
+MIN_ACCOUNT_NAME_LENGTH = 3
+# Keys that hold opaque identifiers, never paths or names.
+_IDENTIFIER_KEYS = frozenset({"id", "sourceId", "parentId", "contextId", "profileId", "observationIds"})
+
+
+class IdentityScrubber:
+    """Remove account home directories and account names from exported text.
+
+    ``accounts`` is a list of ``{"root": path, "alias": "~" | "user-N", "names": [...]}``.
+    A home path becomes its alias wherever it appears, not only as a prefix: caches,
+    temporary folders and session state often embed one, sometimes with separators
+    rewritten (``/tmp/x/-Users-name-project``). Account names are replaced only as
+    whole tokens, and only when distinctive enough not to corrupt ordinary text.
+    """
+
+    def __init__(self, accounts):
+        paths, names = [], []
+        for account in accounts:
+            alias = account["alias"]
+            root = str(account["root"]).rstrip("/\\")
+            variants = {root, root.replace("\\", "/")}
+            if root.startswith("/Users/"):
+                variants.add("/System/Volumes/Data" + root)  # macOS firmlinked form
+            for variant in variants:
+                if len(variant) > 1:
+                    pattern = re.compile(re.escape(variant) + r"(?![A-Za-z0-9._-])", re.IGNORECASE)
+                    paths.append((len(variant), pattern, alias))
+            token = "[account]" if alias == "~" else "[" + alias + "]"
+            for name in account.get("names", ()):
+                if (isinstance(name, str) and len(name) >= MIN_ACCOUNT_NAME_LENGTH
+                        and name.casefold() not in GENERIC_ACCOUNT_NAMES and not name.isdigit()):
+                    pattern = re.compile(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+                    names.append((len(name), pattern, token))
+        # The most specific (longest) match wins when homes or names overlap.
+        self.paths = [(pattern, alias) for _, pattern, alias in sorted(paths, key=lambda item: -item[0])]
+        self.names = [(pattern, token) for _, pattern, token in sorted(names, key=lambda item: -item[0])]
+
+    def text(self, value):
+        if not isinstance(value, str):
+            return value
+        for pattern, alias in self.paths:
+            value = pattern.sub(lambda _: alias, value)
+        for pattern, token in self.names:
+            value = pattern.sub(lambda _: token, value)
+        return value
+
+    def scrub(self, value, key=None):
+        """Return ``value`` with every nested string scrubbed; identifiers are kept."""
+        if key in _IDENTIFIER_KEYS:
+            return value
+        if isinstance(value, str):
+            return self.text(value)
+        if isinstance(value, list):
+            return [self.scrub(item) for item in value]
+        if isinstance(value, dict):
+            return {name: self.scrub(item, name) for name, item in value.items()}
+        return value
+
+    def scrub_snapshot(self, snapshot):
+        for field in ("sources", "observations", "coverage"):
+            if field in snapshot:
+                snapshot[field] = self.scrub(snapshot[field])
+        return snapshot

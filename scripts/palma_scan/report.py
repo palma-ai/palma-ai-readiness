@@ -466,8 +466,8 @@ def _discovery_summary(snapshot: dict) -> str:
     if not discovery:
         return ""
     values = []
-    for key, label in (("localVolumes", "local volumes"), ("profilesAccessible", "accessible profiles"),
-                       ("projectsDiscovered", "AI projects"), ("directoriesVisited", "directories searched")):
+    for key, label in (("localVolumes", "local volumes"), ("projectsDiscovered", "AI projects"),
+                       ("directoriesVisited", "directories searched")):
         number = discovery.get(key)
         if isinstance(number, int) and not isinstance(number, bool) and number >= 0:
             values.append(f'<div><dt>{label}</dt><dd>{number:,}</dd></div>')
@@ -653,7 +653,7 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
     collected = sum(item.get("status") == "collected" for item in sources)
     scope = snapshot.get("scope") if isinstance(snapshot.get("scope"), dict) else {}
     scope_type = _text(scope.get("type", "Scope not recorded"))
-    scope_name = {"machine": "Machine-wide discovery", "copied-home": "Copied home", "current-user": "Current user", "user": "Current user", "endpoint": "Current user", "declared": "Current session"}.get(scope_type, _label(scope_type))
+    scope_name = {"machine": "Your account on this computer", "copied-home": "Copied home", "current-user": "Current user", "user": "Current user", "endpoint": "Current user", "declared": "Current session"}.get(scope_type, _label(scope_type))
     platform_name = {"macos": "macOS", "darwin": "macOS", "windows": "Windows", "linux": "Linux"}.get(_text(scope.get("platform")))
     if platform_name:
         scope_name += " · " + platform_name
@@ -664,9 +664,6 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
         scope_name += " · Subsystem context"
     if environment.get("sandboxIndicators"):
         scope_name += " · Restricted process context"
-    profile_count = scope.get("profileCount", 0)
-    if scope_type == "machine" and isinstance(profile_count, int) and not isinstance(profile_count, bool) and profile_count > 0:
-        scope_name += f' · {profile_count} {"profile" if profile_count == 1 else "profiles"}'
     workspace_count = scope.get("workspaceCount", 0)
     if isinstance(workspace_count, int) and not isinstance(workspace_count, bool) and workspace_count > 0:
         scope_name += f' · {workspace_count} {"project" if workspace_count == 1 else "projects"}'

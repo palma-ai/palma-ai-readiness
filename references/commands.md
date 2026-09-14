@@ -6,7 +6,7 @@ in the release. There is no package installation or backend setup.
 
 | Command | Input | Output |
 | --- | --- | --- |
-| `run` | Machine-wide local discovery | New directory with evidence, summary, and HTML |
+| `run` | Local discovery for the signed-in account | New directory with evidence, summary, and HTML |
 | `collect --output FILE` | Same discovery as run | New snapshot with evidence and evaluated findings |
 | `summary --report FILE` | Saved snapshot | Counts and scope on stdout, or `--output FILE` |
 | `report --report FILE --output FILE` | Saved snapshot | New self-contained HTML report |
@@ -19,10 +19,11 @@ re-evaluation. Neither performs a fresh endpoint scan.
 
 ## Discovery scope
 
-The default scans the machine visible to the native launching process. It discovers local
-volumes, accessible OS profiles, AI project markers, supported application and editor
+The scan covers the account that runs it on the machine visible to the native launching
+process: its profile, AI project markers on local volumes, supported application and editor
 installations, configuration layers, managed policy, profiles/state, extension components,
-browser integrations, and known AI runtime/service metadata.
+browser integrations, and known AI runtime/service metadata. Other accounts' home folders,
+OS temporary folders and the scanner's own folder are not traversed.
 
 - `--workspace DIR` supplements automatic discovery with another project (repeatable).
 - `--output-dir DIR` chooses a new run directory. It does not change scan scope.
@@ -35,8 +36,8 @@ from general traversal; supported AI cache/state locations have dedicated adapte
 Symlinks and Windows reparse points are handled conservatively. Specific skipped/denied
 sources and discovery limits are recorded.
 
-The launching account's OS permissions apply. Other profiles are inspected when accessible;
-protected accounts are reported as such. WSL is a separate operating-system context.
+The launching account's OS permissions apply. Other accounts' home folders are never
+opened, even when readable. WSL is a separate operating-system context.
 A hosted chat, container, or remote shell does not automatically see the physical host.
 For web requests, follow the native run workflow in SKILL.md.
 

@@ -49,6 +49,16 @@ LOCAL_FS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "bcachefs",
             "overlay", "rootfs", "apfs", "hfs", "hfsplus", "ufs", "msdos", "vfat",
             "exfat", "ntfs", "ntfs3", "fuseblk", "jfs", "reiserfs", "squashfs"}
 NETWORK_FS = {"nfs", "nfs4", "cifs", "smbfs", "smb3", "sshfs", "fuse.sshfs", "afpfs", "davfs", "9p"}
+# Folders inside profile roots that are not a person's account.
+NON_ACCOUNT_PROFILE_NAMES = {"Shared", "Public", "Default", "Default User", "All Users", "defaultuser0"}
+NO_LOGIN_SHELLS = {"/usr/sbin/nologin", "/sbin/nologin", "/bin/false", "/usr/bin/false", "/bin/sync"}
+# Fixed OS temporary roots: transient agent sessions and scratch copies, not projects.
+# Explicit --workspace paths are still collected. Environment variables such as TMPDIR
+# are deliberately not consulted, so they cannot hide a directory from discovery.
+TEMPORARY_ROOTS = {"macos": ("/private/tmp", "/private/var/tmp", "/private/var/folders"),
+                   "linux": ("/tmp", "/var/tmp")}
+# This scanner's own folder: a development clone or extracted release is not user evidence.
+SCANNER_ROOT = Path(__file__).resolve().parents[2]
 AI_EXTENSION_NAME = re.compile(r"\b(?:ChatGPT|Claude|Copilot|Gemini|Ollama|Perplexity|Sider|Monica|Merlin|HARPA AI|MaxAI|AI assistant)\b", re.I)
 EXTENSION_PERMISSIONS = {"debugger", "nativeMessaging", "tabs", "scripting", "cookies",
                          "downloads", "clipboardRead", "clipboardWrite", "webRequest"}
@@ -217,7 +227,10 @@ def _profile_metadata(os_name):
                 try:
                     with winreg.OpenKey(key, winreg.EnumKey(key, index)) as profile:
                         value = winreg.QueryValueEx(profile, "ProfileImagePath")[0]
-                    profiles.append(Path(os.path.expandvars(value)))
+                    path = Path(os.path.expandvars(value))
+                    # System and service profiles live under the Windows directory.
+                    if any(path.is_relative_to(root) and path != root for root in roots):
+                        profiles.append(path)
                 except OSError:
                     continue
         # USERPROFILE is a discovery hint, never evidence of unrestricted access.
@@ -232,10 +245,12 @@ def _profile_metadata(os_name):
             fields = line.split(":")
             if len(fields) != 7 or not fields[2].isdigit():
                 continue
-            uid, path = int(fields[2]), Path(fields[5])
+            uid, path, shell = int(fields[2]), Path(fields[5]), fields[6].strip()
             if uid == os.getuid():
                 current = path
-            if (uid == 0 or uid >= 500) and path.is_absolute() and path.parent != path and str(path) not in {"/nonexistent", "/var/empty", "/dev/null"}:
+            # People, not service accounts: regular UIDs with a login shell.
+            person = uid >= 1000 and uid != 65534 and shell not in NO_LOGIN_SHELLS
+            if (person or uid == os.getuid()) and path.is_absolute() and path.parent != path and str(path) not in {"/nonexistent", "/var/empty", "/dev/null"}:
                 profiles.append(path)
         roots = [Path("/home")]
     else:
@@ -244,8 +259,10 @@ def _profile_metadata(os_name):
         for line in _system_command(["/usr/bin/dscl", ".", "-list", "/Users", "NFSHomeDirectory"]).splitlines():
             fields = line.split(None, 1)
             if len(fields) == 2:
-                path = Path(fields[1])
-                if path.is_absolute() and path.parent != path and str(path) not in {"/var/empty", "/nonexistent", "/dev/null"}:
+                path = Path(fields[1].strip())
+                # Daemon accounts (_www, root, nobody) and tool prefixes are not people's
+                # homes; macOS keeps real account homes directly under /Users.
+                if path == current or (path.parent == Path("/Users") and path.name not in NON_ACCOUNT_PROFILE_NAMES):
                     profiles.append(path)
         roots = [Path("/Users")]
     return current, profiles, roots
@@ -366,38 +383,48 @@ class _Discovery:
             return []
 
     def profiles(self):
+        """Return the scanning account's profile; no other account is opened.
+
+        Other accounts' home directories are only recorded, so project discovery
+        can skip them and their paths can be scrubbed from exported text.
+        """
         source = self.source("local-user-profiles")
         paths = set(self.layout.get("profiles", []))
         current = self.layout.get("currentHome")
         if current:
             paths.add(current)
         for parent in self.layout.get("profileRoots", []):
-            paths.update(self.children(parent, source))
-        result = []
-        for path in sorted(paths, key=str):
-            if not path.is_absolute() or path.parent == path:
-                continue
-            if str(path).startswith("\\\\") or any(path == blocked or blocked in path.parents for blocked in self.layout.get("blockedMounts", set())):
-                self.gap(source, "A profile on a nonlocal or excluded filesystem was not opened.")
-                continue
-            try:
-                info = path.lstat()
-                if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
-                    self.counts["symlinksSkipped"] += 1
-                    continue
-                if not stat.S_ISDIR(info.st_mode):
-                    continue
-                self.counts["profilesDiscovered"] += 1
-                with os.scandir(path):
-                    pass
-                alias = "~" if path == current else "user-" + str(len(result) + 1)
-                result.append({"root": path, "alias": alias})
-                self.counts["profilesAccessible"] += 1
-            except FileNotFoundError:
-                continue
-            except OSError as error:
-                self.error(source, error, path)
-        return result
+            paths.update(child for child in self.children(parent, source)
+                         if child.name not in NON_ACCOUNT_PROFILE_NAMES and not child.name.startswith("."))
+        others = sorted((path for path in paths if path != current and path.is_absolute() and path.parent != path), key=str)
+        # Aliases are stable ordinals, never names: ~ for this account, user-N for others.
+        self.accounts = [{"root": path, "alias": "user-" + str(index)} for index, path in enumerate(others, 1)]
+        self.counts["profilesExcluded"] = len(others)
+        if not current or not current.is_absolute() or current.parent == current:
+            self.gap(source, "The current account's home directory could not be determined.", "error")
+            return []
+        if str(current).startswith("\\\\") or any(current == blocked or blocked in current.parents for blocked in self.layout.get("blockedMounts", set())):
+            self.gap(source, "The current account's profile is on a nonlocal or excluded filesystem and was not opened.")
+            return []
+        try:
+            info = current.lstat()
+            if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+                self.counts["symlinksSkipped"] += 1
+                return []
+            if not stat.S_ISDIR(info.st_mode):
+                return []
+            self.counts["profilesDiscovered"] += 1
+            with os.scandir(current):
+                pass
+        except FileNotFoundError:
+            return []
+        except OSError as error:
+            self.error(source, error, current)
+            return []
+        account = {"root": current, "alias": "~"}
+        self.accounts.insert(0, account)
+        self.counts["profilesAccessible"] += 1
+        return [account]
 
     def projects(self, profiles, explicit):
         source = self.source("local-volume-project-discovery")
@@ -409,6 +436,24 @@ class _Discovery:
         self.counts["nonLocalMountsSkipped"] = len(blocked)
         profiles_set = {item["root"] for item in profiles}
         projects = {Path(item).absolute() for item in explicit}
+        # Other accounts' homes, OS temporary folders and this scanner's own folder are
+        # never traversed. Directory identity is compared too, so a firmlink or bind
+        # mount of an excluded folder stays excluded.
+        excluded = {item["root"] for item in getattr(self, "accounts", []) if item["root"] not in profiles_set}
+        excluded.update(Path(path) for path in TEMPORARY_ROOTS.get(self.layout.get("os"), ()))
+        if self.layout.get("os") == "windows":
+            excluded.update(item["root"] / "AppData/Local/Temp" for item in profiles)
+        excluded.add(SCANNER_ROOT)
+        excluded -= set(roots)
+        excluded_identities = set()
+        for path in excluded:
+            try:
+                info = path.lstat()
+                if stat.S_ISDIR(info.st_mode):
+                    excluded_identities.add((info.st_dev, info.st_ino))
+            except OSError:
+                continue
+        self.counts["excludedDirectories"] = 0
         seen, queue = set(), deque((root, 0, None) for root in roots)
         while queue:
             if self.counts["directoriesVisited"] >= self.directory_limit or self.counts["entriesVisited"] >= self.entry_limit or time.monotonic() >= self.deadline:
@@ -432,6 +477,9 @@ class _Discovery:
                 if identity in seen:
                     continue
                 seen.add(identity)
+                if directory in excluded or identity in excluded_identities:
+                    self.counts["excludedDirectories"] += 1
+                    continue
                 self.counts["directoriesVisited"] += 1
                 children = self.children(directory, source)
                 self.counts["entriesVisited"] += len(children)
@@ -715,8 +763,36 @@ def _environment(os_name):
     return {"visibility": "current-operating-system-context", "runtimeContext": "container" if containers else "unknown", "containerIndicators": containers, "subsystemIndicators": subsystems, "sandboxIndicators": sandbox, "isolation": "not-established"}
 
 
+def _account_names(os_name):
+    """The scanning account's login name, used only to scrub it from exported text."""
+    try:
+        if os_name == "windows":
+            return {os.environ["USERNAME"]} if os.environ.get("USERNAME") else set()
+        import pwd
+        return {pwd.getpwuid(os.getuid()).pw_name}
+    except (ImportError, KeyError, OSError):
+        return set()
+
+
+def identity_scrubber(accounts, current_names=()):
+    """Scrub account home paths, and the scanning account's name, from exported text.
+
+    Other accounts are never opened, so only their home paths can appear; their
+    bare names are not rewritten, which could corrupt unrelated labels.
+    """
+    from .engine.redaction import IdentityScrubber
+    return IdentityScrubber([{"root": item["root"], "alias": item["alias"],
+                              "names": {Path(item["root"]).name, *current_names} if item["alias"] == "~" else set()}
+                             for item in accounts])
+
+
 def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT, entry_limit=DEFAULT_ENTRY_LIMIT, seconds=DEFAULT_SECONDS):
-    """Discover local-machine scopes independently of CWD or a supplied home."""
+    """Discover the scanning account's AI evidence on this machine.
+
+    Scope: this account's profile, system and managed policy, installations,
+    running AI app names, and AI projects on local volumes outside other accounts'
+    home directories. Other accounts are never opened.
+    """
     from .collector import collect_scopes
     if any(type(value) is not int or value < 1 for value in (directory_limit, entry_limit, seconds)):
         raise ValueError("Machine discovery budgets must be positive integers.")
@@ -746,4 +822,7 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
     snapshot["scope"].update(platform=layout["os"], profileCount=len(profiles), workspaceCount=len(projects), discovery=discovery.counts, environment=environment)
     if discovery.gaps or any(item["status"] in {"error", "skipped"} for item in discovery.sources):
         snapshot["status"] = "partial"
-    return snapshot
+    # Paths outside the scanned home (temporary folders, caches, other volumes) can
+    # still embed an account's home or name. Remove both from every exported string.
+    accounts = getattr(discovery, "accounts", None) or profiles
+    return identity_scrubber(accounts, _account_names(layout["os"])).scrub_snapshot(snapshot)

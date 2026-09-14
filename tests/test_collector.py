@@ -350,7 +350,9 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual({item["details"]["context"] for item in settings}, {"base"})
         self.assertEqual({item["details"]["accountAlias"] for item in settings}, {"~", "user-1"})
         self.assertEqual(len({item["id"] for item in settings}), 2)
-        self.assertEqual({item["location"] for item in settings}, {"~/.claude/settings.json", str(another / ".claude/settings.json")})
+        # Another account's home is its ordinal alias, never a path that names the person.
+        self.assertEqual({item["location"] for item in settings}, {"~/.claude/settings.json", "user-1/.claude/settings.json"})
+        self.assertNotIn("PRIVATE_OTHER_ACCOUNT", json.dumps(result))
         self.assertEqual(result["scope"]["profileCount"], 2)
 
     def test_machine_system_sources_have_managed_context_and_actionable_locations(self):

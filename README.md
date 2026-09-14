@@ -1,7 +1,7 @@
 # Palma AI access scan
 
-See your machine's AI tools, the access they have, and what needs attention. Palma combines
-machine-wide discovery with configuration evaluation and a clear, interactive local report.
+See the AI tools on your computer, the access they have, and what needs attention. Palma
+combines local discovery with configuration evaluation and a clear, interactive local report.
 It supports Windows, macOS, and Linux, with no account, enrollment, or backend connection.
 
 ## Run on your computer
@@ -21,10 +21,11 @@ bash "/path/to/palma-ai-readiness/scripts/run.sh"
 powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\palma-ai-readiness\scripts\run.ps1"
 ```
 
-The scan discovers accessible user profiles, local AI projects, application installations,
-managed settings, editor profiles, connectors, extension components, and supported runtime
-and browser integration metadata. You do not need to choose a directory. Large machines
-can take several minutes. Specific unreadable sources are recorded in coverage.
+The scan covers your account: AI clients, connectors, skills and settings in your profile,
+managed AI policy, installed AI apps, editor profiles, extension components, supported runtime
+and browser integration metadata, and AI projects on local drives. Other accounts' home
+folders are never opened. You do not need to choose a directory. Large machines can take
+several minutes. Specific unreadable sources are recorded in coverage.
 
 The report opens in your browser. Use `--no-open` to keep it closed, `--workspace <path>`
 to supplement automatic project discovery, or `--output-dir <new-directory>` to choose
@@ -37,7 +38,7 @@ The `run.command` and `run.cmd` double-click launchers save results beside the s
 A web assistant cannot scan your computer through its cloud environment. Download the
 skill and run the native command above, or give the folder to your desktop AI assistant:
 
-> Read SKILL.md in this Palma skill folder. Run the machine-wide scan on this computer
+> Read SKILL.md in this Palma skill folder. Run the scan of my account on this computer
 > and show me the local report, starting with the priorities and recommended actions.
 
 Use native Windows Python for Windows. WSL, containers, and SSH sessions scan their own

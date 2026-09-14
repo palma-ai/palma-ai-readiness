@@ -11,7 +11,7 @@ from .model import booking_link, json_text, read_snapshot, summarize, validate
 
 
 def parser():
-    root = argparse.ArgumentParser(description="Palma AI access scan. Machine-wide local discovery and evidence, with no account or network service.")
+    root = argparse.ArgumentParser(description="Palma AI access scan. Local discovery and evidence for the signed-in account, with no sign-up or network service.")
     root.add_argument("--version", action="version", version=f"Palma AI access scan {__version__}")
     commands = root.add_subparsers(dest="command", required=True)
     for name, help_text in (("run", "Scan and generate the local report"), ("collect", "Collect and evaluate local configuration evidence")):

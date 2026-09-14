@@ -40,7 +40,7 @@ class MachineTests(unittest.TestCase):
         self.received_profiles, self.received = profiles, kwargs
         return {"schemaVersion": "2.0", "collector": {"name": "synthetic", "version": "2.1.0"}, "mode": "endpoint", "status": "complete", "scope": {"type": kwargs["scope_type"]}, "sources": [], "observations": [], "coverage": {"limitations": kwargs["discovery_gaps"]}, "findings": []}
 
-    def scan(self, **budgets):
+    def scan(self, workspaces=None, **budgets):
         with ExitStack() as stack:
             stack.enter_context(patch.object(machine, "_layout", return_value=self.layout))
             stack.enter_context(patch.object(machine, "_environment", return_value={"visibility": "current-operating-system-context", "runtimeContext": "unknown", "containerIndicators": [], "subsystemIndicators": [], "sandboxIndicators": [], "isolation": "not-established"}))
@@ -49,26 +49,92 @@ class MachineTests(unittest.TestCase):
             stack.enter_context(patch.object(machine._Discovery, "services", return_value=None))
             stack.enter_context(patch.object(collector, "collect_scopes", side_effect=self.stub_core, create=True))
             stack.enter_context(patch("socket.create_connection", side_effect=AssertionError("network forbidden")))
-            snapshot = machine.collect_machine(**budgets)
+            snapshot = machine.collect_machine(workspaces, **budgets)
         serialized = json.dumps(snapshot)
         for private in (str(self.root), "PRIVATE_CURRENT", "PRIVATE_OTHER"):
             self.assertNotIn(private, serialized)
         return snapshot
 
-    def test_default_scope_discovers_other_accounts_and_projects_anywhere_on_local_volume(self):
+    def test_scope_is_the_current_account_and_projects_outside_other_homes(self):
         outside = self.volume / "arbitrary/deep/data/project"
         self.put(outside / ".mcp.json", {})
         second = self.other / "work/project"
         self.put(second / ".claude/settings.json", {})
-        with patch.dict(os.environ, {"HOME": "/PRIVATE_FAKE_HOME", "CODEX_HOME": "/PRIVATE_FAKE_CODEX"}):
+        opened = []
+        original = os.scandir
+
+        def tracking_scandir(path):
+            opened.append(Path(path))
+            return original(path)
+
+        with patch.dict(os.environ, {"HOME": "/PRIVATE_FAKE_HOME", "CODEX_HOME": "/PRIVATE_FAKE_CODEX"}), patch.object(os, "scandir", tracking_scandir):
             snapshot = self.scan()
         self.assertEqual(snapshot["scope"]["type"], "machine")
-        self.assertEqual(snapshot["scope"]["profileCount"], 2)
+        self.assertEqual(snapshot["scope"]["profileCount"], 1)
+        self.assertEqual(self.received_profiles, [{"root": self.home, "alias": "~"}])
         self.assertIn(outside, self.received["workspaces"])
-        self.assertIn(second, self.received["workspaces"])
-        self.assertEqual({row["root"] for row in self.received_profiles}, {self.home, self.other})
+        self.assertNotIn(second, self.received["workspaces"])
+        self.assertFalse([path for path in opened if path == self.other or self.other in path.parents],
+                         "another account's home must never be opened")
+        self.assertEqual(snapshot["scope"]["discovery"]["profilesExcluded"], 1)
         self.assertTrue(self.received["include_installations"])
         self.assertEqual(snapshot["coverage"]["limitations"], [])
+
+    def test_temporary_folders_and_the_scanner_folder_are_not_projects_unless_explicit(self):
+        temporary = self.volume / "tmp"
+        session = temporary / "agent-session/project"
+        self.put(session / ".claude/settings.json", {})
+        scanner = self.volume / "tools/palma-ai-readiness"
+        self.put(scanner / ".claude/settings.json", {})
+        self.put(scanner / ".claude/worktrees/copy/.mcp.json", {})
+        explicit = temporary / "requested"
+        self.put(explicit / ".mcp.json", {})
+        with patch.object(machine, "TEMPORARY_ROOTS", {"linux": (str(temporary),)}), patch.object(machine, "SCANNER_ROOT", scanner):
+            snapshot = self.scan([explicit])
+        workspaces = self.received["workspaces"]
+        self.assertNotIn(session, workspaces)
+        self.assertFalse([path for path in workspaces if path == scanner or scanner in path.parents])
+        self.assertIn(explicit, workspaces)
+        # The temporary folder, the scanner folder and the other account's home.
+        self.assertEqual(snapshot["scope"]["discovery"]["excludedDirectories"], 3)
+
+    def test_an_excluded_home_reached_through_another_path_stays_excluded(self):
+        alias = self.volume / "firmlinked-home"
+        self.put(alias / ".mcp.json", {})
+        original = Path.lstat
+
+        def lstat(path):
+            # The alias reports the excluded home's device and inode, as a firmlink would.
+            return original(self.other) if path == alias else original(path)
+
+        with patch.object(Path, "lstat", lstat):
+            self.scan()
+        self.assertNotIn(alias, self.received["workspaces"])
+
+    def test_exported_text_is_scrubbed_of_account_homes_and_the_account_name(self):
+        original = self.stub_core
+
+        def core(profiles, **kwargs):
+            snapshot = original(profiles, **kwargs)
+            snapshot["sources"] = [
+                {"id": "src-a", "client": "claude-code", "scope": "workspace", "status": "collected",
+                 "location": "/cache/-volume-home-PRIVATE_CURRENT-repo/.mcp.json"},
+                {"id": "src-b", "client": "claude-code", "scope": "workspace", "status": "collected",
+                 "location": str(self.other) + "/shared-project/.mcp.json"},
+                {"id": "src-c", "client": "claude-code", "scope": "user", "status": "collected",
+                 "location": str(self.home) + "/.claude/settings.json"}]
+            return snapshot
+
+        self.stub_core = core
+        try:
+            with patch.object(machine, "_account_names", return_value={"PRIVATE_LOGIN"}):
+                snapshot = self.scan()
+        finally:
+            self.stub_core = original
+        locations = [source["location"] for source in snapshot["sources"] if source["id"].startswith("src-")]
+        self.assertIn("~/.claude/settings.json", locations)
+        self.assertIn("user-1/shared-project/.mcp.json", locations)
+        self.assertTrue(any("-volume-home-[account]-repo" in location for location in locations))
 
     def test_discovery_is_not_limited_to_original_500_entry_budget(self):
         for index in range(650):

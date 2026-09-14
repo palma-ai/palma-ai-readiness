@@ -61,7 +61,7 @@ class MachineIntegrationTests(unittest.TestCase):
         self.assertEqual(summary["counts"]["client"], 1)
         self.assertEqual(summary["scope"], "machine")
         report = render_report(data, summary)
-        self.assertIn("Machine-wide discovery · macOS · 2 profiles · 19 projects", report)
+        self.assertIn("Your account on this computer · macOS · 19 projects", report)
         self.assertIn("12,500", report)
         self.assertIn("Installed</span>", report)
         self.assertIn("Process observed</span>", report)
