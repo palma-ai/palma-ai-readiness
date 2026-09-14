@@ -11,12 +11,11 @@
   "coverage": {
     "collected": 20,
     "error": 1,
-    "missing": 192,
     "skipped": 0
   },
   "findings": {
     "critical": 10,
-    "high": 2,
+    "high": 1,
     "info": 6,
     "low": 6,
     "medium": 1

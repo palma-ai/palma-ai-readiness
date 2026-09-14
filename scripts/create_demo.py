@@ -65,6 +65,7 @@ def main():
     write_new(args.output_dir / "snapshot.json", json_text(snapshot))
     write_new(args.output_dir / "summary.json", json_text(summary))
     write_new(args.output_dir / "report.html", render_report(snapshot, summary))
+    write_new(args.output_dir / "share.html", render_report(snapshot, summary, share=True))
     print(f"Synthetic preview: {(args.output_dir / 'report.html').resolve()}")
 
 

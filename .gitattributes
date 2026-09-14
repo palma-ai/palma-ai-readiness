@@ -3,3 +3,4 @@
 /THIRD_PARTY_NOTICES.md -whitespace
 /examples/** linguist-generated
 /examples/report.html -whitespace
+/examples/share.html -whitespace
