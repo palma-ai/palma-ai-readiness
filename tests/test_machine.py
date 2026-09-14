@@ -57,14 +57,20 @@ class MachineTests(unittest.TestCase):
 
     @contextmanager
     def opened(self):
-        """Every directory listed while the block runs."""
-        paths, original = [], os.scandir
+        """Every directory opened or listed while the block runs."""
+        paths, open_, scandir = [], os.open, os.scandir
 
-        def tracking(path):
-            paths.append(Path(path))
-            return original(path)
+        def tracking_open(path, flags, *args, **kwargs):
+            if flags & getattr(os, "O_DIRECTORY", 0) and not isinstance(path, int):
+                paths.append(Path(path))
+            return open_(path, flags, *args, **kwargs)
 
-        with patch.object(os, "scandir", tracking):
+        def tracking_scandir(path="."):
+            if not isinstance(path, int):
+                paths.append(Path(path))
+            return scandir(path)
+
+        with patch.object(os, "open", tracking_open), patch.object(os, "scandir", tracking_scandir):
             yield paths
 
     def exported(self, locations, **patches):
@@ -315,12 +321,19 @@ class MachineTests(unittest.TestCase):
     def test_permission_failure_is_counted_without_private_path_or_error_text(self):
         denied = self.volume / "PRIVATE_DENIED"
         denied.mkdir()
-        original = os.scandir
-        def fake_scandir(path):
-            if Path(path) == denied:
+        open_, scandir = os.open, os.scandir
+
+        def denied_open(path, flags, *args, **kwargs):
+            if not isinstance(path, int) and Path(path) == denied:
                 raise PermissionError(13, "PRIVATE_ERROR_CANARY", str(path))
-            return original(path)
-        with patch.object(os, "scandir", fake_scandir):
+            return open_(path, flags, *args, **kwargs)
+
+        def denied_scandir(path="."):
+            if not isinstance(path, int) and Path(path) == denied:
+                raise PermissionError(13, "PRIVATE_ERROR_CANARY", str(path))
+            return scandir(path)
+
+        with patch.object(os, "open", denied_open), patch.object(os, "scandir", denied_scandir):
             snapshot = self.scan()
         self.assertEqual(snapshot["status"], "partial")
         self.assertGreater(snapshot["scope"]["discovery"]["permissionErrors"], 0)

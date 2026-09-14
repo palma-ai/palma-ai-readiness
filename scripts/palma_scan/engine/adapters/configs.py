@@ -82,6 +82,7 @@ def _project_entries(builder, candidate, source, projects, approved_workspace):
     enqueuing a scan."""
     switches = CODEX_PROJECT_SWITCHES if candidate.family == "codex" else CLAUDE_PROJECT_SWITCHES
     roots = _roots(builder)
+    stale = 0
     for path, config in projects.items():
         if not isinstance(config, dict):
             continue
@@ -103,7 +104,9 @@ def _project_entries(builder, candidate, source, projects, approved_workspace):
                 continue
         project = _project_context(candidate, workspace)
         if state == "stale":
-            label = "projects.item-" + fingerprint(builder.namespace, "project", str(workspace))[:16]
+            # An ordinal, not a hash of the path: a hash would let anyone confirm a guessed folder.
+            stale += 1
+            label = f"projects.stale-{stale}"
             builder.emit(project, source, "setting", label, nativeKey=label, category="other", valueType="object",
                          value=None, valueCollected=False, effectiveState="stale")
         elif candidate.family == "claude-code" and "mcpServers" in config:

@@ -1,12 +1,17 @@
 """Export only bounded metadata, with discovered credential values scrubbed."""
 import re
-from urllib.parse import unquote, unquote_plus, urlsplit
+import unicodedata
+from urllib.parse import quote, unquote, unquote_plus, urlsplit
 
 SECRET_KEY = re.compile(r"token|secret|password|authorization|api[-_]?key|credential", re.I)
+# Possessive quantifiers keep matching linear on long hostile strings.
 KNOWN_SECRET = re.compile(
-    r"(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}"
-    r"|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)"
+    r"(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}+|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{16,}+"
+    r"|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]++\.[A-Za-z0-9_-]++\.[A-Za-z0-9_-]++)"
 )
+# Text beyond an exported label's limit is never shown; this much more is kept while
+# redacting, so a secret that overlaps the limit is still recognized whole.
+SECRET_WINDOW = 16_384
 PLACEHOLDER = re.compile(r"\$\{[^}]+\}|\$[A-Z][A-Z0-9_]*|%[A-Z][A-Z0-9_]*%")
 OPTION_MAPS = {"env", "headers", "http_headers"}
 DECLARATION_MAPS = {"mcpServers", "mcp_servers", "servers", "plugins", "projects", "profiles", "model_providers"}
@@ -34,6 +39,20 @@ URL_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
 # Lower-case slugs with short segments are identifiers (model names, regions, project
 # ids, feature flags), never credentials: `claude-sonnet-4-5-20250929`, `us-east-1`.
 IDENTIFIER_SLUG = re.compile(r"[a-z0-9]{1,16}(?:[._-][a-z0-9]{1,16})*")
+
+
+def visible(text: str) -> str:
+    """Text without characters a reader cannot see but a program or model still reads.
+
+    Format characters (direction controls, zero-width and tag characters), private-use and
+    unassigned code points, and variation selectors can hide instructions in a scanned name
+    or reorder the text around it. They are removed wherever scanned text is exported or shown.
+    """
+    if text.isascii():
+        return text
+    return "".join(character for character in text
+                   if unicodedata.category(character) not in {"Cf", "Co", "Cn"}
+                   and not 0xFE00 <= ord(character) <= 0xFE0F and not 0xE0100 <= ord(character) <= 0xE01EF)
 
 
 def plausible_secret(value: str, level) -> bool:
@@ -123,6 +142,10 @@ def query_credentials(query: str) -> set[str]:
 class Redactor:
     def __init__(self):
         self.secrets: set[str] = set()
+        # Learned secrets indexed by their first characters, so redacting a label costs
+        # time proportional to the label, not to the number of secrets.
+        self._index: dict[str, list[str]] = {}
+        self._indexed: set[str] = set()
 
     def learn(self, data: object, sensitive=False, depth: int = 0):
         """Learn credential values. ``sensitive`` is False, DECLARED (or True) or INFERRED."""
@@ -192,12 +215,28 @@ class Redactor:
     def _learn_url(self, value: str):
         self.secrets.update(item for item in url_credentials(value) if plausible_secret(item, DECLARED))
 
+    def _without_secrets(self, text):
+        if len(self._indexed) != len(self.secrets):
+            for secret in self.secrets - self._indexed:
+                self._index.setdefault(secret[:MIN_DECLARED_SECRET_LENGTH], []).append(secret)
+            for candidates in self._index.values():
+                candidates.sort(key=len, reverse=True)
+            self._indexed = set(self.secrets)
+        result, start, position = [], 0, 0
+        while position <= len(text) - MIN_DECLARED_SECRET_LENGTH:
+            candidates = self._index.get(text[position:position + MIN_DECLARED_SECRET_LENGTH], ())
+            match = next((secret for secret in candidates if text.startswith(secret, position)), None)
+            if match is None:
+                position += 1
+                continue
+            result += [text[start:position], "[redacted]"]
+            position = start = position + len(match)
+        return "".join(result) + text[start:]
+
     def text(self, value: object, maximum: int = 256) -> str:
-        text = str(value)
-        for secret in sorted(self.secrets, key=len, reverse=True):
-            text = text.replace(secret, "[redacted]")
+        text = self._without_secrets(str(value)[:maximum * 2 + SECRET_WINDOW])
         text = KNOWN_SECRET.sub("[redacted]", text)
-        text = "".join(c if ord(c) >= 32 and ord(c) != 127 and not 0xD800 <= ord(c) <= 0xDFFF else " " for c in text)
+        text = "".join(c if ord(c) >= 32 and ord(c) != 127 and not 0xD800 <= ord(c) <= 0xDFFF else " " for c in visible(text))
         result, units = [], 0
         for character in text.strip():
             units += 2 if ord(character) > 0xFFFF else 1
@@ -272,7 +311,7 @@ class IdentityScrubber:
     """
 
     def __init__(self, accounts):
-        self.aliases, self.tokens, homes = {}, {}, {}
+        self.aliases, self.tokens, self.encoded, homes = {}, {}, {}, {}
         for account in accounts:
             alias = account["alias"]
             root = str(account.get("root") or "").rstrip("/\\")
@@ -284,6 +323,18 @@ class IdentityScrubber:
                 if 0 < split < len(variant):
                     self.aliases.setdefault(variant.lower(), alias)
                     homes.setdefault(variant[:split].lower(), set()).add(variant[split:].lower())
+            if alias == "~" and len(root) > 1:
+                # Tools also store a home as one token (-Users-first-last, C--Users-name) or
+                # percent-encoded (%2FUsers%2Fname, file:///c%3A/Users/First%20Last).
+                forward = root.replace("\\", "/")
+                encoded = quote(forward, safe="/")
+                if encoded != forward:
+                    self.aliases.setdefault(encoded.lower(), alias)
+                    split = encoded.rfind("/") + 1
+                    homes.setdefault(encoded[:split].lower(), set()).add(encoded[split:].lower())
+                for form in {re.sub(r"[^A-Za-z0-9]", "-", root), re.sub(r"[^A-Za-z0-9]+", "-", root), quote(forward, safe="")}:
+                    if len(form.strip("-")) >= 4:
+                        self.encoded.setdefault(form.lower(), alias)
             token = "[account]" if alias == "~" else "[" + alias + "]"
             for name in account.get("names", ()):
                 if _distinctive(name):
@@ -296,6 +347,8 @@ class IdentityScrubber:
                       for parent, names in sorted(homes.items(), key=lambda item: -len(item[0]))]
         self.names = (re.compile(r"(?<![A-Za-z0-9])" + _alternation(self.tokens) + r"(?![A-Za-z0-9])", re.IGNORECASE)
                       if self.tokens else None)
+        self.encoded_homes = (re.compile(r"(?<![A-Za-z0-9])" + _alternation(self.encoded) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+                              if self.encoded else None)
 
     def text(self, value, names=True):
         if not isinstance(value, str):
@@ -306,6 +359,9 @@ class IdentityScrubber:
                 value = pattern.sub(lambda match: _lookup(self.aliases, match.group(0)), value)
         if names and self.names:
             value = self.names.sub(lambda match: _lookup(self.tokens, match.group(0)), value)
+        # After the name, so a distinctive name keeps its readable [account] form.
+        if self.encoded_homes and ("-" in value or "%" in value):
+            value = self.encoded_homes.sub(lambda match: _lookup(self.encoded, match.group(0)), value)
         return value[:MAX_SCRUBBED_LENGTH] if len(value) > max(original, MAX_SCRUBBED_LENGTH) else value
 
     def scrub(self, value, key=None):
@@ -324,4 +380,12 @@ class IdentityScrubber:
         for field in ("sources", "observations", "coverage"):
             if field in snapshot:
                 snapshot[field] = self.scrub(snapshot[field])
+        # Declared names and hook events can embed the account name too. Client ids and
+        # setting keys are fixed vocabulary and keep their spelling.
+        for item in snapshot.get("observations", []):
+            if isinstance(item, dict) and item.get("kind") not in {"client", "setting"}:
+                item["name"] = self.text(item.get("name"))
+                details = item.get("details")
+                if isinstance(details, dict) and isinstance(details.get("events"), list):
+                    details["events"] = [self.text(event) for event in details["events"]]
         return snapshot

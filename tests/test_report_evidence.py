@@ -144,7 +144,7 @@ class ShareLocationTests(unittest.TestCase):
             "~/Library/Application Support/Claude/claude_desktop_config.json": "~/Library/\u2026/claude_desktop_config.json",
             "~/AppData/Local/PRIVATE_COMPANY/PRIVATE_PROJECT/.vscode/mcp.json": "project/.vscode/mcp.json",
             "/opt/PRIVATE_COMPANY/PRIVATE_PROJECT/.mcp.json": "project/.mcp.json",
-            "/Library/WebServer/Documents/PRIVATE_SITE/notes.json": "/Library/\u2026/notes.json",
+            "/Library/WebServer/Documents/PRIVATE_SITE/notes.json": "/Library/\u2026/(name withheld).json",
             "C:/ProgramData/PRIVATE_COMPANY/PRIVATE_PROJECT/settings.json": "C:/ProgramData/\u2026/settings.json",
             "/srv/PRIVATE_HOST/data.json": "location withheld",
             "system:claude-code/managed-settings.json": "system:claude-code/managed-settings.json",

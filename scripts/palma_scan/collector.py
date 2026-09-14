@@ -684,10 +684,11 @@ class _Collector:
             self.mcps(source, data[key], context=context, map_key=key)
 
 
-def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type="machine", discovery_gaps=None, include_installations=False):
+def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type="machine", discovery_gaps=None, include_installations=False, excluded_roots=()):
     """Collect discovered profile, workspace, system-file and in-memory policy sources."""
     from .baseline import collect_scopes as collect_baseline
-    return collect_baseline(profiles, system_sources, workspaces, scope_type=scope_type, discovery_gaps=discovery_gaps, include_installations=include_installations)
+    return collect_baseline(profiles, system_sources, workspaces, scope_type=scope_type, discovery_gaps=discovery_gaps,
+                            include_installations=include_installations, excluded_roots=excluded_roots)
 
 
 def collect(home: Path, workspaces=None, *, scope_type="current-user") -> dict:
@@ -700,4 +701,6 @@ def collect(home: Path, workspaces=None, *, scope_type="current-user") -> dict:
         raise ValueError("workspace must be a directory, never a filesystem root")
     snapshot = collect_scopes([{"root": home, "alias": "~"}], workspaces=roots, scope_type=scope_type)
     snapshot["observations"] = merge_clients(snapshot["observations"])
-    return snapshot
+    # A copied home is usually named after its account; its paths and name stay out too.
+    from .machine import identity_scrubber
+    return identity_scrubber(home, (), {home.name}).scrub_snapshot(snapshot)

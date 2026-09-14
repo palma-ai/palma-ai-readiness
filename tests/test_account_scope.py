@@ -80,7 +80,7 @@ class IdentityScrubberTests(unittest.TestCase):
         scrubber = IdentityScrubber([{"root": Path("/Users/deadbeef"), "alias": "~", "names": ["deadbeef"]}])
         snapshot = {"scope": {"label": "unchanged"},
                     "sources": [{"id": "src-deadbeef", "location": "/Users/deadbeef/x.json", "reasons": ["deadbeef copy"]}],
-                    "observations": [{"id": "obs-1", "sourceId": "src-deadbeef", "name": "deadbeef",
+                    "observations": [{"id": "obs-1", "kind": "setting", "sourceId": "src-deadbeef", "name": "deadbeef",
                                       "details": {"configuredLocations": ["/cache/deadbeef/hooks"], "parentId": "obs-deadbeef",
                                                   "value": "/srv/deadbeef/tool", "label": "deadbeef"}}],
                     "coverage": {"limitations": ["/Users/deadbeef/.claude.json: parse_error"]}}

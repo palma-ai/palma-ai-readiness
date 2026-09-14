@@ -13,7 +13,7 @@ No artwork is fetched when collecting data, generating a report, or opening it. 
 ## Artwork sources and transformations
 
 - **Palma**: the Palma wordmark is supplied by Palma AI from its application asset library (`static/images/PalmaLogoLightMode.png`).
-- **Existing Palma client artwork**: Codex/OpenAI, Claude (Code and Desktop), Cursor, Gemini CLI, VS Code, and Windsurf were supplied by Palma from `apps/mcp-platform/static/images/mcp-hosts/`. These are existing product-identification assets; their original brand and trademark rights remain with their owners. This notice does not assert a new open-source license for the marks.
+- **Existing Palma client artwork**: Codex/OpenAI, Claude (Code and Desktop), Cursor, Gemini CLI, VS Code, and Windsurf were supplied by Palma from its application asset library (`images/mcp-hosts/`). These are existing product-identification assets; their original brand and trademark rights remain with their owners. This notice does not assert a new open-source license for the marks.
 - **Dashboard Icons**: GitHub, Slack, Notion, Linear, Atlassian, Figma, Google Drive, and Google Chrome use [Homarr Labs Dashboard Icons](https://github.com/homarr-labs/dashboard-icons/tree/03e8f8e22da16ccddf5e14afa90711391357231e), pinned to commit `03e8f8e22da16ccddf5e14afa90711391357231e`. Existing connector files were copied from Palma's vendored `static/brand-icons/` catalog at that pin. The Chrome asset came from the same pinned upstream. The upstream Apache License 2.0 is reproduced below, including its attribution notice.
 - **Playwright**: the Playwright mark is from [Microsoft's Playwright documentation artwork](https://playwright.dev/img/playwright-logo.svg). The [documentation repository license](https://github.com/microsoft/playwright.dev/blob/main/LICENSE) is Creative Commons Attribution 4.0 International, reproduced below. Retrieved 10 September 2026; the source digest is recorded below.
 - **Generic interface icons**: the shared-client, custom connector, filesystem, browser, and documentation glyphs are code-native interface symbols authored for this report. Browserbase and Context7 use these generic symbols with their names; the glyphs are not presented as their brand marks.
@@ -34,7 +34,7 @@ Additional client artwork: Cline, Roo Code, Continue, and LM Studio come from Pa
 
 ## Original source checksums
 
-Paths in this table are relative to Palma's `apps/mcp-platform/static/` asset directory unless a public URL is shown. Checksums identify the original bytes before SVG normalization.
+Paths in this table are relative to Palma's application asset directory unless a public URL is shown. Checksums identify the original bytes before SVG normalization.
 
 | Catalog asset | Source | SHA-256 |
 | --- | --- | --- |

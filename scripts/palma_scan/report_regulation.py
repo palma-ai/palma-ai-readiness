@@ -84,7 +84,7 @@ def render_regulation_section(findings: list[tuple[str, dict]], observations: li
         '<p><strong>Next step:</strong> Document the purpose, affected people and your role. Check prohibited practices, qualifying regulated products and Annex III uses, including exceptions.</p>'
         f'<p>{_reference("Prohibited practices", _DESK + "ai-act/article-5")} · {_reference("High-risk criteria", _DESK + "ai-act/article-6")}</p>'))
     return f'''<section class="regulation-panel" id="eu-ai-regulation" aria-labelledby="regulation-title">
-<div class="regulation-heading" id="regulation-indicator" data-status="{status}"><div class="regulation-identity"><span class="regulation-mark" aria-hidden="true">EU</span><div><h2 id="regulation-title">EU AI Act</h2><p>Four areas for your AI review</p></div></div><span class="regulation-status">{label}</span></div>
+<div class="regulation-heading" id="regulation-indicator" data-status="{status}"><div class="regulation-identity"><span class="regulation-mark" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg></span><div><h2 id="regulation-title">EU AI Act</h2><p>Four areas for your AI review</p></div></div><span class="regulation-status">{label}</span></div>
 <div class="regulation-tiles">{''.join(tiles)}</div>
 <div class="regulation-footer"><p>Local review signals · Compliance not assessed</p>{_reference("Official EU AI Act guidance ↗", _GUIDANCE)}</div>
 </section>'''

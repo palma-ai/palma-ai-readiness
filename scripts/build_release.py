@@ -44,7 +44,10 @@ def main():
         source = root / name
         if not source.is_file() or source.is_symlink():
             parser.error(f"Missing regular release source: {name}")
-        contents.append((name, source.read_bytes()))
+        data = source.read_bytes()
+        if name.endswith(".cmd"):
+            data = data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")  # cmd.exe expects CRLF lines.
+        contents.append((name, data))
     # Bundled parsers ship only as reviewed: upstream bytes, or the documented local edits.
     vendor = json.loads((root / "scripts/palma_scan/_vendor/sources.json").read_text(encoding="utf-8"))
     reviewed = {**vendor["originalSourceSha256"], **vendor["vendoredSha256"]}
@@ -53,7 +56,12 @@ def main():
     for name in sorted(set(bundled) | set(reviewed)):
         if name not in bundled or hashlib.sha256(bundled[name]).hexdigest() != reviewed.get(name):
             parser.error(f"Bundled parser source does not match its reviewed SHA-256: {name}")
-    # The entrypoint checks every file against this manifest before running.
+    # The entrypoint checks every file against this manifest before running, and refuses to
+    # run a release whose manifest is missing.
+    marker = b"\nRELEASE = False\n"
+    contents = [(name, data.replace(marker, b"\nRELEASE = True\n") if name == "scripts/palma-scan.py" else data) for name, data in contents]
+    if dict(contents)["scripts/palma-scan.py"].count(b"\nRELEASE = True\n") != 1:
+        parser.error("The entrypoint's release marker is missing.")
     manifest = "".join(f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in contents)
     contents = sorted([*contents, ("MANIFEST.sha256", manifest.encode("ascii"))])
     args.output.parent.mkdir(parents=True, exist_ok=True)

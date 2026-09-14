@@ -1,11 +1,15 @@
 """Behavioral acceptance checks for the standalone local command surface."""
+from contextlib import redirect_stdout
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = ROOT / "scripts" / "palma-scan.py"
@@ -15,6 +19,11 @@ class CliTests(unittest.TestCase):
     def invoke(self, *args):
         return subprocess.run([sys.executable, "-I", "-S", str(ENTRY), *map(str, args)],
                               capture_output=True, text=True, cwd=ROOT)
+
+    def test_the_entrypoint_runs_only_isolated(self):
+        result = subprocess.run([sys.executable, str(ENTRY), "--version"], capture_output=True, text=True, cwd=ROOT)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("-I -S", result.stderr)
 
     def test_help_exposes_only_local_commands(self):
         result = self.invoke("--help")
@@ -53,21 +62,28 @@ class CliTests(unittest.TestCase):
             self.assertEqual(second.returncode, 2)
             self.assertEqual(first, (output / "report.html").read_bytes())
 
-    @unittest.skipIf(os.name == "nt", "HOME selects the home folder on POSIX")
-    def test_results_go_to_the_home_folder_not_the_working_directory(self):
+    @unittest.skipIf(os.name == "nt", "the POSIX account database names the home folder")
+    def test_results_go_to_the_accounts_home_folder_not_the_working_directory_or_home_variable(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from palma_scan import cli
         with tempfile.TemporaryDirectory() as td:
-            home, project = Path(td)/"home", Path(td)/"project"
-            home.mkdir()
-            project.mkdir()
-            copied = Path(td)/"copied-home"
-            copied.mkdir()
-            result = subprocess.run([sys.executable, "-I", "-S", str(ENTRY), "run", "--copied-home", str(copied), "--no-open"],
-                                    capture_output=True, text=True, cwd=project, env={**os.environ, "HOME": str(home)})
-            self.assertEqual(result.returncode, 0, result.stderr)
+            home, project, copied = Path(td)/"home", Path(td)/"project", Path(td)/"copied-home"
+            for folder in (home, project, copied):
+                folder.mkdir()
+            previous = Path.cwd()
+            os.chdir(project)
+            try:
+                with patch("pwd.getpwuid", return_value=types.SimpleNamespace(pw_dir=str(home))), \
+                     patch.dict(os.environ, {"HOME": str(project)}), redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(cli.main(["run", "--copied-home", str(copied), "--no-open"]), 0)
+            finally:
+                os.chdir(previous)
             self.assertEqual(list(project.iterdir()), [])
             runs = [path.name for path in home.iterdir()]
             self.assertEqual(len(runs), 1)
             self.assertTrue(runs[0].startswith("readiness-run-"))
+            self.assertIn("~/" + runs[0] + "/report.html", output.getvalue())
+            self.assertNotIn(td, output.getvalue())
 
     def test_rejects_unsupported_snapshot_and_unsafe_booking_link(self):
         with tempfile.TemporaryDirectory() as td:

@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import re
 
+from .engine.redaction import visible
+
 RULES_VERSION = "2026-09-14.1"
 INSTRUCTION_REVIEW_BYTES = 64 * 1024
 ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
@@ -240,7 +242,7 @@ def _join(parts):
 
 def _prose_name(name):
     """A declared name as it may appear in a summary, or None for a path or web address."""
-    text = " ".join(_UNSAFE_PROSE.sub("", str(name)).split())
+    text = " ".join(visible(_UNSAFE_PROSE.sub("", str(name))).split())
     if not text or re.search(r"[\\/]|://", text):
         return None  # Shown with its evidence, never inside a sentence.
     return text if len(text) <= PROSE_NAME_LIMIT else text[:PROSE_NAME_LIMIT - 1] + "\u2026"

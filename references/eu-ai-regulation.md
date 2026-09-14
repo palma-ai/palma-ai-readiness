@@ -56,7 +56,7 @@ longer requires them to guarantee a specific level. Local configuration cannot s
 whether such measures exist, so never treat missing local training records as a
 breach. Some AI Act Service Desk article pages state that their text has not yet been
 updated for the amendments; check amended provisions against the Official Journal.
-[Regulation (EU) 2026/1744](http://data.europa.eu/eli/reg/2026/1744/oj),
+[Regulation (EU) 2026/1744](https://eur-lex.europa.eu/eli/reg/2026/1744/oj),
 [Commission amendment summary](https://digital-strategy.ec.europa.eu/en/news/ai-omnibus-enters-force).
 
 Research background for maintainers (not displayed in the report): original prohibitions from

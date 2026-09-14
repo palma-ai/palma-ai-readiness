@@ -2,20 +2,21 @@
 
 Use `python3 -I -S <skill>/scripts/palma-scan.py` with Python 3.11+ (`py -3 -I -S` on
 Windows), or `run.sh` to find a compatible installed interpreter. JSON5 and YAML parsers are
-included in the release. There is no package installation or backend setup. In a release
-folder, the entrypoint first checks every file against `MANIFEST.sha256` and exits with
-code 2 if one differs or an extra Python file is present.
+included in the release. There is no package installation or backend setup. The entrypoint
+runs only under `-I -S`. In a release folder it first checks every file against
+`MANIFEST.sha256` and exits with code 2 if a file differs, a file or folder that is not part
+of the release is present, or the manifest is missing.
 
 | Command | Input | Output |
 | --- | --- | --- |
 | `run` | Local discovery for the signed-in account | New directory with evidence, summary, local report and shareable summary |
 | `collect --output FILE` | Same discovery as run | New snapshot with evidence and evaluated findings |
-| `summary --report FILE` | Saved snapshot | Counts and scope on stdout, or `--output FILE` |
+| `summary --report FILE` | Saved snapshot | Counts, coverage and `priorities` (rule text only, no scanned names) on stdout, or `--output FILE` |
 | `report --report FILE --output FILE` | Saved snapshot | New self-contained HTML report; `--share` renders the shareable summary |
 | `evaluate --report FILE --output FILE` | Saved endpoint snapshot | New snapshot evaluated with the bundled rules |
 
 `summary`, `report`, and `evaluate` also accept `--run-dir DIR` instead of `--report`.
-Without `--output`, `report` writes `report-rebuilt.html` beside the snapshot. Existing
+Without `--output`, `report` writes `report-rebuilt.html` (`share-rebuilt.html` with `--share`) beside the snapshot. Existing
 files are refused. Rendering preserves stored findings; use `evaluate` for an explicit
 re-evaluation. Neither performs a fresh endpoint scan.
 
@@ -56,7 +57,7 @@ For web requests, follow the native run workflow in SKILL.md.
 with every location reduced to its AI configuration folder and file name, names that are
 paths or web addresses withheld, and no project, folder or volume names.
 
-`--booking-url https://...` includes an optional calendar link. No destination is built in.
+`--booking-url https://...` includes an optional link to a palma.ai page; other hosts are refused. No destination is built in.
 Rendering neither fetches it nor appends inventory. Use the same options for identical HTML.
 
 The EU AI Act overview and EU AI Act review appear automatically in `run`

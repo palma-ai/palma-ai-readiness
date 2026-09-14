@@ -826,6 +826,12 @@ def _read_extension_rows(raw, budget):
         connection.execute("PRAGMA trusted_schema=OFF")
         connection.execute("PRAGMA query_only=ON")
         connection.execute("PRAGMA temp_store=MEMORY")
+        connection.execute("PRAGMA cell_size_check=ON")
+        # The database file is untrusted: defensive mode and a value-size limit.
+        if hasattr(connection, "setconfig") and hasattr(sqlite3, "SQLITE_DBCONFIG_DEFENSIVE"):
+            connection.setconfig(sqlite3.SQLITE_DBCONFIG_DEFENSIVE, True)
+        if hasattr(connection, "setlimit"):
+            connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 64 * 1024 * 1024)
         if hasattr(connection, "enable_load_extension"):
             connection.enable_load_extension(False)
         connection.deserialize(raw)

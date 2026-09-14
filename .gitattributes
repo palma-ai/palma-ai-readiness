@@ -4,3 +4,5 @@
 /examples/** linguist-generated
 /examples/report.html -whitespace
 /examples/share.html -whitespace
+# cmd.exe reads batch files reliably only with CRLF line endings.
+*.cmd text eol=crlf

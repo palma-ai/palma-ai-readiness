@@ -45,7 +45,10 @@ PRUNE_NAMES = {".git", ".hg", ".svn", "node_modules", ".venv", "venv", "__pycach
                "GPUCache", "Service Worker", ".Trash", ".Trashes", "$RECYCLE.BIN",
                "System Volume Information", ".Spotlight-V100", ".fseventsd",
                ".DocumentRevisions-V100", "Backups.backupdb", ".timemachine",
-               "com.apple.TimeMachine.localsnapshots"}
+               "com.apple.TimeMachine.localsnapshots", "FileHistory", "WindowsImageBackup",
+               # Cloud-synced folders download online-only files when they are listed or read.
+               "CloudStorage", "Mobile Documents"}
+SF_DATALESS = 0x40000000
 LOCAL_FS = {"ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs", "bcachefs",
             "overlay", "rootfs", "apfs", "hfs", "hfsplus", "ufs", "msdos", "vfat",
             "exfat", "ntfs", "ntfs3", "fuseblk", "jfs", "reiserfs", "squashfs"}
@@ -83,8 +86,31 @@ def _identity(path):
     return (info.st_dev, info.st_ino) if info.st_ino else None
 
 
+def _open_unredirected(path, flags):
+    """Open a path one component at a time from the filesystem root, following no link.
+
+    A folder checked earlier and swapped for a link afterwards is refused, not followed.
+    """
+    path = Path(path)
+    if os.open not in os.supports_dir_fd or not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"):
+        return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0))
+    parts = path.relative_to(path.anchor).parts
+    if not parts:
+        return os.open(path, flags | os.O_NOFOLLOW)
+    access = getattr(os, "O_PATH", getattr(os, "O_SEARCH", os.O_RDONLY)) | os.O_DIRECTORY | os.O_NOFOLLOW
+    directory = os.open(path.anchor, access)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, access, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        return os.open(parts[-1], flags | os.O_NOFOLLOW, dir_fd=directory)
+    finally:
+        os.close(directory)
+
+
 def _regular_metadata(path, parser="json"):
-    """Read only a selected bounded metadata document; never follow final links."""
+    """Read only a selected bounded metadata document; never follow any link on its path."""
     path = Path(path)
     for parent in [*reversed(path.parents), path]:
         info = parent.lstat()
@@ -93,7 +119,7 @@ def _regular_metadata(path, parser="json"):
     info = path.lstat()
     if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_METADATA_BYTES:
         raise ValueError("unsupported metadata file")
-    fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    fd = _open_unredirected(path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
     with os.fdopen(fd, "rb") as stream:
         opened = os.fstat(stream.fileno())
         if not stat.S_ISREG(opened.st_mode) or (info.st_dev, info.st_ino) != (opened.st_dev, opened.st_ino):
@@ -156,7 +182,7 @@ def _system_command(command):
         uid = str(os.getuid())
         allowed |= {("/bin/ps", "-x", "-U", uid, "-o", "comm="), ("/bin/ps", "-U", uid, "-o", "comm=")}
     windows = os.name == "nt" and command == (str(_windows_system_directory() / "tasklist.exe"), "/FO", "CSV", "/NH",
-                                              "/FI", "USERNAME eq " + os.environ.get("USERNAME", ""))
+                                              "/FI", "USERNAME eq " + _windows_user())
     if command not in allowed and not windows:
         raise ValueError("unsupported OS inventory command")
     first = command[0]
@@ -170,6 +196,14 @@ def _system_command(command):
     if result.returncode or len(result.stdout) > MAX_OS_OUTPUT_BYTES:
         raise ValueError("OS inventory unavailable or oversized")
     return result.stdout.decode("utf-8", "replace")
+
+
+def _windows_user():
+    """This account for tasklist's USERNAME filter, with its domain; a wildcard is refused."""
+    name, domain = os.environ.get("USERNAME", ""), os.environ.get("USERDOMAIN", "")
+    if not name or any(character in name + domain for character in '*"?\\'):
+        raise ValueError("unsupported account name")
+    return domain + "\\" + name if domain else name
 
 
 def _windows_system_directory():
@@ -402,15 +436,28 @@ class _Discovery:
             if stat.S_ISLNK(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
                 self.counts["symlinksSkipped"] += 1
                 return []
-            with os.scandir(path) as entries:
-                result = []
-                for item in entries:
-                    result.append(Path(item.path))
-                    if len(result) > 100_000:
-                        self.gap(source, "A discovery directory exceeded its 100,000-entry budget.")
-                        self.counts["truncated"] = True
-                        break
-                return sorted(result)
+            # List the folder that was checked, through a handle opened without following a
+            # final link and compared by identity, so a folder swapped in between is never listed.
+            listed = path
+            if os.scandir in os.supports_fd and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW"):
+                listed = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                opened = os.fstat(listed)
+                if (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
+                    os.close(listed)
+                    raise ValueError("directory changed while opening")
+            try:
+                with os.scandir(listed) as entries:
+                    result = []
+                    for item in entries:
+                        result.append(path / item.name)
+                        if len(result) > 100_000:
+                            self.gap(source, "A discovery directory exceeded its 100,000-entry budget.")
+                            self.counts["truncated"] = True
+                            break
+            finally:
+                if listed is not path:
+                    os.close(listed)
+            return sorted(result)
         except FileNotFoundError:
             return []
         except (OSError, ValueError) as error:
@@ -423,6 +470,13 @@ class _Discovery:
         uid = getattr(info, "st_uid", None)
         return (minimum is not None and self.uid is not None and uid is not None
                 and uid != self.uid and uid >= minimum and uid not in NOBODY_UIDS)
+
+    def usable_marker(self, path):
+        """An AI marker this account owns, or a system account does; another person's is not."""
+        try:
+            return not self.other_person(path.lstat())
+        except OSError:
+            return False
 
     def profiles(self):
         """Return the scanning account's profile; no other account is opened.
@@ -526,6 +580,7 @@ class _Discovery:
                     return True
             return False
 
+        other_names = {item["root"].name.casefold() for item in self.accounts} - {home.name.casefold() for home in homes}
         queue = deque()
         for root in roots:
             if root not in profiles_set and outside_scope(root):
@@ -561,11 +616,16 @@ class _Discovery:
                 self.counts["directoriesVisited"] += 1
                 children = self.children(directory, source)
                 self.counts["entriesVisited"] += len(children)
-                if directory not in profiles_set and directory.parent != directory and any(child.name in PROJECT_MARKERS for child in children):
+                if directory not in profiles_set and directory.parent != directory and any(child.name in PROJECT_MARKERS and self.usable_marker(child) for child in children):
                     projects.add(directory)
                 for child in children:
                     if child.name in PRUNE_NAMES or child.suffix.lower() == ".app":
                         self.counts["prunedDirectories"] += 1
+                        continue
+                    # A copy of another account's home, such as D:\Backup\Users\alice, on a disk
+                    # that records no owner.
+                    if child.name.casefold() in other_names and directory.name.casefold() in {"users", "home"}:
+                        self.counts["excludedDirectories"] += 1
                         continue
                     # Native OS binary/system trees have dedicated inventories.
                     if directory.parent == directory and child.name in {"proc", "sys", "dev", "run", "bin", "sbin", "lib", "lib64", "usr", "System", "Windows"}:
@@ -573,6 +633,9 @@ class _Discovery:
                         continue
                     try:
                         child_info = child.lstat()
+                        if (getattr(child_info, "st_flags", 0) or 0) & SF_DATALESS:
+                            self.counts["prunedDirectories"] += 1  # Online-only: listing it would download it.
+                            continue
                         if stat.S_ISDIR(child_info.st_mode) and not getattr(child_info, "st_file_attributes", 0) & 0x400:
                             if depth >= 128:
                                 self.counts["truncated"] = True
@@ -596,7 +659,7 @@ class _Discovery:
             if os_name not in {"windows", "macos", "linux"}:
                 raise ValueError("unsupported OS")
             if os_name == "windows":
-                command = [_windows_system_directory() / "tasklist.exe", "/FO", "CSV", "/NH", "/FI", "USERNAME eq " + os.environ["USERNAME"]]
+                command = [_windows_system_directory() / "tasklist.exe", "/FO", "CSV", "/NH", "/FI", "USERNAME eq " + _windows_user()]
             else:
                 command = ["/bin/ps", *(["-x"] if os_name == "macos" else []), "-U", str(os.getuid()), "-o", "comm="]
             text = _system_command(command)
@@ -762,7 +825,8 @@ def _system_sources(os_name, discovery=None, *, environ=None):
         safe = pure is not None and pure.is_absolute() and pure.parent != pure and ".." not in pure.parts and len(value) <= 32768 and "\x00" not in value and not value.startswith(("\\\\", "//"))
         if safe and discovery:
             path = Path(value)
-            safe = not any(path == blocked or blocked in path.parents for blocked in discovery.layout.get("blockedMounts", set()))
+            outside = [*discovery.layout.get("blockedMounts", set()), *(item["root"] for item in discovery.accounts or ())]
+            safe = not any(path == folder or folder in path.parents for folder in outside)
         if safe:
             env[key] = value
         elif discovery:
@@ -897,7 +961,10 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
     if environment["containerIndicators"]:
         source = discovery.source("runtime-context")
         discovery.gap(source, "Container indicators were observed; the outer host filesystem and processes are not verified.")
-    snapshot = collect_scopes(profiles, system_sources=systems, workspaces=projects, scope_type="machine", discovery_gaps=sorted(discovery.gaps), include_installations=True)
+    # Environment overrides and search paths must not lead into other accounts or network disks.
+    outside = [*(item["root"] for item in discovery.accounts or ()), *layout.get("blockedMounts", set())]
+    snapshot = collect_scopes(profiles, system_sources=systems, workspaces=projects, scope_type="machine", discovery_gaps=sorted(discovery.gaps),
+                              include_installations=True, excluded_roots=outside)
     snapshot["startedAt"] = started
     snapshot["completedAt"] = datetime.now(timezone.utc).isoformat()
     snapshot["sources"].extend(discovery.sources)

@@ -63,7 +63,29 @@ def scope(args):
     return home, projects
 
 
+def home_folder():
+    """This account's home from the account database, not the HOME variable."""
+    try:
+        import pwd
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (ImportError, KeyError, OSError):
+        return Path.home()
+
+
+def shown(path):
+    """A path for messages. Under the home folder it starts with ~, so output names no account."""
+    path = Path(path).absolute()
+    try:
+        return str(Path("~") / path.relative_to(home_folder()))
+    except ValueError:
+        return str(path)
+
+
 def open_local(path, enabled):
+    # Without a display, Linux would start a text-mode browser in the foreground and wait.
+    if enabled and sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        enabled = False
+        print("The report is saved. Open report.html in a browser to view it.")
     if enabled:
         try:
             opened = webbrowser.open(path.resolve().as_uri())
@@ -93,21 +115,21 @@ def main(argv=None):
             validate(snapshot)
             if args.command == "collect":
                 write_new(output, json_text(snapshot))
-                print(f"Local evidence: {output.absolute()}")
+                print(f"Local evidence: {shown(output)}")
             else:
                 from .report import render_report
                 summary = summarize(snapshot)
                 html = render_report(snapshot, summary, booking_url=link)
                 shareable = render_report(snapshot, summary, booking_url=link, share=True)
                 # Not the working directory: results must not land inside a project or skill folder.
-                output = output or Path.home() / ("readiness-run-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"))
+                output = output or home_folder() / ("readiness-run-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f"))
                 output.mkdir(mode=0o700)
                 write_new(output / "snapshot.json", json_text(snapshot))
                 write_new(output / "summary.json", json_text(summary))
                 write_new(output / "report.html", html)
                 write_new(output / "share.html", shareable)
-                print(f"Local report: {(output / 'report.html').absolute()}")
-                print(f"Shareable summary (no project or folder names): {(output / 'share.html').absolute()}")
+                print(f"Local report: {shown(output / 'report.html')}")
+                print(f"Shareable summary (no project or folder names): {shown(output / 'share.html')}")
                 print(f"Coverage: {snapshot['status']}. {len(snapshot['findings'])} findings to review. Nothing was sent by the scanner.")
                 open_local(output / "report.html", args.open_report)
         else:
@@ -126,17 +148,19 @@ def main(argv=None):
                 from .governance import RULES_VERSION
                 snapshot["collector"]["rulesVersion"] = RULES_VERSION
                 write_new(args.output, json_text(validate(snapshot)))
-                print(f"Local evaluated evidence: {args.output.absolute()}")
+                print(f"Local evaluated evidence: {shown(args.output)}")
             else:
                 from .report import render_report
                 output = args.output or (args.run_dir or args.report.parent) / ("share-rebuilt.html" if args.share else "report-rebuilt.html")
                 write_new(output, render_report(snapshot, summarize(snapshot), booking_url=link, share=args.share))
-                print(f"Local report: {output.absolute()}")
+                print(f"Local report: {shown(output)}")
                 open_local(output, args.open_report)
         return 0
     except (OSError, ValueError, TypeError, RecursionError) as error:
         # Do not echo raw document contents from parser errors or exception reprs.
-        message = str(error) if isinstance(error, ValueError) else "Could not read or write the requested local artifacts. Check paths and permissions."
+        message = (str(error) if isinstance(error, ValueError)
+                   else "Could not read or write the requested local artifacts. Check paths and permissions." if isinstance(error, OSError)
+                   else "The evidence has an unsupported field type or nesting, so nothing was written.")
         print(f"Palma: {message}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:

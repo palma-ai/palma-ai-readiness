@@ -79,7 +79,22 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(extra.returncode, 2)
             self.assertIn("scripts/palma_scan/json.py", extra.stderr)
             added.unlink()
+            release_root = Path(td)/"extracted/palma-ai-readiness"
+            bytecode = release_root/"scripts/palma_scan/__pycache__/cli.cpython-314.pyc"
+            bytecode.parent.mkdir()
+            bytecode.write_bytes(b"planted")
+            self.assertEqual(subprocess.run(version, capture_output=True, text=True, cwd=td).returncode, 2, "planted bytecode is refused")
+            bytecode.unlink()
+            bytecode.parent.rmdir()
+            linked = release_root/"scripts/palma_scan/linked"
+            linked.symlink_to(Path(td), target_is_directory=True)
+            self.assertEqual(subprocess.run(version, capture_output=True, text=True, cwd=td).returncode, 2, "a linked folder is refused")
+            linked.unlink()
             self.assertEqual(subprocess.run(version, capture_output=True, text=True, cwd=td).returncode, 0)
+            (release_root/"MANIFEST.sha256").unlink()
+            missing = subprocess.run(version, capture_output=True, text=True, cwd=td)
+            self.assertEqual(missing.returncode, 2, "a release without its manifest is refused")
+            self.assertIn("MANIFEST.sha256", missing.stderr)
 
     def test_release_build_stops_when_a_bundled_parser_differs_from_its_reviewed_hash(self):
         with tempfile.TemporaryDirectory() as td:
@@ -97,8 +112,20 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("yaml/loader.py", result.stderr)
             self.assertFalse((Path(td)/"drifted.zip").exists())
 
+    def test_release_stamps_the_entrypoint_and_ships_the_batch_launcher_with_crlf(self):
+        with tempfile.TemporaryDirectory() as td:
+            archive = Path(td)/"release.zip"
+            self.assertEqual(build(archive).returncode, 0)
+            with zipfile.ZipFile(archive) as release:
+                entry = release.read("palma-ai-readiness/scripts/palma-scan.py")
+                launcher = release.read("palma-ai-readiness/scripts/run.cmd")
+        self.assertIn(b"\nRELEASE = True\n", entry)
+        self.assertNotIn(b"\nRELEASE = False\n", entry)
+        self.assertEqual(launcher.count(b"\n"), launcher.count(b"\r\n"))
+
     def test_windows_launcher_needs_no_powershell_policy_change(self):
         commands = [line for line in (ROOT/"scripts/run.cmd").read_text().splitlines() if not line.startswith("rem ")]
+        self.assertIn('set "NoDefaultCurrentDirectoryInExePath=1"', commands, "a py or python in the current folder is never run")
         self.assertFalse([line for line in commands if "powershell" in line.lower() or "executionpolicy" in line.lower()])
         self.assertIn('%palma_exe% -I -S "%~dp0palma-scan.py" run --open %*', commands)
         # cmd variable names ignore case, so the launcher's own variable must not be PALMA_PYTHON.

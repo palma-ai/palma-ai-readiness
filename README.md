@@ -7,8 +7,8 @@ It supports Windows, macOS, and Linux, with no account, enrollment, or backend c
 ## Run on your computer
 
 Download the skill from palma.ai and check it before extracting: the archive's SHA-256
-must match the `.sha256` file published beside it (`shasum -a 256` on macOS, `sha256sum` on
-Linux, `Get-FileHash -Algorithm SHA256` in Windows PowerShell). Extract the **complete skill
+must match the `.sha256` file published beside it (`shasum -a 256 -c palma-ai-readiness.zip.sha256`
+on macOS, `sha256sum -c` on Linux, `Get-FileHash -Algorithm SHA256` in Windows PowerShell). Extract the **complete skill
 folder**. Python **3.11+** is required; parsers are bundled, so there are no packages to
 install or build tools to configure.
 
@@ -34,8 +34,10 @@ The report opens in your browser. Use `--no-open` to keep it closed, `--workspac
 to supplement automatic project discovery, or `--output-dir <new-directory>` to choose
 where results are saved. Otherwise they go in a new `readiness-run-<timestamp>` folder in
 your home folder. You can also double-click `scripts/run.command` on macOS or
-`scripts\run.cmd` on Windows. `PALMA_PYTHON` can select an installed compatible Python
-executable. The scanner refuses to start if a file in the folder differs from its release.
+`scripts\run.cmd` on Windows; if Gatekeeper or SmartScreen blocks it, use the terminal
+command instead rather than removing the quarantine or choosing to run it anyway.
+`PALMA_PYTHON` can select an installed compatible Python executable. The scanner refuses to
+start if the folder differs from its release.
 
 ## Starting from a website or web chat
 
@@ -82,7 +84,7 @@ execute discovered code or change your configuration. You control any sharing.
 Interested in the picture across your team? Palma's separate aggregated view can connect
 recurring tools, exposure patterns, and priorities across participating devices. This skill
 has no upload or aggregation function. An optional `--booking-url <https-url>` adds a
-calendar link when one is supplied.
+link to a palma.ai page when one is supplied.
 
 See [commands](references/commands.md), [rules and coverage](references/risk-rules.md),
 [report design and manual fallback](references/report-design.md), and

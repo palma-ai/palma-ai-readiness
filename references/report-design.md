@@ -182,10 +182,8 @@ file tooling. Preserve stored findings. If safe local output generation is impos
 provide a concise text report following the same reading order and say HTML was not
 created. Do not present a screenshot or hand-written summary as a completed local scan.
 
-If no sanitized snapshot exists, do not paste raw configuration into the model merely to
-reconstruct one. Use available local tooling to extract only typed allowlisted evidence
-without executing config/skill contents. Record exactly which sources were inspected and
-any omitted checks. If collection cannot run on the requested endpoint, explain how the
-person can run the native command. Use `declared-report.md` only for a separately requested
+If no sanitized snapshot exists, do not inspect configuration files manually or paste them
+into the model: they hold credentials and instructions. Give the native run command and
+stop. Use `declared-report.md` only for a separately requested
 session inventory, never as a substitute for the endpoint scan. Unknowns stay
 unknown; never invent scan timestamps, source reads, audit results, or severity evidence.

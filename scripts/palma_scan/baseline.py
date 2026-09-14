@@ -129,8 +129,12 @@ def _version_controlled(path, stop, files, repositories):
     return False
 
 
+MAX_GITIGNORE_RULES = 1000
+
+
 def _repository_patterns(folder, files):
-    """The folder's .gitignore lines if it is a repository root, False if unreadable, else None."""
+    """The folder's compiled .gitignore rules if it is a repository root, False if they cannot
+    be used (unreadable, or more rules than are checked), else None."""
     try:
         marker = files.info(folder / '.git')
     except ReadGap:
@@ -143,24 +147,26 @@ def _repository_patterns(folder, files):
     except ReadGap:
         return False
     try:
-        return files.read(folder / '.gitignore')[0].decode('utf-8', 'replace').splitlines()
+        lines = files.read(folder / '.gitignore')[0].decode('utf-8', 'replace').splitlines()
     except ReadGap as error:
         return [] if error.reason == 'not_found' else False
-
-
-def _git_ignored(parts, patterns):
-    """Whether .gitignore patterns exclude a path or a folder above it; the last match decides."""
     rules = []
-    for line in patterns:
+    for line in lines:
         pattern = line.strip()
         if pattern and not pattern.startswith('#'):
             negate = pattern.startswith('!')
             pattern = pattern.removeprefix('!')
-            rules.append((negate, '/' in pattern.rstrip('/'), pattern.strip('/')))
+            rules.append((negate, '/' in pattern.rstrip('/'), re.compile(fnmatch.translate(pattern.strip('/')))))
+    # Parsed once per repository; a huge ignore file counts as unknown rather than slowing the scan.
+    return rules if len(rules) <= MAX_GITIGNORE_RULES else False
+
+
+def _git_ignored(parts, rules):
+    """Whether .gitignore rules exclude a path or a folder above it; the last match decides."""
     for depth in range(1, len(parts) + 1):
         excluded = False
         for negate, anchored, pattern in rules:
-            if fnmatch.fnmatchcase('/'.join(parts[:depth]) if anchored else parts[depth - 1], pattern):
+            if pattern.match('/'.join(parts[:depth]) if anchored else parts[depth - 1]):
                 excluded = not negate
         if excluded:
             return True  # Git cannot re-include a file below an excluded folder.
@@ -451,7 +457,7 @@ def _add_editor_state(collection, alias):
     if helper is None:
         return
     options = replace(collection.options, max_file_bytes=64 * 1024 * 1024, max_total_bytes=128 * 1024 * 1024)
-    files = SafeFiles([collection.home], Budget(options, time.monotonic()))
+    files = SafeFiles([collection.home], Budget(options, time.monotonic()), account_uid=options.account_uid)
     from .collector import _id
     for record in helper(collection.home, files=files):
         relative = Path(record['relative'])
@@ -471,7 +477,7 @@ def _add_editor_state(collection, alias):
             _collect_in_memory(collection.builder, candidate, data)
     collection.builder.finish()
 
-def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type='machine', discovery_gaps=None, include_installations=False):
+def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type='machine', discovery_gaps=None, include_installations=False, excluded_roots=()):
     from .collector import _Collector, _id, MAX_MANIFESTS
     from .governance import RULES_VERSION
     started = datetime.now(timezone.utc).isoformat()
@@ -506,7 +512,7 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
             candidates += _known_candidates(workspace, 'workspace-' + str(roots.index(workspace) + 1), True)
         if machine and selected:
             env = dict(os.environ) if alias == '~' else {}
-            env, rejected = bounded_environment(env, platform, root)
+            env, rejected = bounded_environment(env, platform, root, excluded_roots)
             for key in rejected:
                 source = {'id': 'src-' + _id('environment-override', alias, key), 'client': 'machine',
                           'scope': 'user', 'location': alias + ': environment override ' + key,
@@ -529,7 +535,8 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
                 candidates += [c for c in installed_client_candidates(root, layout, {}, discover_os_packages=False) if c.path.is_relative_to(root) and c.format != 'registry' and not getattr(c, 'query_status', None)]
         candidates = list({(c.family, c.path, c.role, c.context): c for c in candidates}.values())
         # Dynamic project candidates from original state maps use these roots.
-        options = CollectOptions(home=root, os_name=platform, environ=env, workspaces=assigned, discover_os_packages=machine, max_manifests=MAX_MANIFESTS)
+        options = CollectOptions(home=root, os_name=platform, environ=env, workspaces=assigned, discover_os_packages=machine, max_manifests=MAX_MANIFESTS,
+                                 account_uid=os.getuid() if machine and hasattr(os, 'getuid') else None)
         collection = _LocalCollection(options, ('local', alias), candidates)
         # Initial candidates already contain full workspace layouts. Original
         # state discovery may add further in-scope project roots while running.

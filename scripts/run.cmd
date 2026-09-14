@@ -2,9 +2,15 @@
 rem Double-click launcher. It finds Python 3.11 or newer and saves results in a new
 rem readiness-run folder in your home folder. No PowerShell policy change is needed.
 setlocal
+rem Never run a py or python placed in the current folder, and report the real exit code.
+set "NoDefaultCurrentDirectoryInExePath=1"
+set "ERRORLEVEL="
 set "palma_check=import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)"
 set "palma_exe="
-if defined PALMA_PYTHON set palma_exe="%PALMA_PYTHON%"
+set "palma_custom="
+if defined PALMA_PYTHON set "palma_custom=%PALMA_PYTHON:"=%"
+if defined palma_custom "%palma_custom%" -I -S -c "%palma_check%" >nul 2>&1 && set palma_exe="%palma_custom%"
+if defined palma_custom if not defined palma_exe echo PALMA_PYTHON must name Python 3.11 or newer.& pause & exit /b 2
 if not defined palma_exe py -3 -I -S -c "%palma_check%" >nul 2>&1 && set "palma_exe=py -3"
 if not defined palma_exe python -I -S -c "%palma_check%" >nul 2>&1 && set "palma_exe=python"
 if not defined palma_exe echo Palma needs Python 3.11 or newer. No Python packages are required.& echo If it is already installed, set PALMA_PYTHON to its executable path.& pause & exit /b 2

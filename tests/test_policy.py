@@ -39,10 +39,10 @@ class PolicyTests(unittest.TestCase):
 
     def test_connectors_through_a_palma_gateway_are_governed_and_lookalikes_are_not(self):
         governed = {"space": "https://gateway.palma.ai/mcp", "regional": "https://gateway.eu1.palma.ai/spaces/team/mcp",
-                    "suffixed": "https://gateway-gcp.palma.ai/mcp", "explicit-port": "https://gateway.palma.ai:443/mcp"}
+                    "suffixed": "https://gateway-west.palma.ai/mcp", "explicit-port": "https://gateway.palma.ai:443/mcp"}
         lookalikes = {"cleartext": "http://gateway.palma.ai/mcp", "other-port": "https://gateway.palma.ai:8443/mcp",
                       "suffix-domain": "https://gateway.palma.ai.example.test/mcp", "prefixed": "https://evilgateway.palma.ai/mcp",
-                      "other-host": "https://api.palma.ai/mcp", "similar-domain": "https://gateway.palma-ai.test/mcp",
+                      "other-host": "https://example-other.palma.ai/mcp", "similar-domain": "https://gateway.palma-ai.test/mcp",
                       "trailing-dot": "https://gateway.palma.ai./mcp", "userinfo": "https://team:PRIVATE@gateway.palma.ai/mcp",
                       "backslash": "https://gateway.palma.ai\\@collector.example.test/mcp"}
         servers = {name: {"type": "http", "url": url} for name, url in {**governed, **lookalikes}.items()}

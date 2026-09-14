@@ -56,7 +56,7 @@ class Budget:
 
 
 class SafeFiles:
-    def __init__(self, roots: list[Path], budget: Budget, exact_files=()):
+    def __init__(self, roots: list[Path], budget: Budget, exact_files=(), account_uid=None):
         self.roots = []
         for root in sorted({root.absolute() for root in roots}, key=lambda root: len(root.parts)):
             if root.parent == root or ".." in root.parts:
@@ -65,6 +65,7 @@ class SafeFiles:
                 self.roots.append(root)
         self.exact_files = {path.absolute() for path in exact_files}
         self.budget = budget
+        self.account_uid = account_uid
 
     def _boundary(self, path):
         root = next((root for root in self.roots if path.is_relative_to(root)), None)
@@ -162,6 +163,9 @@ class SafeFiles:
             opened = os.fstat(descriptor)
             if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino):
                 raise ReadGap("io_error", "unreadable")
+            # A hard link can place another account's file inside a scanned folder.
+            if self.account_uid is not None and opened.st_nlink > 1 and opened.st_uid not in {self.account_uid, 0}:
+                raise ReadGap("outside_scope")
             maximum = min(self.budget.options.max_file_bytes, available)
             raw = self._read_bytes(descriptor, maximum)
             self.budget.files_read += 1

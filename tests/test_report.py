@@ -277,19 +277,21 @@ class ReportTests(unittest.TestCase):
     def test_booking_link_optional_and_only_safe_https(self):
         baseline = render_report(snapshot(), {})
         self.assertNotIn('class="booking-link"', baseline)
-        for unsafe in ("javascript:alert(1)", "data:text/html,bad", "http://example.com", "//example.com", "https://user:secret@example.com", "https://example.com\n/path", "https://example.com\\@evil.invalid", "https://example.com:99999", "https://example.com:bad"):
+        for unsafe in ("javascript:alert(1)", "data:text/html,bad", "http://palma.ai", "//palma.ai", "https://user:secret@palma.ai", "https://palma.ai\n/path", "https://palma.ai\\@evil.invalid", "https://palma.ai:99999", "https://palma.ai:bad", "https://calendar.example.com/palma"):
             with self.subTest(url=unsafe):
                 self.assertNotIn('class="booking-link"', render_report(snapshot(), {}, booking_url=unsafe))
-        safe = render_report(snapshot(), {}, booking_url="https://calendar.example.com/palma?view=team&source=report")
-        self.assertIn('href="https://calendar.example.com/palma?view=team&amp;source=report"', safe)
+        safe = render_report(snapshot(), {}, booking_url="https://palma.ai/team?view=team&source=report")
+        self.assertIn('href="https://palma.ai/team?view=team&amp;source=report"', safe)
         self.assertIn('rel="noreferrer noopener" target="_blank">Talk to Palma', safe)
 
     def test_unsafe_reference_links_are_not_rendered(self):
         data = snapshot()
-        data["findings"][1]["references"] = ["javascript:alert(1)", "https://user:secret@example.com", "https://example.com/docs?a=1&b=2"]
+        data["findings"][1]["references"] = ["javascript:alert(1)", "https://user:secret@example.com", "https://example.com/docs?a=1&b=2",
+                                             "https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"]
         document = Document(render_report(data, {}))
         external = [attrs["href"] for tag, attrs in document.tags if tag == "a" and attrs.get("class") not in {"artwork-reference", "regulation-source"} and not attrs["href"].startswith("#")]
-        self.assertEqual(external, ["https://example.com/docs?a=1&b=2"])
+        # Only documentation the bundled rules cite is linked.
+        self.assertEqual(external, ["https://modelcontextprotocol.io/specification/latest/basic/security_best_practices"])
         for tag, attrs in document.tags:
             if tag == "a" and attrs.get("class") == "regulation-source":
                 self.assertTrue(attrs["href"].startswith(("https://ai-act-service-desk.ec.europa.eu/en/", "https://digital-strategy.ec.europa.eu/en/")))
@@ -472,11 +474,11 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(teaser, empty_teaser, "Illustration must not look like invented team results derived from one snapshot")
 
     def test_team_teaser_booking_is_only_the_explicit_optional_destination(self):
-        output = render_report(snapshot(), {}, booking_url="https://calendar.example.com/palma")
+        output = render_report(snapshot(), {}, booking_url="https://palma.ai/team")
         teaser = output.split('<aside class="team-teaser"', 1)[1].split('</aside>', 1)[0]
         links = [attrs for tag, attrs in Document(teaser).tags if tag == "a"]
         self.assertEqual(len(links), 1)
-        self.assertEqual(links[0]["href"], "https://calendar.example.com/palma")
+        self.assertEqual(links[0]["href"], "https://palma.ai/team")
         self.assertNotIn("Interested in the team view?", teaser)
 
     def test_supported_client_icons_have_text_and_only_observed_clients_are_listed(self):
