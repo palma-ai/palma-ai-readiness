@@ -60,6 +60,14 @@ sources, observations, and findings. IDs link records within the artifact; no pe
 device identity or organization metadata is needed. Evidence distinguishes installation,
 configuration, cached state, and observed runtime activity.
 
+Each declaration is recorded once. Identical copies in other files (git worktrees, desktop
+agent session copies, cached plugin versions) merge into one observation: `locations`
+lists where it is declared and `copyCount` counts the merged declarations. Copies whose
+content, state or applicability differ stay separate. Each AI client is one observation
+with its installed `versions`, `processObserved` and the `projectCount` of projects that
+configure it. Sources are kept when they back evidence or record a read problem;
+`coverage.sourcesInspected` counts every source read.
+
 On POSIX, new result directories use `0700` and files `0600`; Windows access depends on
 the destination ACL. Use a private folder. Secrets and raw configuration are excluded,
 but artifacts still describe your AI environment.

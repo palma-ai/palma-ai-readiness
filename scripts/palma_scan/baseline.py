@@ -25,6 +25,7 @@ from .engine.paths import installation_candidates, bounded_environment
 from .engine.parsing import validate_tree, ParseError
 from .engine.filesystem import SafeFiles, Budget, ReadGap
 from .engine.adapters.configs import collect_config, collect_cached_settings
+from .dedup import collapse_declarations
 
 
 def _extra():
@@ -310,6 +311,8 @@ def _merge(collector, collection, alias, workspaces):
             name = kind.title()
             if kind == 'client':
                 details.update(installationState=old.get('installationState', 'config_only'), activation='installed' if old.get('installationState') == 'installed' else 'present', variant=old.get('variant', 'unknown'), authModes=old.get('authModes', ['unknown']), authEvidence=old.get('authEvidence', 'unknown'))
+                if old.get('projectScoped'):
+                    details['projectScoped'] = True  # Aggregated into the client row's project count.
                 version = _safe_version(old.get('version'))
                 if version:
                     details['version'] = version
@@ -358,6 +361,8 @@ def _merge(collector, collection, alias, workspaces):
                 continue
             item = collector.observe(source, kind, name, details, enabled, discriminator='engine:' + old['id'])
             item['id'] = 'obs-' + _id('engine', alias, old['id'])
+            if kind == 'agent' or (kind == 'plugin' and old.get('installationState') in {'cached', 'installed'}):
+                item['_content'] = builder.content.get(old['sourceId'])
     if failed:
         # A source that failed in any pass contributes no rows at all.
         collector.observations[:] = [item for item in collector.observations if item['sourceId'] not in failed]
@@ -485,11 +490,17 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         collection.builder.finish()
         _merge(collector, collection, 'system', roots)
     # Shared graph edges and repeated candidates resolve to one deterministic row.
-    sources = list({s['id']: s for s in collector.sources}.values())
-    observations = list({o['id']: o for o in collector.observations}.values())
+    observations = collapse_declarations(list({o['id']: o for o in collector.observations}.values()))
+    # Keep sources that back evidence or record a problem. An absent candidate path is the
+    # normal case, and a file that was read without yielding evidence (or whose declaration
+    # merged into another copy, which lists its location) is only counted.
+    referenced = {item['sourceId'] for item in observations}
+    candidates = list({s['id']: s for s in collector.sources}.values())
+    inspected = sum(1 for s in candidates if s['status'] == 'collected')
+    sources = [s for s in candidates if s['id'] in referenced or s['status'] in {'error', 'skipped'}]
     # A parent withdrawn with a failed source must not leave dangling links behind.
     identities = {item['id'] for item in observations}
     for item in observations:
         if 'parentId' in item['details'] and item['details']['parentId'] not in identities:
             del item['details']['parentId']
-    return {'schemaVersion': '2.0', 'collector': {'name': 'palma-ai-readiness', 'version': __version__, 'rulesVersion': RULES_VERSION}, 'mode': 'endpoint', 'startedAt': started, 'completedAt': datetime.now(timezone.utc).isoformat(), 'status': 'partial' if collector.gaps else 'complete', 'scope': {'type': scope_type, 'workspaceCount': len(roots), 'profileCount': len(selected)}, 'sources': sources, 'observations': observations, 'coverage': {'limitations': sorted(collector.gaps)}}
+    return {'schemaVersion': '2.0', 'collector': {'name': 'palma-ai-readiness', 'version': __version__, 'rulesVersion': RULES_VERSION}, 'mode': 'endpoint', 'startedAt': started, 'completedAt': datetime.now(timezone.utc).isoformat(), 'status': 'partial' if collector.gaps else 'complete', 'scope': {'type': scope_type, 'workspaceCount': len(roots), 'profileCount': len(selected)}, 'sources': sources, 'observations': observations, 'coverage': {'limitations': sorted(collector.gaps), 'sourcesInspected': inspected}}

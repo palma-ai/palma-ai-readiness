@@ -17,7 +17,7 @@ def main():
              "scripts/palma-scan.py", "scripts/run.sh", "scripts/run.ps1",
              "scripts/run.command", "scripts/run.cmd",
              *[f"scripts/palma_scan/{name}.py" for name in
-               ("__init__", "cli", "model", "collector", "rules", "report", "machine",
+               ("__init__", "cli", "model", "collector", "dedup", "rules", "report", "machine",
                 "baseline", "extra_clients", "brands_extra", "governance", "report_theme", "report_font", "report_regulation")],
              "scripts/palma_scan/palma_catalog.json",
              *[f"scripts/palma_scan/engine/{name}.py" for name in

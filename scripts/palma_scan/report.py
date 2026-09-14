@@ -650,7 +650,9 @@ def render_report(snapshot: dict, summary: dict, *, booking_url: str | None = No
         source_anchors.setdefault(_text(source.get("id", "")), _anchor("source", index, source.get("id", "")))
     observation_map = {_text(item.get("id", "")): item for item in observations}
     kind_counts = Counter(_text(item.get("kind", "other")) for item in observations)
-    collected = sum(item.get("status") == "collected" for item in sources)
+    coverage_record = snapshot.get("coverage") if isinstance(snapshot.get("coverage"), dict) else {}
+    inspected = coverage_record.get("sourcesInspected")
+    collected = inspected if type(inspected) is int and inspected >= 0 else sum(item.get("status") == "collected" for item in sources)
     scope = snapshot.get("scope") if isinstance(snapshot.get("scope"), dict) else {}
     scope_type = _text(scope.get("type", "Scope not recorded"))
     scope_name = {"machine": "Your account on this computer", "copied-home": "Copied home", "current-user": "Current user", "user": "Current user", "endpoint": "Current user", "declared": "Current session"}.get(scope_type, _label(scope_type))

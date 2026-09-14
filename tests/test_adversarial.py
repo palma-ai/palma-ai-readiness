@@ -184,14 +184,13 @@ class CollectorAdversarialTests(unittest.TestCase):
             self.put(base + "/Code/User/settings.json", {"chat.tools.global.autoApprove": False})
             self.put(base + "/Code - Insiders/User/mcp.json", {"servers": {"example": {"type": "http", "url": "https://example.invalid/mcp"}}})
         snapshot = self.scan()
-        collected = {item["location"] for item in snapshot["sources"] if item["status"] == "collected"}
-        for base in roots:
-            self.assertIn("~/" + base + "/Code/User/settings.json", collected)
-            self.assertIn("~/" + base + "/Code - Insiders/User/mcp.json", collected)
         settings = [item for item in snapshot["observations"] if item["kind"] == "setting"]
         mcps = [item for item in snapshot["observations"] if item["kind"] == "mcp"]
-        self.assertEqual(len(settings), len(roots))
-        self.assertEqual(len(mcps), len(roots))
+        # Identical declarations in each platform layout are one declaration in three places.
+        for items, filename in ((settings, "Code/User/settings.json"), (mcps, "Code - Insiders/User/mcp.json")):
+            self.assertEqual(len(items), 1)
+            self.assertEqual(items[0]["details"]["locationCount"], len(roots))
+            self.assertEqual(set(items[0]["details"]["locations"]), {"~/" + base + "/" + filename for base in roots})
 
     def test_duplicate_and_malformed_config_sources_do_not_echo_private_values(self):
         self.put(".claude/settings.json", '{"permissions":{"defaultMode":"default","defaultMode":"PRIVATE_DUPLICATE_CANARY"}}')

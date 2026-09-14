@@ -12,6 +12,7 @@ import re
 import stat
 from urllib.parse import parse_qsl, urlsplit
 
+from .dedup import content_digest, merge_clients
 from .engine.redaction import Redactor
 
 MAX_MANIFESTS = 20000
@@ -533,7 +534,8 @@ class _Collector:
             details.update(_provider_metadata(entry))
             if type(entry.get("sandboxEnabled")) is bool:
                 details["sandboxConfigured"] = entry["sandboxEnabled"]
-            self.observe(source, "mcp", display_name, details, enabled, context + ":" + item_id)
+            item = self.observe(source, "mcp", display_name, details, enabled, context + ":" + item_id)
+            item["_content"] = content_digest(entry)
             if transport == "unknown" or (url is not None and endpoint["endpointScope"] == "unknown"):
                 source.setdefault("issueKind", "uninterpreted-mcp-transport")
                 self.gap(source, "an MCP transport or endpoint could not be interpreted", "error")
@@ -559,7 +561,8 @@ class _Collector:
             if isinstance(hook_locations, dict) and hook_locations:
                 state = "disabled" if _get(data, "chat.useHooks") is False or all(value is False for value in hook_locations.values()) else "unknown"
                 names = [self.display_text(name) for name in sorted(hook_locations)]
-                self.observe(source, "hook", "Hooks: " + ", ".join(names), {"activation": "configured", "context": context, "auditStatus": "not-assessed", "configuredLocations": names, "typeCounts": {"configuredLocations": len(hook_locations)}}, state)
+                item = self.observe(source, "hook", "Hooks: " + ", ".join(names), {"activation": "configured", "context": context, "auditStatus": "not-assessed", "configuredLocations": names, "typeCounts": {"configuredLocations": len(hook_locations)}}, state)
+                item["_content"] = content_digest(hook_locations)
         hooks = data.get("hooks", {})
         if isinstance(hooks, dict) and hooks:
             # Event names identify the declaration; command and prompt bodies stay private.
@@ -576,11 +579,13 @@ class _Collector:
             state = "disabled" if data.get("disableAllHooks") is True or _get(data, "features.hooks") is False else "unknown"
             if sum(counts.values()):
                 events = [self.display_text(event) for event in sorted(hooks)]
-                self.observe(source, "hook", "Hooks: " + ", ".join(events), {"events": events, "declaration": "hooks", "typeCounts": counts, "activation": "configured", "auditStatus": "not-assessed", "context": context}, state)
+                item = self.observe(source, "hook", "Hooks: " + ", ".join(events), {"events": events, "declaration": "hooks", "typeCounts": counts, "activation": "configured", "auditStatus": "not-assessed", "context": context}, state)
+                item["_content"] = content_digest(hooks)
             else:
                 self.gap(source, "a declared hook block had no interpretable handler entries")
         if isinstance(data.get("notify"), list) and data["notify"]:
-            self.observe(source, "hook", "Configured notification command", {"typeCounts": {"command": 1}, "activation": "configured", "auditStatus": "not-assessed", "context": context})
+            item = self.observe(source, "hook", "Configured notification command", {"typeCounts": {"command": 1}, "activation": "configured", "auditStatus": "not-assessed", "context": context})
+            item["_content"] = content_digest(data["notify"])
 
     def state(self, root, source, data):
         projects = data.get("projects")
@@ -643,4 +648,6 @@ def collect(home: Path, workspaces=None, *, scope_type="current-user") -> dict:
     roots = list(dict.fromkeys(Path(path).absolute() for path in (workspaces or [])))
     if any(not path.is_dir() or path.parent == path for path in roots):
         raise ValueError("workspace must be a directory, never a filesystem root")
-    return collect_scopes([{"root": home, "alias": "~"}], workspaces=roots, scope_type=scope_type)
+    snapshot = collect_scopes([{"root": home, "alias": "~"}], workspaces=roots, scope_type=scope_type)
+    snapshot["observations"] = merge_clients(snapshot["observations"])
+    return snapshot

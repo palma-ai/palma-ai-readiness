@@ -14,6 +14,8 @@ import stat
 import time
 from urllib.parse import urlsplit
 
+from .dedup import content_digest
+
 # Primary documentation and schemas checked when adding these adapters. These
 # URLs are references for report readers, never collection or upload endpoints.
 SOURCE_REFERENCES = {
@@ -495,10 +497,11 @@ def _opencode(collector, source, data):
             agent_id = "agent-" + _opaque(name)
             disabled_key = "disable" if version == "v1" else "disabled"
             enabled = "disabled" if agent.get(disabled_key) is True else "unknown"
-            collector.observe(source, "agent", name,
-                              {"activation": "configured", "auditStatus": "not-assessed", "context": context,
-                               "itemId": agent_id, "schema": version, "declaration": collector.declaration(field, name)},
-                              enabled, "extra:" + field + ":" + agent_id)
+            item = collector.observe(source, "agent", name,
+                                     {"activation": "configured", "auditStatus": "not-assessed", "context": context,
+                                      "itemId": agent_id, "schema": version, "declaration": collector.declaration(field, name)},
+                                     enabled, "extra:" + field + ":" + agent_id)
+            item["_content"] = content_digest(agent)
             key = "permission" if version == "v1" else "permissions"
             if key in agent:
                 _opencode_permissions(collector, source, agent[key], version=version, context=context + ":" + version + ":" + agent_id, enabled=enabled)

@@ -263,7 +263,9 @@ class CollectorTests(unittest.TestCase):
         for relative in ("Library/Application Support/Code/User/mcp.json", "AppData/Roaming/Code/User/mcp.json", ".config/Code/User/mcp.json"):
             self.put(relative, {"servers": {"demo": {"command": "node"}}})
         result = collect(self.home)
-        self.assertEqual(len(self.items(result, "mcp")), 3)
+        mcps = self.items(result, "mcp")
+        self.assertEqual(len(mcps), 1)
+        self.assertEqual(mcps[0]["details"]["locationCount"], 3)
 
     def test_environment_placeholders_and_windsurf_file_refs_are_not_literals(self):
         self.put(".codeium/windsurf/mcp_config.json", {"mcpServers": {"demo": {"command": "node", "env": {"API_KEY": "${file:/DO_NOT_READ}", "TOKEN": "$TOKEN", "PASSWORD": "<your-token>"}}}})
@@ -373,7 +375,10 @@ class CollectorTests(unittest.TestCase):
             roots.append(root)
         result = collect_scopes([], workspaces=roots)
         self.assertEqual(result["scope"]["workspaceCount"], 18)
-        self.assertEqual(len(self.items(result, "setting")), 18)
+        settings = self.items(result, "setting")
+        self.assertEqual(len(settings), 1)
+        self.assertEqual(settings[0]["details"]["locationCount"], 18)
+        self.assertEqual(len(set(settings[0]["details"]["locations"])), 18)
 
     def test_targeted_plugin_layout_collects_packaged_skills_agents_and_mcp(self):
         relative = ".codex/plugins/cache/market/PRIVATE_PLUGIN/1.0.0"

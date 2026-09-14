@@ -794,6 +794,7 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
     home directories. Other accounts are never opened.
     """
     from .collector import collect_scopes
+    from .dedup import merge_clients
     if any(type(value) is not int or value < 1 for value in (directory_limit, entry_limit, seconds)):
         raise ValueError("Machine discovery budgets must be positive integers.")
     started = datetime.now(timezone.utc).isoformat()
@@ -818,7 +819,8 @@ def collect_machine(workspaces=None, *, directory_limit=DEFAULT_DIRECTORY_LIMIT,
     snapshot["startedAt"] = started
     snapshot["completedAt"] = datetime.now(timezone.utc).isoformat()
     snapshot["sources"].extend(discovery.sources)
-    snapshot["observations"].extend(discovery.observations)
+    snapshot["coverage"]["sourcesInspected"] = snapshot["coverage"].get("sourcesInspected", 0) + sum(item["status"] == "collected" for item in discovery.sources)
+    snapshot["observations"] = merge_clients(snapshot["observations"] + discovery.observations)
     snapshot["scope"].update(platform=layout["os"], profileCount=len(profiles), workspaceCount=len(projects), discovery=discovery.counts, environment=environment)
     if discovery.gaps or any(item["status"] in {"error", "skipped"} for item in discovery.sources):
         snapshot["status"] = "partial"

@@ -82,6 +82,9 @@ def validate(snapshot):
     if not isinstance(snapshot["coverage"].get("limitations"), list) or not all(
             isinstance(item, str) for item in snapshot["coverage"]["limitations"]):
         raise ValueError("Snapshot coverage.limitations must be a list of text.")
+    inspected = snapshot["coverage"].get("sourcesInspected", 0)
+    if type(inspected) is not int or inspected < 0:
+        raise ValueError("Snapshot coverage.sourcesInspected must be a non-negative integer.")
     if snapshot["scope"].get("type") not in {"machine", "current-user", "copied-home", "declared"}:
         raise ValueError("Snapshot has an unsupported scope type.")
     if snapshot["mode"] == "declared" and (snapshot["status"] != "partial" or snapshot["scope"]["type"] != "declared"):
@@ -140,11 +143,13 @@ def summarize(snapshot):
     counts["client"] = len({item["client"].casefold() for item in snapshot["observations"] if item["kind"] == "client"})
     severity = Counter(item["severity"] for item in snapshot["findings"])
     coverage = Counter(item["status"] for item in snapshot["sources"])
+    inspected = snapshot["coverage"].get("sourcesInspected")
+    coverage["collected"] = inspected if type(inspected) is int else coverage["collected"]
     return {"schemaVersion": "2.0", "mode": snapshot["mode"], "status": snapshot["status"],
             "scope": snapshot["scope"]["type"],
             "counts": {kind: counts[kind] for kind in KINDS},
             "findings": {level: severity[level] for level in SEVERITIES},
-            "coverage": {state: coverage[state] for state in ("collected", "missing", "skipped", "error")},
+            "coverage": {state: coverage[state] for state in ("collected", "skipped", "error")},
             "limitationCount": len(snapshot["coverage"]["limitations"])}
 
 

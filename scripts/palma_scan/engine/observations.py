@@ -1,5 +1,6 @@
 """Build a referentially complete report with bounded source/observation slots."""
 from datetime import datetime, timezone
+import hashlib
 
 from .filesystem import ReadGap
 from .identity import fingerprint
@@ -30,6 +31,10 @@ class ReportBuilder:
         self.mcp_documents = []
         self.component_parents = {}
         self.manifests_seen = 0
+        # SHA-256 of each file read, used only to recognize identical copies of a
+        # declaration in memory. Never exported: a digest of a small file that holds
+        # a secret could be tested against guesses.
+        self.content: dict[str, str] = {}
 
     def context_id(self, candidate):
         return fingerprint(self.namespace, candidate.family, candidate.context)
@@ -59,6 +64,7 @@ class ReportBuilder:
         dropped = [self.sources.pop(identity) for identity in list(self.sources) if identity not in known]
         for source in dropped:
             self.documents.pop(source["id"], None)
+            self.content.pop(source["id"], None)
         return dropped
 
     def probe_document(self, candidate):
@@ -99,6 +105,7 @@ class ReportBuilder:
             self.documents.pop(identity, None)
             self.candidates.pop(identity, None)
             self.component_parents.pop(identity, None)
+            self.content.pop(identity, None)
         for identity in [identity for identity in self.observations if identity not in observations]:
             del self.observations[identity]
         self.clients = {context: client for context, client in self.clients.items() if client["id"] in self.observations}
@@ -134,6 +141,7 @@ class ReportBuilder:
         try:
             raw, info = self.files.read(candidate.path)
             self.file_metadata(candidate, source, info)
+            self.content[source["id"]] = hashlib.sha256(raw).hexdigest()
             return source, raw
         except ReadGap as error:
             source.update(status=error.status, reason=error.reason)
@@ -189,7 +197,8 @@ class ReportBuilder:
                   "kind": "client", "name": NAMES.get(candidate.family, candidate.family), "family": candidate.family,
                   "variant": variant, "version": version,
                   "installationState": "installed" if installed else "config_only",
-                  "authModes": ["unknown"], "authEvidence": "unknown"}
+                  "authModes": ["unknown"], "authEvidence": "unknown",
+                  "projectScoped": candidate.context.startswith("project:")}
         self.clients[context] = client
         self.observations[client["id"]] = client
         return client

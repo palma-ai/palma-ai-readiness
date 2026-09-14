@@ -26,7 +26,7 @@ class ReleaseTests(unittest.TestCase):
                                  "scripts/palma_scan/report_theme.py", "scripts/palma_scan/report_font.py",
                                  "scripts/palma_scan/report_regulation.py", "references/eu-ai-regulation.md",
                                  "scripts/palma_scan/governance.py", "scripts/palma_scan/palma_catalog.json",
-                                 "scripts/palma_scan/baseline.py", "scripts/palma_scan/machine.py",
+                                 "scripts/palma_scan/baseline.py", "scripts/palma_scan/machine.py", "scripts/palma_scan/dedup.py",
                                  "scripts/palma_scan/extra_clients.py", "scripts/palma_scan/brands_extra.py",
                                  "scripts/palma_scan/engine/collection.py",
                                  "scripts/palma_scan/engine/adapters/plugin_components.py",
