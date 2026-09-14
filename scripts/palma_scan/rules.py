@@ -33,7 +33,7 @@ def _finding(rule_id, title, severity, category, observations, summary, impact, 
 
 def _active(item):
     details = item.get("details", {})
-    return item.get("enabled") != "disabled" and not details.get("shadowedBySelectedProfile") and details.get("context") != "cached" and details.get("interpretation") != "inventory-only" and not details.get("applicability")
+    return governance.applies(item) and details.get("interpretation") != "inventory-only" and not details.get("applicability")
 
 
 def _additional(snapshot: dict) -> list[dict]:

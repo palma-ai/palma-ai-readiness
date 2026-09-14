@@ -58,7 +58,57 @@ class MarketplacePolicyTests(unittest.TestCase):
         result = self.scan()
         self.assertTrue(all(x['details'].get('sourceTrust') == 'unresolved' for x in self.artifacts(result)))
         ids = {x['id'] for x in self.artifacts(result)}
-        self.assertTrue(any(x['severity'] == 'critical' and ids <= set(x['observationIds']) for x in result['findings']))
+        # Unknown provenance is a verification task (High), not a known-unapproved source (Critical).
+        [finding] = [x for x in result['findings'] if x['ruleId'] == 'artifacts-unresolved-source']
+        self.assertEqual(finding['severity'], 'high')
+        self.assertTrue(ids <= set(finding['observationIds']))
+        self.assertIn('could not be resolved locally', finding['summary'])
+        self.assertFalse(any(x['ruleId'] == 'artifacts-unapproved-marketplace' for x in result['findings']))
+        self.assertFalse(any(x['ruleId'] == 'skills-local-unreviewed' for x in result['findings']))
+
+    def test_declared_source_outside_the_allowlist_is_critical(self):
+        self.plugin('claude', 'claude-plugins-official')
+        self.write('.claude/plugins/known_marketplaces.json', {'claude-plugins-official': {'source': {'source': 'github', 'repo': 'other/claude-plugins-official'}}})
+        result = self.scan()
+        ids = {x['id'] for x in self.artifacts(result)}
+        [finding] = [x for x in result['findings'] if x['ruleId'] == 'artifacts-unapproved-marketplace']
+        self.assertEqual(finding['severity'], 'critical')
+        self.assertTrue(ids <= set(finding['observationIds']))
+        self.assertFalse(any(x['ruleId'] == 'artifacts-unresolved-source' for x in result['findings']))
+
+    def test_codex_bundled_system_skills_are_allowlisted_only_with_their_marker(self):
+        self.write('.codex/skills/.system/skill-creator/SKILL.md', '---\nname: skill-creator\n---\nBundled fixture')
+        self.write('.codex/skills/mine/SKILL.md', '---\nname: mine\n---\nLocal fixture')
+        result = self.scan()
+        skills = {x['name']: x for x in result['observations'] if x['kind'] == 'skill'}
+        self.assertNotEqual(skills['skill-creator']['details'].get('sourceTrust'), 'allowlisted', 'a .system folder alone is not evidence')
+        marker = '.codex/skills/.system/.codex-system-skills.marker'
+        self.write(marker, 'c0ffee1234abcdef\n')
+        result = self.scan()
+        skills = {x['name']: x for x in result['observations'] if x['kind'] == 'skill'}
+        self.assertEqual((skills['skill-creator']['details'].get('sourceTrust'), skills['skill-creator']['details'].get('sourcePolicyId')),
+                         ('allowlisted', 'openai-codex-system-skills'))
+        self.assertEqual(skills['skill-creator']['details']['auditStatus'], 'not-assessed')
+        self.assertIsNone(skills['mine']['details'].get('sourceTrust'))
+        findings = {x['ruleId']: x for x in result['findings']}
+        self.assertEqual(findings['skills-local-unreviewed']['observationIds'], [skills['mine']['id']])
+        self.assertEqual(findings['skills-local-unreviewed']['title'], 'Local skills without a recorded review')
+        self.assertIn(skills['skill-creator']['id'], findings['artifacts-allowlisted-source']['observationIds'])
+        self.assertNotIn('c0ffee1234abcdef', json.dumps(result), 'the marker value is never exported')
+        self.write(marker, '<html>not a marker</html>')
+        result = self.scan()
+        skills = {x['name']: x for x in result['observations'] if x['kind'] == 'skill'}
+        self.assertNotEqual(skills['skill-creator']['details'].get('sourceTrust'), 'allowlisted')
+
+    def test_a_system_skills_folder_inside_a_project_cannot_launder_a_skill(self):
+        self.write('code/app/.codex/skills/.system/evil/SKILL.md', '---\nname: evil\n---\nSpoofed fixture')
+        self.write('code/app/.codex/skills/.system/.codex-system-skills.marker', 'deadbeef\n')
+        with patch('subprocess.Popen', side_effect=AssertionError('no process')):
+            result = collect(self.home, [self.home / 'code/app'], scope_type='copied-home')
+        result['findings'] = evaluate(result)
+        [skill] = [x for x in result['observations'] if x['kind'] == 'skill']
+        self.assertNotEqual(skill['details'].get('sourceTrust'), 'allowlisted')
+        self.assertIn(skill['id'], next(x for x in result['findings'] if x['ruleId'] == 'skills-local-unreviewed')['observationIds'])
 
     def test_lookalike_and_url_tricks_do_not_match_an_allowlisted_origin(self):
         self.plugin('claude', 'claude-plugins-official')

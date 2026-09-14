@@ -183,7 +183,8 @@ class SummaryTests(Home):
         self.put(".cursor/mcp.json", {"mcpServers": {"PRIVATE_SERVER_NAME": {"command": "node"}}})
         summary = model.summarize(self.scan())
         self.assertTrue(summary["priorities"])
-        self.assertEqual(set(summary["priorities"][0]), {"severity", "title", "ruleId", "declarations", "clients", "recommendation"})
+        self.assertEqual(set(summary["priorities"][0]), {"severity", "title", "ruleId", "declarations", "applies", "clients", "recommendation"})
+        self.assertEqual(summary["priorities"][0]["applies"], 1)
         self.assertNotIn("PRIVATE_SERVER_NAME", json.dumps(summary))
 
     def test_snapshot_input_is_size_limited(self):

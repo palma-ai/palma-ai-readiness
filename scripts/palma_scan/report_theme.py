@@ -79,6 +79,12 @@ pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px
 .regulation-tile[data-review-state="missing-evidence"]>summary,.regulation-tile[data-review-state="review-required"]>summary { background: #fff9ef }
 .regulation-tile[data-review-state="missing-evidence"] .regulation-unknown { color: #895117 }
 .regulation-review-label { display: block; margin-top: 6px; color: #895117; font-size: 12px; font-weight: 600 }
+/* Without a governance layer the areas are called out as not covered, not merely unassessed. */
+.regulation-heading[data-status="not-covered"] .regulation-status { color: #8f2a2a; background: #fdeeee; border-color: #efc7c7 }
+.regulation-tile[data-review-state="not-covered"] { border-color: #e6b8b8 }
+.regulation-tile[data-review-state="not-covered"]>summary { background: #fff3f3 }
+.regulation-tile[data-review-state="not-covered"] .regulation-unknown,.regulation-tile[data-governance="none"] .regulation-review-label { color: #a13232 }
+.regulation-governance { margin: 0 0 18px; padding: 12px 14px; border: 1px solid #efc7c7; border-radius: 10px; background: #fff3f3; color: #7a2626; font-size: 13px }
 @media(max-width:960px) {
   .regulation-tiles { grid-template-columns: repeat(2,minmax(0,1fr)) }.regulation-tile>summary { min-height: 167px }
 }

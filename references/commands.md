@@ -101,7 +101,7 @@ assistant handling a machine-scan request should acquire the released skill firs
 | --- | --- | --- |
 | `run` | Local discovery for the signed-in account | New directory with evidence, summary, local report and shareable summary |
 | `collect --output FILE` | Same discovery as run | New snapshot with evidence and evaluated findings |
-| `summary --report FILE` | Saved snapshot | Counts, coverage and `priorities` (rule text only, no scanned names) on stdout, or `--output FILE` |
+| `summary --report FILE` | Saved snapshot | Counts, coverage and `priorities` (rule text, declaration and applies-as-written counts, no scanned names) on stdout, or `--output FILE` |
 | `report --report FILE --output FILE` | Saved snapshot | New self-contained HTML report; `--share` renders the shareable summary |
 | `evaluate --report FILE --output FILE` | Saved endpoint snapshot | New snapshot evaluated with the bundled rules |
 

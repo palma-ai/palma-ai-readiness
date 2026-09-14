@@ -6,6 +6,9 @@ copies of MCP configuration; plugin caches keep every downloaded version. Record
 observation per file multiplied every inventory count and finding. Copies whose kind,
 client, name, state, typed facts and content are identical become one observation that
 lists where it is declared. Anything that differs, including content, stays separate.
+A hook with identical handlers also merges across the user and project layers: the
+same notification command in a user file and a project file is one command to review.
+A cached or managed policy copy of a hook stays a separate declaration.
 """
 import hashlib
 import json
@@ -14,6 +17,8 @@ import re
 MAX_LOCATIONS = 100
 # Detail fields that identify one copy's position rather than what it declares.
 _PER_COPY = frozenset({"contextId", "parentId", "declaration", "profileId", "locations", "locationCount", "copyCount"})
+# Layers whose identical hook declarations describe one command; other contexts stay apart.
+_LOCAL_LAYERS = frozenset({"base", "project"})
 # Their typed facts do not capture everything that matters, so identical copies also need
 # identical content. Without a content digest such observations are never merged.
 _CONTENT_REQUIRED = frozenset({"mcp", "hook", "agent"})
@@ -34,6 +39,8 @@ def _order(item):
 
 def _key(item, malformed):
     details = {key: value for key, value in item.get("details", {}).items() if key not in _PER_COPY}
+    if item["kind"] == "hook" and details.get("context") in _LOCAL_LAYERS:
+        details["context"] = "local"
     content = details.get("digest") if item["kind"] == "skill" else item.get("_content")
     # Credential counts alone cannot tell two different secrets apart.
     credential = type(details.get("literalCredentialCount")) is int and details["literalCredentialCount"] > 0

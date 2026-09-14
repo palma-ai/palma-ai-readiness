@@ -462,12 +462,23 @@ def _facts(item: dict) -> list[str]:
             add({"all": "No approval before tool use", "none": "Asks before tool use"}.get(approval, "Approval setting not recorded"), "risk" if approval == "all" else "")
         elif approval == "all":
             add("No approval before tool use", "risk")
-        if details.get("inlineCredentialPresent") is True or _count(details.get("literalCredentialCount")):
+        stored = details.get("inlineCredentialPresent") is True or _count(details.get("literalCredentialCount"))
+        if stored:
             add("Credential stored in the file", "risk")
         auth = {"bearer_header": "Fixed secret", "static_header": "Fixed secret", "oauth_declared": "OAuth sign-in",
                 "environment_reference": "Secret from environment"}.get(details.get("auth"))
+        if auth == "Fixed secret" and details.get("authSecretByReference") is True:
+            auth = "Fixed secret supplied by reference"
         if auth:
             add(auth)
+        if details.get("toolAllowlistConfigured") is True:
+            add("Tool allowlist configured")
+        if details.get("toolDenylistConfigured") is True:
+            add("Tool denylist configured")
+        if details.get("packageEnabled") == "disabled":
+            add("Plugin pack switched off")
+        if details.get("packageState") == "cached":
+            add("Plugin pack cached, no installation record")
         if details.get("unversionedPackage") is True:
             add("Unpinned package version")
         if details.get("configurationIssue"):
@@ -801,6 +812,9 @@ def _evidence(finding: dict, observations: dict[str, dict], share: bool) -> str:
     distinct = finding.get("distinct")
     if type(distinct) is int and distinct > 0:
         extent += f'<span>{distinct} distinct</span>'
+    applying = finding.get("applies")
+    if type(applying) is int and applying >= 0 and type(declarations) is int and declarations > 0:
+        extent += f'<span>{applying} {"applies" if applying == 1 else "apply"} as written</span>'
     rating_reason = finding.get("ratingReason")
     rating = f'<div class="impact rating-reason"><h4>Priority rationale</h4><p>{_e(rating_reason)}</p></div>' if isinstance(rating_reason, str) and rating_reason else ""
     count = _plural(len(rows), "item", "items")

@@ -38,7 +38,7 @@ class SettingSemanticsTests(unittest.TestCase):
                 self.assert_collected(snapshot, ("disableAllHooks", "chat.useHooks", "features.hooks", "features.codex_hooks"))
                 self.assertNotIn("hooks-declared", findings)
 
-    def test_disabled_and_cached_hook_handlers_retain_high_review_priority(self):
+    def test_disabled_and_cached_hook_handlers_keep_their_evidence_at_info_priority(self):
         hook = {"PreToolUse": [{"hooks": [{"type": "command", "command": "PRIVATE_HANDLER"}]}]}
         snapshot, findings = self.scan({
             ".claude/settings.json": {"disableAllHooks": True, "hooks": hook},
@@ -46,7 +46,10 @@ class SettingSemanticsTests(unittest.TestCase):
             ".config/Code/User/settings.json": {"chat.useHooks": False, "chat.hookFilesLocations": {"./hooks.json": True}},
         })
         finding = findings["hooks-declared"]
-        self.assertEqual(finding["severity"], "high")
+        # No handler applies as written: the declarations stay in evidence, the priority does not.
+        self.assertEqual((finding["severity"], finding["baselineSeverity"], finding["applies"]), ("info", "medium", 0))
+        self.assertIn("switched off", finding["summary"])
+        self.assertIn("in a cached policy copy", finding["summary"])
         self.assertTrue(any(item["value"]["observedState"] == "disabled" for item in finding["evidence"]))
         self.assertTrue(any(item["value"]["context"] == "cached" for item in finding["evidence"]))
         self.assertTrue({"disableAllHooks", "chat.useHooks"}.isdisjoint(item["key"] for item in finding["evidence"]))

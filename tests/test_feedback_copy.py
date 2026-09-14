@@ -55,36 +55,57 @@ class FeedbackCopyTests(unittest.TestCase):
                 self.assertNotIn(location, summary)
                 self.assertIn(location, evidence)
 
-    def test_local_inventory_without_mapped_findings_requires_coverage_evidence_even_with_gateway(self):
-        for governed in (False, True):
+    def test_local_inventory_without_a_governance_layer_is_not_covered_and_with_one_needs_owner_evidence(self):
+        for governed, state in ((False, "not-covered"), (True, "missing-evidence")):
             with self.subTest(governed=governed):
                 observations = [{"id": "o1", "kind": "mcp", "details": {"governedBy": "palma-gateway"} if governed else {}}]
                 output = render_regulation_section([], observations, False)
                 tiles = Tiles(output)
-                self.assertEqual(tiles.states, {
-                    "regulation-oversight": "missing-evidence", "regulation-safeguards": "missing-evidence",
-                    "regulation-transparency": "missing-evidence", "regulation-classification": "missing-evidence"})
+                self.assertEqual(tiles.states, {slug: state for slug in (
+                    "regulation-oversight", "regulation-safeguards", "regulation-transparency", "regulation-classification")})
                 self.assertEqual(tiles.counts, [])
                 self.assertIn("Compliance not assessed", output)
+                self.assertEqual("No governance layer found on this machine" in output, not governed)
+                self.assertEqual('data-status="not-covered"' in output, not governed)
+                self.assertEqual("Coverage not evidenced" in output, governed)
+                self.assertEqual(output.count("Assume "), 0 if governed else 4)
 
     def test_mapped_findings_require_review_without_turning_unmapped_areas_into_passes(self):
         findings = [("f-approval", {"ruleId": "approval-prompts-disabled", "title": "Approval disabled", "severity": "low"}),
                     ("f-sandbox", {"ruleId": "sandbox-disabled", "title": "Sandbox disabled", "severity": "high"})]
-        output = render_regulation_section(findings, [{"id": "o1", "enabled": "disabled"}], False)
-        tiles = Tiles(output)
-        self.assertEqual(tiles.states, {
-            "regulation-oversight": "review-required", "regulation-safeguards": "review-required",
-            "regulation-transparency": "missing-evidence", "regulation-classification": "missing-evidence"})
-        self.assertEqual(tiles.counts, ["1", "1"])
-        self.assertIn('href="#f-approval"', output)
-        self.assertIn('href="#f-sandbox"', output)
+        for governed, state, label in ((False, "not-covered", "Not covered · review required"),
+                                       (True, "missing-evidence", ">Review required<")):
+            with self.subTest(governed=governed):
+                observations = [{"id": "o1", "enabled": "enabled", "details": {"governedBy": "palma-gateway"} if governed else {}}]
+                output = render_regulation_section(findings, observations, False)
+                tiles = Tiles(output)
+                self.assertEqual(tiles.states, {
+                    "regulation-oversight": "review-required", "regulation-safeguards": "review-required",
+                    "regulation-transparency": state, "regulation-classification": state})
+                self.assertEqual(tiles.counts, ["1", "1"])
+                self.assertIn(label, output)
+                self.assertIn('href="#f-approval"', output)
+                self.assertIn('href="#f-sandbox"', output)
+
+    def test_a_gateway_connector_that_cannot_apply_is_not_a_governance_layer(self):
+        for details, enabled in (({"governedBy": "palma-gateway"}, "disabled"),
+                                 ({"governedBy": "palma-gateway", "profileSelected": False}, "unknown"),
+                                 ({"governedBy": "palma-gateway", "packageState": "cached"}, "unknown"),
+                                 ({"governedBy": "palma-gateway", "context": "cached"}, "unknown")):
+            with self.subTest(details=details, enabled=enabled):
+                output = render_regulation_section([], [{"id": "o1", "kind": "mcp", "enabled": enabled, "details": details}], False)
+                self.assertIn('data-status="not-covered"', output)
+                self.assertEqual(set(Tiles(output).states.values()), {"not-covered"})
 
     def test_empty_and_declared_tiles_do_not_claim_a_machine_coverage_gap(self):
         for observations, declared in (([], False), ([], True), ([{"id": "o1"}], True)):
             with self.subTest(observations=observations, declared=declared):
-                tiles = Tiles(render_regulation_section([], observations, declared))
+                output = render_regulation_section([], observations, declared)
+                tiles = Tiles(output)
                 self.assertEqual(list(tiles.states.values()), ["not-assessed"] * 4)
                 self.assertEqual(tiles.counts, [])
+                self.assertNotIn('data-governance="observed"', output, "nothing was observed")
+                self.assertIn('data-governance="unknown"', output)
 
 
 if __name__ == "__main__":

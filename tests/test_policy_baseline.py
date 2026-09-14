@@ -90,7 +90,7 @@ class PolicyBaselineTests(unittest.TestCase):
                 expected_severity = "low" if item["id"] in LOW_PERMISSION_OVERRIDES else "high" if item["id"] in HIGH_PRIORITY_OVERRIDES else item["severity"]
                 self.assertEqual(finding["severity"], expected_severity)
                 self.assertEqual(finding["baselineSeverity"], item["severity"])
-                self.assertEqual(finding["priorityPolicyVersion"], "2026-09-14.2")
+                self.assertEqual(finding["priorityPolicyVersion"], "2026-09-14.3")
                 self.assertIsInstance(finding["ratingReason"], str)
                 self.assertTrue(finding["ratingReason"])
 
@@ -169,10 +169,15 @@ class PolicyBaselineTests(unittest.TestCase):
         local["enabled"] = "disabled"
         local["details"].update(context="cached", activation="cached", effectiveState="stale")
         findings = {item["ruleId"]: item for item in governance.evaluate(snapshot)}
-        self.assertIn(local["id"], findings["mcp-local-unaudited"]["observationIds"])
         self.assertIn(local["id"], findings["mcp-declared-disabled"]["observationIds"])
-        self.assertEqual(findings["mcp-local-unaudited"]["severity"], "high")
-        evidence = json.dumps(findings["mcp-local-unaudited"]["evidence"])
+        finding = findings["mcp-local-unaudited"]
+        self.assertIn(local["id"], finding["observationIds"])
+        # Other local connectors in the fixture still apply, so the priority stays High and
+        # the summary states the split instead of dropping the disabled declaration.
+        self.assertEqual(finding["severity"], "high")
+        self.assertEqual(finding["applies"], finding["declarations"] - 1)
+        self.assertIn(f"{finding['applies']} of {finding['declarations']} apply as written; 1 is in a cached policy copy", finding["summary"])
+        evidence = json.dumps(finding["evidence"])
         self.assertIn("disabled", evidence)
         self.assertIn("cached", evidence)
         self.assertIn("settings-stale", findings)

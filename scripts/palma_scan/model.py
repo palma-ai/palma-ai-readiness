@@ -161,7 +161,7 @@ def summarize(snapshot):
             "limitationCount": len(snapshot["coverage"]["limitations"]),
             # Rule text only, in report order: an assistant can present priorities without
             # reading scanned names or locations.
-            "priorities": [{key: finding.get(key) for key in ("severity", "title", "ruleId", "declarations", "clients", "recommendation")}
+            "priorities": [{key: finding.get(key) for key in ("severity", "title", "ruleId", "declarations", "applies", "clients", "recommendation")}
                            for finding in snapshot["findings"]]}
 
 

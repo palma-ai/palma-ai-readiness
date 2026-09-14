@@ -1,6 +1,8 @@
 # Contributing
 
-Use Python 3.11 or newer. Development checks use temporary fixtures and fictional
+Use Python 3.11 or newer. On macOS the `python3` on the path can be older than that;
+run the checks with an explicit interpreter such as `python3.14` in that case.
+Development checks use temporary fixtures and fictional
 configuration; they do not require a scan of your computer.
 
 ```bash

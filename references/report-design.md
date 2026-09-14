@@ -61,7 +61,9 @@ readiness, coverage, artwork credits, and individual findings start collapsed.
    priority and client labels. Opening it reveals a concise condition without file paths,
    **Why it matters**, an action and evidence. Computer-use impacts explain that actions
    may go unnoticed without supervision; they do not claim all actions are invisible.
-   Evidence contains safe names, typed facts and configuration locations. Show the first
+   Evidence contains safe names, typed facts and configuration locations, including
+   whether a connector is switched off, cached in an uninstalled plugin pack, or limited by
+   a tool allowlist, and how many declarations apply as written. Show the first
    20 records, with the remainder in a further disclosure. Search and filters have clear
    reset controls. All priorities remain available; do not imply an allowlisted source
    proves that an installed artifact was audited or unchanged.
@@ -70,9 +72,12 @@ readiness, coverage, artwork credits, and individual findings start collapsed.
    Matching names do not establish identical behavior. Group browser extension records
    with their counts and permission sets. Client facts and unknown clients remain visible.
 6. **EU AI Act readiness.** Four collapsed review areas use the evidence semantics in
-   [eu-ai-regulation.md](eu-ai-regulation.md). Mapped findings require review; missing local
-   evidence requires owner verification. A local scan cannot prove that an organizational
-   control is absent or classify the legal use case. Keep the official guidance link.
+   [eu-ai-regulation.md](eu-ai-regulation.md). Without a governance layer (no connector
+   through a Palma-operated gateway) the panel and every area are called out as **Not
+   covered**, in a distinct warning tone; with one, mapped findings require review and
+   unmatched areas require owner verification. A local scan cannot classify the legal use
+   case, and "not covered" is the stated assumption for an ungoverned machine, not proof
+   that an organizational control is absent. Keep the official guidance link.
 7. **Coverage.** Record inspected source counts and group unreadable or skipped sources by
    cause. Preserve actual permission failures. Safe fixed diagnostic categories and native
    numeric codes are available only in the local report, alongside each source. Never show

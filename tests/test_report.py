@@ -96,16 +96,25 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(any(attrs.get("class") == "regulation-count" for _, attrs in document.tags), "No findings must not look like a passed legal control")
 
     def test_regulation_indicator_cannot_infer_legal_status_from_priorities(self):
+        # No connector is governed in the fixture, so every priority leaves the areas not covered.
         for severity in ("critical", "high", "low", "info"):
             data = snapshot()
             data["findings"][1]["severity"] = severity
             output = render_report(data, {})
             document = Document(output)
             indicator = next((attrs for _, attrs in document.tags if attrs.get("id") == "regulation-indicator"), {})
-            self.assertEqual(indicator.get("data-status"), "review-needed")
+            self.assertEqual(indicator.get("data-status"), "not-covered")
             self.assertIn("Compliance not assessed", " ".join(document.text))
+            self.assertIn("No governance layer found", " ".join(document.text))
         data["findings"] = []
-        self.assertIn('data-status="review-needed"', render_report(data, {}))
+        self.assertIn('data-status="not-covered"', render_report(data, {}))
+        # A governed connector that applies as written changes the assumption, not the legal status.
+        data["observations"].append({"id": "o-gateway", "kind": "mcp", "client": "Codex", "name": "Space", "location": "~/.codex/config.toml",
+                                     "sourceId": "s-collected", "enabled": "enabled", "details": {"transport": "http", "governedBy": "palma-gateway"}})
+        governed = render_report(data, {})
+        self.assertIn('data-status="review-needed"', governed)
+        self.assertNotIn("No governance layer found", " ".join(Document(governed).text))
+        self.assertIn("Compliance not assessed", governed)
 
     def test_empty_and_declared_regulation_status_remains_unassessed(self):
         for mode, observations, expected in (
@@ -139,7 +148,7 @@ class ReportTests(unittest.TestCase):
         data["findings"] = [data["findings"][1]]
         data["findings"][0].update(ruleId="approval-prompts-disabled", severity="low", observationIds=["o-disabled"])
         output = render_report(data, {})
-        self.assertIn('data-status="review-needed"', output)
+        self.assertIn('data-status="not-covered"', output)
         document = Document(output)
         self.assertEqual(sum(attrs.get("class") == "regulation-finding-link" for _, attrs in document.tags), 1)
         self.assertIn("Disabled in configuration", " ".join(document.text))

@@ -74,7 +74,13 @@ names and their local configuration paths. MCP servers and skills appear once pe
 declared name, with client badges and declaration counts. Expand a row to compare
 its configurations or skill contents; matching names do not imply identical versions
 or access. Browser extension records are grouped with their permission sets.
-All priorities remain visible, with Critical
+Finding summaries name connectors, not file paths; paths sit in the evidence. Access,
+capability and permission findings say how many declarations apply as written: an entry
+in an unselected profile, a cached policy copy, a plugin pack that is switched off or has
+no installation record, or an entry that is switched off stays in the evidence without
+raising the priority on its own. Skills and plugins from a marketplace
+outside Palma's allowlist are Critical; packs whose source could not be resolved locally
+are High, with a verify-the-source action. All priorities remain visible, with Critical
 and High first. Client and connector icons are embedded.
 The report uses Palma's light visual style, with Onest typography, a client-to-component map,
 prominent Critical/High callouts, clickable priority bars, and expandable evidence. Detailed sections start collapsed. Its font and artwork are embedded;
@@ -82,7 +88,10 @@ the report works offline and makes no network requests.
 
 The **EU AI Act overview** highlights when an AI use-case review is needed.
 Its compact tiles link relevant local findings to review questions, with an official
-EU AI Act guidance link for further detail. Legal risk class and compliance remain
+EU AI Act guidance link for further detail. If the scan finds no governance layer (no
+connector routed through a Palma-operated gateway), the panel says so and treats all four
+areas as not covered until an owner documents them; that is a stated assumption, not
+proof that a control is absent. Legal risk class and compliance remain
 unassessed: local access settings cannot establish the intended use or your legal role.
 It appears automatically in local reports. See the
 [EU AI Act review guidance](references/eu-ai-regulation.md).
@@ -105,5 +114,6 @@ has no upload or aggregation function. The report ends with a team-view diagram 
 clicked; no scan data is added to it.
 
 Learn more about [Palma](https://palma.ai). See [commands](references/commands.md), [rules and coverage](references/risk-rules.md),
-[report design and manual fallback](references/report-design.md), and
-[third-party notices](THIRD_PARTY_NOTICES.md).
+[report design and manual fallback](references/report-design.md),
+[third-party notices](THIRD_PARTY_NOTICES.md), and the [security policy](SECURITY.md)
+for reporting a vulnerability privately.

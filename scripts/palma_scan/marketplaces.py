@@ -7,7 +7,7 @@ import configparser
 from dataclasses import replace
 from functools import lru_cache
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from urllib.parse import urlsplit
 
@@ -16,6 +16,8 @@ from .engine.filesystem import ReadGap
 
 TRUST_FIELDS = ('sourceTrust', 'sourcePolicyId', 'sourceEvidence', 'marketplaceId')
 SEGMENT = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,199}\Z')
+# Codex writes a hexadecimal fingerprint (a hashed u64) when it installs its embedded skills.
+SYSTEM_SKILLS_MARKER = re.compile(rb'[0-9a-f]{1,32}\s*\Z')
 REPOSITORY = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*\Z')
 
 
@@ -109,6 +111,8 @@ def _claude_sources(builder, root, market):
 
 
 def _installed(builder, root, market, plugin, directory):
+    """Claude's installation record names the cache directory; a home copied elsewhere keeps
+    the original absolute path, so its marketplace, plugin and version folders also match."""
     for identity, data in builder.documents.items():
         candidate = builder.candidates[identity]
         if candidate.path != root / 'installed_plugins.json' or data.get('version') != 2:
@@ -119,9 +123,37 @@ def _installed(builder, root, market, plugin, directory):
             for entry in entries:
                 path = entry.get('installPath') if isinstance(entry, dict) else None
                 if (isinstance(path, str) and Path(path).is_absolute() and '..' not in Path(path).parts
-                        and Path(path) == directory):
+                        and (Path(path) == directory or Path(path).parts[-3:] == directory.parts[-3:])):
                     return True
     return False
+
+
+def _plugin_switch(builder, home, family, market, plugin):
+    """The configured state of ``plugin@market``: Claude's ``enabledPlugins`` in the settings
+    files beside the plugin folder, or Codex's ``[plugins]`` table in ``config.toml``."""
+    name = plugin + '@' + market
+    for identity, data in builder.documents.items():
+        candidate = builder.candidates[identity]
+        if candidate.family != family:
+            continue
+        if family == 'claude-code':
+            if candidate.path.parent != home or candidate.path.name not in {'settings.json', 'settings.local.json'}:
+                continue
+            entry = data.get('enabledPlugins', {}).get(name) if isinstance(data.get('enabledPlugins'), dict) else None
+        else:
+            if candidate.path != home / 'config.toml':
+                continue
+            entries = data.get('plugins')
+            entry = entries.get(name) if isinstance(entries, dict) else None
+            if isinstance(entry, dict):
+                entry = entry.get('enabled', 'configured')
+        if entry is True:
+            return 'enabled'
+        if entry is False:
+            return 'disabled'
+        if entry is not None:
+            return 'configured'
+    return None
 
 
 def _probe(builder, candidate, *, document=False):
@@ -168,6 +200,32 @@ def _curated_skill(collection, item, candidate):
         return
 
 
+def _system_skill(collection, item, candidate, verified):
+    """Codex installs its embedded skills into ``<CODEX_HOME>/skills/.system`` beside a marker.
+
+    The marker file holds the fingerprint Codex uses to skip reinstalling; only its
+    presence and shape are checked here, once per folder, and nothing from it is exported.
+    Only the account's own Codex home qualifies: a ``.system`` folder inside a project
+    checkout, a folder without the marker, or a skill elsewhere keeps ordinary local review.
+    """
+    if candidate is None or candidate.scope != 'user' or item.get('sourceTrust') == 'allowlisted':
+        return
+    folder = candidate.path.parent.parent
+    entry = next((x for x in policy()['sources'] if x.get('systemSkillsDir') and candidate.family in x['clients']
+                  and folder.match(x['systemSkillsDir'])), None)
+    if entry is None:
+        return
+    if folder not in verified:
+        marker = replace(candidate, path=folder / entry['markerFile'], role='registry-probe', format='text',
+                         location=str(PurePosixPath(candidate.location).parent.parent / entry['markerFile']))
+        source, raw = _probe(collection.builder, marker)
+        verified[folder] = raw is not None and SYSTEM_SKILLS_MARKER.fullmatch(raw) is not None
+        if raw is not None and not verified[folder]:
+            source.update(status='unsupported', reason='unknown_schema')
+    if verified[folder]:
+        item.update(sourceTrust='allowlisted', sourcePolicyId=entry['id'], sourceEvidence=['codex-system-skills-marker'])
+
+
 def _configured(builder, item, candidate, roots):
     name = item.get('name', '')
     if not isinstance(name, str) or name.count('@') != 1:
@@ -193,10 +251,12 @@ def annotate(collection):
     builder = collection.builder
     roots = [candidate for candidate in collection.pending if candidate.role == 'plugins'
              and candidate.family in {'claude-code', 'codex'} and candidate.path.name == 'cache']
+    system_folders = {}
     for item in list(builder.observations.values()):
         candidate = builder.candidates.get(item['sourceId'])
         if item['kind'] == 'skill' and not item.get('parentId'):
             _curated_skill(collection, item, candidate)
+            _system_skill(collection, item, candidate, system_folders)
         if item['kind'] != 'plugin' or item.get('parentId') or candidate is None:
             continue
         if candidate.role != 'plugin':
@@ -233,8 +293,16 @@ def annotate(collection):
                     elif data is not None:
                         source.update(status='unsupported', reason='unknown_schema')
             item.update(facts)
-            if candidate.family == 'claude-code' and _installed(builder, root.path.parent, market, plugin, directory):
+            # Installation and switch state: Claude's registry and settings, Codex's remote
+            # installation record and [plugins] table. A pack with neither stays cached.
+            home = root.path.parent if candidate.family == 'claude-code' else root.path.parent.parent
+            switch = _plugin_switch(builder, home.parent if candidate.family == 'claude-code' else home, candidate.family, market, plugin)
+            installed = (_installed(builder, root.path.parent, market, plugin, directory) if candidate.family == 'claude-code'
+                         else switch is not None or 'codex-remote-install' in facts.get('sourceEvidence', []))
+            if installed:
                 item['installationState'] = 'installed'
+            if switch in {'enabled', 'disabled'}:
+                item['enabled'] = switch
             break
     for item in builder.observations.values():
         parent = builder.observations.get(item.get('parentId'))

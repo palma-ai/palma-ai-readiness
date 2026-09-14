@@ -123,7 +123,7 @@ def _artifact_index(builder):
         if origin is None or origin.role != "plugin":
             continue
         directory = origin.path.parent.parent if origin.path.parent.name in {".codex-plugin", ".claude-plugin", ".cursor-plugin"} else origin.path.parent
-        packages[directory] = observation.get("installationState", "unknown")
+        packages[directory] = (observation.get("installationState", "unknown"), observation.get("enabled", "unknown"))
     for identity, data in builder.documents.items():
         candidate = builder.candidates.get(identity)
         if candidate and any(key in data for key in ("mcpServers", "mcp_servers", "servers")):
@@ -142,7 +142,9 @@ def _source_artifact_metadata(builder, candidate, old, collection, index):
     packages, mcp_paths = index
     for directory in (candidate.path, *candidate.path.parents):
         if directory in packages:
-            result["packageState"] = packages[directory]
+            result["packageState"], enabled = packages[directory]
+            if enabled != "unknown":
+                result["packageEnabled"] = enabled
             break
     is_mcp = candidate.path in mcp_paths
     is_mcp |= candidate.path.name in {".mcp.json", "mcp.json", "mcp_config.json", "mcp-config.json", "cline_mcp_settings.json", "mcp_settings.json"}

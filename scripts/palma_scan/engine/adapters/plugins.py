@@ -43,7 +43,9 @@ def collect_plugin(builder, directory, manifest):
     if data is None:
         return
     gemini = manifest.name == "gemini-extension.json"
-    installed = gemini or directory.role == "skills"
+    # Copilot's install directory is literally named installed-plugins; Codex's cache
+    # is joined to its configuration and remote-install records by the marketplace policy.
+    installed = gemini or directory.role == "skills" or "installed-plugins" in directory.path.parts
     plugin = builder.emit(candidate, source, "plugin", metadata_name(data, directory.path.name),
                           artifactType="extension" if gemini else "plugin",
                           version=data.get("version") if isinstance(data.get("version"), str) else None,
