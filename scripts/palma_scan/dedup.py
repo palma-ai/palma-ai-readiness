@@ -63,6 +63,24 @@ def _record_locations(canonical, items):
         canonical["details"]["locationCount"] = len(unique)
 
 
+def fold_pack_switches(observations):
+    """An account-level ``plugin@marketplace`` switch whose pack is installed is that pack's
+    enabled state, already carried by the pack row; it is not a second pack. A switch in a
+    project's own settings, or one whose pack is not installed, stays its own declaration."""
+    installed = {(item["client"], item["details"].get("marketplaceId"), item["name"]) for item in observations
+                 if item["kind"] == "plugin" and item.get("details", {}).get("installationState") == "installed"
+                 and item["details"].get("marketplaceId")}
+    result = []
+    for item in observations:
+        details = item.get("details", {})
+        if item["kind"] == "plugin" and details.get("activation") == "configured" and details.get("context") == "base" and "@" in item["name"]:
+            plugin, market = item["name"].rsplit("@", 1)
+            if (item["client"], market, plugin) in installed:
+                continue
+        result.append(item)
+    return result
+
+
 def collapse_declarations(observations, malformed=frozenset()):
     """Merge identical copies of declarations; client rows are merged separately.
 

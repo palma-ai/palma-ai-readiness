@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from palma_scan.collector import collect
+from palma_scan.model import validate
 from palma_scan.rules import evaluate
 
 
@@ -34,7 +35,7 @@ class MarketplacePolicyTests(unittest.TestCase):
         with patch('subprocess.Popen', side_effect=AssertionError('no process')), patch('socket.socket', side_effect=AssertionError('no network')):
             result = collect(self.home, scope_type='copied-home')
         result['findings'] = evaluate(result)
-        return result
+        return validate(result)
 
     def artifacts(self, result):
         return [x for x in result['observations'] if x['kind'] in {'plugin', 'skill'} and x['details'].get('activation') != 'configured']
@@ -212,18 +213,45 @@ class MarketplacePolicyTests(unittest.TestCase):
 
     def test_managed_marketplace_records_from_other_hosts_and_odd_shapes_stay_unapproved(self):
         self.plugin('codex', 'openai-bundled')
-        for source in ('C:\\Users\\Someone\\.codex\\.tmp\\bundled-marketplaces\\openai-bundled', '.codex/.tmp/bundled-marketplaces/openai-bundled',
-                       '~/.codex/.tmp/bundled-marketplaces/openai-bundled', str(self.home / '.codex/.tmp/../.tmp/bundled-marketplaces/openai-bundled'),
-                       str(self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled') + '\n', ''):
+        cases = (('C:\\Users\\Someone\\.codex\\.tmp\\bundled-marketplaces\\openai-bundled', 'allowlisted'),
+                 ('/Users/someone/.codex/.tmp/bundled-marketplaces/openai-bundled', 'allowlisted'),
+                 ('.codex/.tmp/bundled-marketplaces/openai-bundled', 'unapproved'),
+                 ('~/.codex/.tmp/bundled-marketplaces/openai-bundled', 'unapproved'),
+                 (str(self.home / '.codex/.tmp/../.tmp/bundled-marketplaces/openai-bundled'), 'unapproved'),
+                 (str(self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled') + '\n', 'unapproved'),
+                 (str(self.home / '.codex/.tmp/bundled-marketplaces/openai-bundled-alpha'), 'unapproved'),
+                 ('', 'unapproved'))
+        for source, expected in cases:
             escaped = source.replace('\\', '\\\\').replace('\n', '\\n')
             self.write('.codex/config.toml', f'[marketplaces.openai-bundled]\nsource_type="local"\nsource="{escaped}"\n')
             result = self.scan()
             trusts = {x['details'].get('sourceTrust') for x in self.artifacts(result)}
-            expected = {'allowlisted'} if source.startswith('C:') else {'unapproved'}
-            self.assertEqual(trusts, expected, source)
+            self.assertEqual(trusts, {expected}, source)
         self.write('.codex/config.toml', '[marketplaces.openai-bundled]\nsource_type="local"\nsource=7\n')
         result = self.scan()
         self.assertEqual({x['details'].get('sourceTrust') for x in self.artifacts(result)}, {'unapproved'})
+
+    def test_an_installed_packs_account_switch_is_the_pack_not_a_second_entry(self):
+        self.plugin('codex', 'openai-curated-remote')
+        self.write('.codex/plugins/cache/openai-curated-remote/example/.codex-remote-plugin-install.json', {'schema_version': 1, 'remote_plugin_id': 'plugin_1234567890'})
+        self.write('.codex/config.toml', '[plugins."example@openai-curated-remote"]\nenabled=false\n[plugins."absent@openai-curated-remote"]\nenabled=true\n')
+        base = self.plugin('claude', 'claude-plugins-official')
+        self.write('.claude/plugins/known_marketplaces.json', {'claude-plugins-official': {'source': {'source': 'github', 'repo': 'anthropics/claude-plugins-official'}}})
+        self.write('.claude/plugins/installed_plugins.json', {'version': 2, 'plugins': {'example@claude-plugins-official': [{'scope': 'user', 'installPath': str(self.home / base), 'version': '1.0.0'}]}})
+        self.write('.claude/settings.json', {'enabledPlugins': {'example@claude-plugins-official': True}})
+        self.write('code/app/.claude/settings.json', {'enabledPlugins': {'example@claude-plugins-official': False}})
+        with patch('subprocess.Popen', side_effect=AssertionError('no process')):
+            result = collect(self.home, [self.home / 'code/app'], scope_type='copied-home')
+        result['findings'] = evaluate(result)
+        rows = sorted((x['client'], x['name'], x['enabled'], x['details']['installationState'], x['details'].get('context')) for x in result['observations'] if x['kind'] == 'plugin')
+        self.assertEqual(rows, [('claude-code', 'example', 'enabled', 'installed', 'package'),
+                                ('claude-code', 'example@claude-plugins-official', 'disabled', 'config_only', 'project'),
+                                ('codex', 'absent@openai-curated-remote', 'enabled', 'config_only', 'base'),
+                                ('codex', 'example', 'disabled', 'installed', 'package')])
+        # The switched-off Codex pack and the project's own switch are the disabled declarations; the account switch folded into its pack.
+        [disabled] = [x for x in result['findings'] if x['ruleId'] == 'plugins-declared-disabled']
+        names = {x['id']: x['name'] for x in result['observations']}
+        self.assertEqual(sorted(names[i] for i in disabled['observationIds']), ['example', 'example@claude-plugins-official'])
 
     def test_system_skills_read_through_another_client_keep_their_bundled_provenance(self):
         self.write('.codex/skills/.system/skill-creator/SKILL.md', '---\nname: skill-creator\n---\nBundled fixture')

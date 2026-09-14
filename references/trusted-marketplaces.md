@@ -41,7 +41,9 @@ folder has no registry of its own, and a Codex `[plugins]` entry without a cache
 the provenance of its marketplace entry in the same `config.toml`. Codex packs count as
 installed through their remote installation record or a `[plugins."<plugin>@<marketplace>"]`
 entry in `config.toml`. The `enabledPlugins` and `[plugins]` switches give a cached pack its
-enabled or disabled state, which its bundled connectors inherit when the priority policy
+enabled or disabled state; an account-level switch whose pack is installed is listed as that
+pack, not as a second entry, while a switch in a project's own settings stays a separate
+declaration. Bundled connectors inherit the pack's state when the priority policy
 decides whether they apply as written.
 Bundled skills and agents inherit their parent plugin's source classification. Configured
 Claude plugin keys retain their explicit enabled or disabled state.

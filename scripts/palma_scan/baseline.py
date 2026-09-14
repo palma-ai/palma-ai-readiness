@@ -25,7 +25,7 @@ from .engine.paths import installation_candidates, bounded_environment
 from .engine.parsing import validate_tree, ParseError
 from .engine.filesystem import SafeFiles, Budget, ReadGap
 from .engine.adapters.configs import collect_config, collect_cached_settings
-from .dedup import collapse_declarations, content_digest
+from .dedup import collapse_declarations, content_digest, fold_pack_switches
 from .engine.git_provenance import version_controlled as _version_controlled
 
 
@@ -518,7 +518,7 @@ def collect_scopes(profiles, system_sources=None, workspaces=None, *, scope_type
         _merge(collector, collection, 'system', roots)
     # Shared graph edges and repeated candidates resolve to one deterministic row.
     malformed = {source['id'] for source in collector.sources if source.get('issueKind') == 'unsupported-mcp-shape'}
-    observations = collapse_declarations(list({o['id']: o for o in collector.observations}.values()), malformed)
+    observations = collapse_declarations(fold_pack_switches(list({o['id']: o for o in collector.observations}.values())), malformed)
     # Keep sources that back evidence or record a problem. An absent candidate path is the
     # normal case, and a file that was read without yielding evidence (or whose declaration
     # merged into another copy, which lists its location) is only counted.

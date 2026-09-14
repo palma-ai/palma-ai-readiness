@@ -61,10 +61,18 @@ def _managed_local_policy(client, source):
         if client not in entry['clients'] or not expected:
             continue
         managed = Path(os.path.normpath(os.path.join(home, expected)))
-        depth = len(managed.parts) - len(Path(home).parent.parts)
-        if depth > 0 and [os.path.normcase(part) for part in record.parts[-depth:]] == [os.path.normcase(part) for part in managed.parts[-depth:]]:
+        if _same_tail(record, managed, len(managed.parts) - len(Path(home).parent.parts)):
             return entry
     return None
+
+
+def _same_tail(record, local, depth):
+    """Whether a recorded path ends in the same ``depth`` folders as a local one. Windows
+    records compare case-insensitively, as the recording client resolved them."""
+    if depth <= 0 or len(record.parts) < depth or len(local.parts) < depth:
+        return False
+    fold = str.casefold if isinstance(record, PureWindowsPath) or os.name == 'nt' else str
+    return [fold(part) for part in record.parts[-depth:]] == [fold(part) for part in local.parts[-depth:]]
 
 
 def source_policy(client, source):
@@ -156,7 +164,7 @@ def _installed(builder, root, market, plugin, directory):
         if isinstance(entries, list):
             for entry in entries:
                 record = _record_path(entry.get('installPath') if isinstance(entry, dict) else None)
-                if record is not None and record.parts[-3:] == directory.parts[-3:]:
+                if record is not None and _same_tail(record, directory, 3):
                     return True
     return False
 
