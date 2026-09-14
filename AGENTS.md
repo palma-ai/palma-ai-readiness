@@ -22,7 +22,7 @@ are bundled; the public skill requires no package installation or build setup.
   platform launchers. Preserve the bundled parsers and notices in `_vendor/`.
 - `references/`: command, evidence, policy, and report guidance.
 - `tests/` and `examples/`: regression coverage, fixtures, and sample artifacts.
-- `docs/publishing.md`: maintainer validation and release instructions;
+- `CONTRIBUTING.md`: development checks and release instructions;
   `scripts/build_release.py` packages the public skill.
 
 ## Skill maintenance
@@ -46,7 +46,7 @@ are bundled; the public skill requires no package installation or build setup.
 - For report changes, generate a fictional demo with
   `python3 -I -S scripts/create_demo.py --output-dir /path/to/new-demo` and inspect
   the report. Optional DOM checks and native platform checks are documented in
-  `docs/publishing.md`.
+  `CONTRIBUTING.md`.
 - For instruction-only changes, check frontmatter, referenced paths, and command
   consistency. Do not run a real scan or rebuild releases as a routine check.
 - Keep generated archives, local scan results, environments, and caches out of
